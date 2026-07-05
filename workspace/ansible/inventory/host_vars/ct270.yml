@@ -1,3 +1,5 @@
-# life-ops:HA compose + HA configuration.yaml + paperless compose(待辦15,2026-07-05;去密 ${VAR} 設計可入庫)。
-# 排除 /opt/nocodb compose(chmod600、內含 DB 密碼,拓樸 §10.5)、secrets.yaml、/opt/paperless/.env(機密)
-backup_find_cmd: "find /opt/homeassistant /opt/paperless -maxdepth 3 -type f \\( -name 'docker-compose.yml' -o -name 'configuration.yaml' \\) -size -256k ! -name 'secrets.yaml' 2>/dev/null"
+# life-ops:HA compose + HA configuration.yaml + paperless compose(待辦15,2026-07-05;去密 ${VAR} 設計可入庫)
+# + paperless ocr sidecar 程式(ocr/*.py、Dockerfile、requirements.txt)與 scripts/*.sh(待辦15追加,2026-07-05)。
+# 排除 /opt/nocodb compose(chmod600、內含 DB 密碼,拓樸 §10.5)、secrets.yaml、/opt/paperless/.env(機密)、
+# ocr/models/*.onnx 與 ocr/fonts/*.ttf(大二進位,由 -size 與名單自然排除;隨 vzdump 即可)
+backup_find_cmd: "find /opt/homeassistant /opt/paperless -maxdepth 3 -type f \\( -name 'docker-compose.yml' -o -name 'configuration.yaml' -o -path '*/paperless/ocr/*.py' -o -path '*/paperless/ocr/Dockerfile' -o -path '*/paperless/ocr/requirements.txt' -o -path '*/paperless/scripts/*.sh' \\) -size -256k ! -name 'secrets.yaml' 2>/dev/null"

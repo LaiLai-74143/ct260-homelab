@@ -2,12 +2,30 @@
 # DB 共用 /opt/nocodb postgres16(新庫 paperless,經 external network nocodb_default 連服務名 db)。
 # 機密全在 ./.env(chmod600,不入 config-backup;副本存 CT260 ~/.config/homelab/paperless.env)。
 # HTTP(S)_PROXY 僅供容器啟動時 apt 裝 tesseract-ocr-chi-tra(每次 recreate 重裝,經 CT202 squid,
-# 白名單 deb.debian.org);broker/db 為容器網內直連,在 NO_PROXY。
+# 白名單 deb.debian.org);broker/db/ocr 為容器網內直連,在 NO_PROXY。
+# 待辦15追加(2026-07-05):ocr sidecar(RapidOCR PP-OCRv5)兩條路:
+# ① PDF 入件經 pre-consume script 先產雙層 PDF,paperless OCR_MODE 預設 skip 見文字層即跳過 tesseract;
+# ② consume 資料夾圖片由 sidecar watcher 轉雙層 PDF(原圖刪除),paperless 以 IGNORE_PATTERNS
+#    忽略圖片/*.tmp 只吃成品 PDF(pre-consume 換檔型對圖片不可行:parser 依原始 mime 先定)。
+# sidecar 掛掉 fail-open 落回 tesseract;API 直傳「原始圖片」仍走 tesseract(app 內建掃描產 PDF 不受影響)。
 services:
   broker:
     image: docker.io/library/redis:8.6.4
     restart: unless-stopped
     volumes: ["redisdata:/data"]
+  ocr:
+    # 本地 build 映像(模型已烘入,執行期零外聯);rebuild 需 squid 維護窗,見 ocr/Dockerfile
+    build: { context: ./ocr }
+    image: paperless-ocr:rapidocr3.9.1
+    restart: unless-stopped
+    mem_limit: 1536m   # rec server 模型(80MB)推理峰值較高
+    volumes:
+      - ./consume:/consume
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
   webserver:
     image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
     restart: unless-stopped
@@ -18,6 +36,7 @@ services:
       - media:/usr/src/paperless/media
       - ./export:/usr/src/paperless/export
       - ./consume:/usr/src/paperless/consume
+      - ./scripts:/usr/src/paperless/scripts:ro
     environment:
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_DBHOST: db
@@ -30,14 +49,20 @@ services:
       PAPERLESS_TIME_ZONE: Asia/Taipei
       PAPERLESS_OCR_LANGUAGE: chi_tra+eng
       PAPERLESS_OCR_LANGUAGES: chi-tra
+      PAPERLESS_PRE_CONSUME_SCRIPT: /usr/src/paperless/scripts/pre-consume-ocr.sh
+      # 有文字層就不產 PDF/A archive:ghostscript 重寫 subset 字型 ToUnicode 會弄壞萃取
+      # (實測整齊 -0x100 碼位錯字:送→輁、錄→鈄),內文直接取自 sidecar 產的原件
+      PAPERLESS_OCR_SKIP_ARCHIVE_FILE: with_text
+      # 預設清單 + 圖片(交 ocr watcher 轉 PDF)+ watcher 暫存檔
+      PAPERLESS_CONSUMER_IGNORE_PATTERNS: '[".DS_Store/*", "._*", ".stfolder/*", ".stversions/*", ".localized/*", "desktop.ini", "@eaDir/*", "*.tmp", "*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG", "*.tif", "*.TIF", "*.tiff", "*.TIFF", "*.webp", "*.WEBP", "*.bmp", "*.BMP", "*.gif", "*.GIF"]'
       PAPERLESS_ALLOWED_HOSTS: paperless.home.arpa,192.168.20.70,ct270.home.arpa,life-ops.home.arpa
       PAPERLESS_CSRF_TRUSTED_ORIGINS: http://paperless.home.arpa:8000,http://192.168.20.70:8000
       HTTP_PROXY: http://10.80.80.10:3128
       HTTPS_PROXY: http://10.80.80.10:3128
       http_proxy: http://10.80.80.10:3128
       https_proxy: http://10.80.80.10:3128
-      NO_PROXY: localhost,127.0.0.1,broker,db,.home.arpa,192.168.0.0/16,10.0.0.0/8
-      no_proxy: localhost,127.0.0.1,broker,db,.home.arpa,192.168.0.0/16,10.0.0.0/8
+      NO_PROXY: localhost,127.0.0.1,broker,db,ocr,.home.arpa,192.168.0.0/16,10.0.0.0/8
+      no_proxy: localhost,127.0.0.1,broker,db,ocr,.home.arpa,192.168.0.0/16,10.0.0.0/8
     networks: [default, nocodb]
 networks:
   nocodb:

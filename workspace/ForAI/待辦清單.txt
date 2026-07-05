@@ -286,6 +286,11 @@
        302 即活）＝待使用者 UI 加。
     e✔ MCP paperless_search 已上（31b 同步結案）：全文查詢＋中文零命中自動退 title_content 子字串
        （whoosh 對 CJK 斷詞粗糙，「測試」搜不到「測試文件」——踩坑見缺改記錄）。
+    f✔ OCR 引擎換 RapidOCR sidecar（2026-07-05 追加，因 tesseract 中文實測太差）：ocr 容器
+       （本地 build，RapidOCR 3.9.1／PP-OCRv5 det=mobile+rec=server，模型/字型烘入映像，零外聯）；
+       PDF 走 pre-consume script 換雙層 PDF、圖片走 consume watcher 轉 PDF（IGNORE_PATTERNS 擋圖）；
+       fail-open 落回 tesseract（已實測）；OCR_SKIP_ARCHIVE_FILE=with_text 防 ghostscript 弄壞
+       ToUnicode。合成難字件全對、使用者原亂碼掃描件改可辨識。四踩坑見缺改記錄「待辦⑮追加」。
     （另議：拉 image 時發現 Docker Hub blob CDN 已改 cloudfront，squid 註解行已修正域名。）
 
 -------------------------------------------------------------------------------

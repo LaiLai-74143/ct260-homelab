@@ -1284,3 +1284,54 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
   http://paperless.home.arpa:8000（帳密在 CT260 ~/.config/homelab/paperless.env）。
 文件：拓樸 §3/§4.4/§10.5（Paperless 區塊+MCP 工具數）/§10.6（squid 白名單）、監控告警 §9.5b、
   待辦清單 ✔15/31b✔、ansible host_vars/ct270.yml。
+
+### 待辦⑮追加 OCR 引擎換 RapidOCR sidecar（2026-07-05）
+背景：使用者實測 tesseract chi_tra 對真實中文掃描件辨識很差（UI 截圖辨成「號 re S Pa eravie we」），
+  指示換引擎（參考 pre-consume script 換引擎方案，評估後採 sidecar 變體）。
+架構定案：ocr 容器（本地 build paperless-ocr:rapidocr3.9.1）＝RapidOCR 3.9.1（onnxruntime）＋
+  FastAPI（POST /ocr 收 PDF 回雙層 PDF）＋consume watcher 執行緒（圖→雙層 PDF）。
+  引擎不進 paperless 容器（每次 recreate 乾淨、pip 全家桶不可行）；models/fonts 隨 build context
+  烘入映像 → 執行期與 rebuild 零外聯（rebuild 僅 pypi，永久白名單涵蓋）。
+模型選型（本地 venv 實測三組合後定案）：PP-OCRv5 det=mobile＋rec=server。
+  rec mobile 難字件漏字（陳大文→陳、甲方→甲、貳→贰、「自…8月1日…止」漏月日）；
+  rec server 全對（另次 mobile 反而對統編 22555003 一位——server+300dpi 渲染管線下兩件全對）。
+  CT270（2C）每頁約 6-10 秒、sidecar 常駐 ~708MiB（mem_limit 1536m）。
+★ 踩坑1：BuildKit 拉 base image 不走 dockerd systemd proxy（dial 直連 refused）——先 docker pull
+  python:3.12-slim（daemon 傳統路徑走代理）再 build --pull=false。
+★ 踩坑2：squid dstdomain 子域重複＝parse FATAL（非只 WARNING）——暫窗行 .pythonhosted.org 與
+  既有永久白名單 files.pythonhosted.org 相撞，squid 拒 reconfigure。教訓：加窗前先 grep 既有清單。
+  （原永久白名單本就含 pypi.org files.pythonhosted.org，暫窗實際只需 .docker.io/cloudfront/.modelscope.cn。）
+★ 踩坑3：pre-consume 對圖片不可換型——paperless 在 pre-consume 前已依原始 mime 選 parser，
+  把 working file 從 JPG 換成 PDF 內容 → PIL「cannot identify image file」ConsumerError。
+  解法：script 只轉發 PDF（頭 5 bytes 檢查）；圖片改由 ocr 容器 watcher 在 consume 資料夾先轉
+  雙層 PDF（原圖刪、寫 X.pdf；X.pdf.tmp 過渡），webserver 以 PAPERLESS_CONSUMER_IGNORE_PATTERNS
+  忽略圖片與 *.tmp。副作用：手機 app「分享原始照片」（API 直傳圖片）仍走 tesseract 後備；
+  app 內建掃描（產 PDF）不受影響。
+★ 踩坑4（兩層）：文字層寫入/萃取的字型陷阱——
+  a. pymupdf 內建 CJK 字型（china-t）無可攜 ToUnicode：pymupdf 自己讀得回、pdfminer/paperless
+     萃取成 CID 亂碼。→ 改 insert_text(fontfile=NotoSansTC) 嵌真字型＋doc.subset_fonts()。
+  b. subset_fonts 對 OTF（CFF）炸「Reserved charstring byte」→ 整包 16MB 全嵌（PDF 13.9MB）。
+     → 換 TTF（google/fonts NotoSansTC[wght].ttf），subset 後每份約 +40KB。
+  c. 即便如此,ghostscript 產 PDF/A archive 時重寫 subset 字型 ToUnicode → 萃取出整齊 -0x100
+     碼位錯字（送 U+9001→輁 U+8F01、錄 U+9304→鈄 U+9204）。→ PAPERLESS_OCR_SKIP_ARCHIVE_FILE=
+     with_text（有文字層不產 archive，內文直取原件；tesseract 後備件無文字層仍照常產 archive）。
+  殘留小疵（接受）：萃取端可能把 '-' 反查成 U+2011（NotoSansTC cmap 多碼位共 glyph），
+  whoosh 斷詞後 AB／12345678 等詞元照樣可搜。
+其他實作點：script fail-open（sidecar 停機實測 5.3s 由 tesseract 接手成功入件）；
+  OCR 文字 NFKC 正規化後寫層（全形→半形利搜尋）；webserver NO_PROXY 加 ocr（另 script 帶
+  curl --noproxy '*' 雙保險）；MAX_PAGES=50 超過原樣退回；PDF 已有文字層（≥50字）不重跑。
+驗證：合成難字件（旋轉+雜訊+小字）收據/租約關鍵字串全對（含人名/大寫金額/統編/完整日期）；
+  使用者原亂碼掃描件過新管線可正確辨識選單文字；fail-open 實測過；force-recreate 後全 healthy、
+  外聯僅 deb.debian.org（chi-tra 重裝，預期內）；獨立子代理對抗驗證（見當日記錄）。
+回滾：docker compose 還原 docker-compose.yml.before-20260705-todo15b＋up -d（sidecar 檔案留存
+  不礙事）；squid 已復關無需動作（備份 squid.conf.before-20260705-todo15b）。
+備份面：host_vars/ct270.yml backup_find_cmd 擴充收 ocr/*.py、ocr/Dockerfile、ocr/requirements.txt、
+  scripts/*.sh（models/fonts 大二進位不入 git，隨 vzdump）。
+對抗驗證（獨立子代理,2026-07-05）：15/15 PASS 零回歸（含 OCR 內文關鍵字串、fail-open 持久日誌、
+  離網三向探測、squid 無殘窗、HA/nocodb/兩庫/wazuh/node_exporter/promtail/MCP/DNS 回歸）。觀察留档：
+  ①webserver 每次 recreate 仍需 squid 拉 chi-tra——squid 故障期間 recreate 會令 tesseract 後備
+    無中文（改善向：把 chi_tra 烘進自建映像或 volume 快取,暫不做）；
+  ②ocr 映像 site-packages 內另有 rapidocr 自帶 PP-OCRv6 small 模型 ~31MB（params 已釘死 v5,無害,
+    映像可再瘦身）；③nocodb 健康端點是 /api/v1/health（/api/health 為 404,設監控勿寫錯）；
+  ④webserver 未設容器級 mem_limit（隨 CT 4G 上限）,大件併發時盯 swap（部署後 +56M）。
+  合成測試文件（test-receipt/test-lease/failopen-test）驗畢已刪,庫內僅餘使用者文件與待辦15 舊測件。
