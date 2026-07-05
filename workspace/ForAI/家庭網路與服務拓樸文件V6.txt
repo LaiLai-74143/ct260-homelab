@@ -393,6 +393,7 @@ honeypot.home.arpa                 -> 10.66.66.10
 vaultwarden-restore-test.home.arpa / restore-lab.home.arpa / ct250.home.arpa  -> 192.168.20.50
 codex-ops.home.arpa / ct260.home.arpa  -> 192.168.20.60
 life-ops.home.arpa / ct270.home.arpa   -> 192.168.20.70
+paperless.home.arpa                    -> 192.168.20.70  （Paperless-ngx，2026-07-05 待辦15）
 ```
 
 已作廢 / NXDOMAIN（死別名，勿再使用，沿革見缺改記錄）：
@@ -488,6 +489,7 @@ PC40 -> CT250      192.168.20.50 tcp/22
 PC40 -> CT260      192.168.20.60 tcp/22           （Allow-PC40-To-CT260-CodexOps-SSH）
 PC40 -> CT270      192.168.20.70 tcp/8080         （Allow-PC40-To-CT270-LifeOps-NocoDB；NocoDB web）
 PC40 -> CT270      192.168.20.70 tcp/8123         （Allow-PC40-To-CT270-HomeAssistant；HA web，2026-07-01）
+PC40 -> CT270      192.168.20.70 tcp/8000         （Allow-PC40-To-CT270-Paperless；Paperless web，2026-07-05 待辦15）
 PC40 -> AP Main/Node web/ping
 PC40 -> CT201      10.80.80.11   tcp/3000,3001,3002,9090,9100, ping
 PC40 -> DXP4800    192.168.30.3  tcp/5243,8243（SNAT 192.168.30.1）
@@ -951,16 +953,35 @@ Home Assistant（2026-07-01 建，第 1 階段：純本地）：
         miio 規則收窄（dest_ip pin 到裝置 IP）評估後暫緩：iot 設備為 DHCP 動態 IP、且 auto 已本地優先，pin 死易因租約變動破控；
           該規則現況已 src_ip(20.70)+單埠(54321)+單目的區(iot)，屬合理最小權限。日後如改靜態租約可再收窄。
           （2026-07-02 已為 5 台線上 WiFi 米家設備建靜態租約，見 §2.6；待全 iot 段靜態化後可回頭 pin dest_ip 收窄。）
+Paperless-ngx（2026-07-05 建，待辦15）：文件管理＋OCR（掃描件/發票/證件歸檔）。
+  服務：/opt/paperless docker-compose = ghcr.io/paperless-ngx/paperless-ngx:2.20.15（webserver :8000）
+        + redis:8.6.4（broker）。DB 共用 /opt/nocodb postgres16（新庫 paperless，owner paperless；
+        webserver 掛 external network nocodb_default 以服務名 db 連線）。卷 data/media/redisdata（named
+        volume，隨 rootfs 在 hdd1、隨待辦13 vzdump 一併備份）；./consume ./export 為 bind（uid 1000）。
+  機密：compose 去密 ${VAR}＋本地 .env（600，不入 config-backup）；副本＋API token 存 CT260
+        ~/.config/homelab/paperless.env（600）。admin 帳號=admin。compose 本身無密可入庫（ansible
+        host_vars/ct270.yml backup_find_cmd 已收）。
+  OCR：PAPERLESS_OCR_LANGUAGE=chi_tra+eng；chi-tra 語言包為容器啟動時 apt 裝（每次 recreate 重裝，
+        經 CT202 squid，白名單已永久加 deb.debian.org）→ 容器 environment 帶 HTTP(S)_PROXY=10.80.80.10:3128
+        ＋NO_PROXY（broker/db/內網段），CT270 離網政策不變。冒煙實測：中文測試圖入件 OCR 全文一字不差。
+  入件：①官方手機 app（Paperless Mobile，Android）指 http://paperless.home.arpa:8000（手機經
+        ts_phone_servers 可達）②consume 資料夾 /opt/paperless/consume（inotify 即時；處理完自動移除）。
+  存取：PC40 經 OpenWrt allowlist tcp/8000（Allow-PC40-To-CT270-Paperless，見 §4.4）；TZ=Asia/Taipei。
+  ★ 搜尋注意：whoosh 對中文連續字串斷詞粗糙——「測試」搜不到「測試文件」（整塊成單一 token）；
+        API 端 title_content=（子字串比對）對中文可靠；MCP paperless_search 已做零命中自動 fallback。
+  Kuma 探活：http://192.168.20.70:8000（302 即活）＝待使用者 UI 加。
 MCP server（已建）：CT260 /home/codex/life-ops-mcp/server.py（零依賴純 Python stdio JSON-RPC）。
-  讀 nocodb.env 直連 NocoDB v1/v2 API；讀 gcal.env 以 refresh→access token 呼叫 Google Calendar v3 API。
+  讀 nocodb.env 直連 NocoDB v1/v2 API；讀 gcal.env 以 refresh→access token 呼叫 Google Calendar v3 API；
+  讀 paperless.env 呼叫 Paperless REST API（2026-07-05 待辦15/31b）。
   已用 `claude mcp add life-ops -s user` 註冊到 Claude Code（~/.claude.json user scope，健康檢查 Connected）。
-  18 工具：
+  18 工具（17＋paperless_search；舊文誤植 18 實為 17）：
    行事曆(Google)：calendar_agenda/calendar_add/calendar_update/calendar_delete/calendar_conflicts/prep_check
      （prep_check=掃近期行程用關鍵字表推「要空腹/帶證件/預約/送禮…」的準備事項）
    人物(NocoDB)：find_person/add_person
    借貸(NocoDB)：list_debts/balance_by_person/add_transaction/settle_transaction/overdue_debts
    瑣事(NocoDB)：find_note/add_note/list_todos
    綜合：daily_brief（今日 Google 行程＋prep＋待辦＋逾期借貸）
+   文件(Paperless)：paperless_search（全文＋中文子字串 fallback，回標題/日期/片段/連結）
   用法：在 CT260 開新的 claude session 即載入（此節點目前是主要 Agent）。
 待辦：（本專案主體完成）視需要再加 web 反代/DNS 對外、或 CT250 也接同一 MCP。
 ```
@@ -981,8 +1002,11 @@ CT202  hostname fwdproxy  VLAN80 10.80.80.10/24  GW 10.80.80.1  DNS 10.80.80.1
         client ACL：僅 192.168.20.70 + 本機；HTTPS 走 CONNECT 用 dstdomain 比對目標 host（不 SSL-bump、無憑證問題）。
         出站白名單 dstdomain：.github.com .githubusercontent.com codeload.github.com
           ghcr.io pkg-containers.githubusercontent.com  pypi.org files.pythonhosted.org
-          .home-assistant.io  api.met.no
-        （dockerhub registry-1/auth.docker.io 等已寫成註解，要更新 nocodb/postgres 時再放開。）
+          .home-assistant.io  api.met.no  deb.debian.org（2026-07-05 待辦15 永久加：paperless 容器
+          啟動時 apt 裝 tesseract-ocr-chi-tra，每次 recreate 重裝）
+        （dockerhub .docker.io 等已寫成註解，要更新 nocodb/postgres/redis 時再暫開；
+          ★ 2026-07-05 實測 Docker Hub blob CDN 已由 production.cloudflare.docker.com 改
+          production.cloudfront.docker.com，註解行已更新為正確域名。原檔另備 squid.conf.before-20260705-todo15。）
         非白名單 → TCP_DENIED/403。cache deny all（純轉發、不留快取）。日誌 /var/log/squid/access.log。
   客戶端：CT270 dockerd /etc/systemd/system/docker.service.d/http-proxy.conf；
           HA 容器 compose environment HTTP(S)_PROXY=http://10.80.80.10:3128 + NO_PROXY 內網段。

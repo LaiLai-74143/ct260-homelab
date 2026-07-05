@@ -1247,3 +1247,40 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
 - 終態 agent 9/9 Active：routerpve/24bay-pve/MC-server/mc-proxy/monitor/fwdproxy/ct-dmz-proxy/
   codex-ops/life-ops。AGH rewrite wazuh.home.arpa 另議（現用 https://10.80.80.12 直連）。
 文件：拓樸 §4.4/§10.8、待辦清單 ◐14（b✔d✔ 更新）。
+
+### 待辦⑮ Paperless-ngx 部署（2026-07-05 全流程完成；Kuma 探活待使用者 UI 加）
+- CT270 /opt/paperless compose：paperless-ngx:2.20.15(ghcr，當日 latest release) + redis:8.6.4。
+  DB 共用 /opt/nocodb postgres16——新 role/庫 paperless，webserver 掛 external network nocodb_default
+  以服務名 db 連線（不動 nocodb compose）。卷 data/media/redisdata named volume（rootfs=hdd1，
+  vzdump ✔13 既有 job 自動涵蓋）；consume/export bind（uid 1000）。磁碟 34%→部署後仍 20G 餘裕。
+- 機密：compose 全 ${VAR} 去密＋CT270 .env(600)；副本＋API token（POST /api/token/ 取得）存 CT260
+  ~/.config/homelab/paperless.env(600)。admin=admin（PAPERLESS_ADMIN_* 首啟建 superuser）。
+- OCR 中文：PAPERLESS_OCR_LANGUAGE=chi_tra+eng（底線）＋PAPERLESS_OCR_LANGUAGES=chi-tra（連字號，
+  apt 包名慣例）——語言包非 image 內建，容器每次 recreate 都在啟動時 apt 裝 → squid 白名單永久加
+  deb.debian.org＋容器 environment 帶 HTTP(S)_PROXY=10.80.80.10:3128（NO_PROXY 涵蓋 broker/db/內網段，
+  redis/postgres 為容器網內直連不受影響）。CT270 離網政策（deny_ct270_wan）原封不動。
+- ★ 踩坑1：Docker Hub blob CDN 已由 production.cloudflare.docker.com 改 production.cloudfront.docker.com
+  ——squid 舊註解行域名已過時，redis 拉取 Forbidden 才發現。已修正註解行；本次拉 redis 走「暫開→拉完
+  復關」維護窗（備份 squid.conf.before-20260705-todo15）。
+- ★ 踩坑2：squid dstdomain 不允許 .docker.io 與 auth.docker.io 並列（子域名重複 → parse ERROR＋
+  reconfigure 拒跑），收斂成 .docker.io 單條。
+- ★ 踩坑3：whoosh 全文索引對中文連續字串斷詞粗糙——「測試文件」整塊成單一 token，query=測試 命中 0；
+  title_content=（icontains 子字串）才可靠。MCP paperless_search 設計成 query= 零命中且含 CJK 時
+  自動退 title_content=。
+- 冒煙：中文測試圖（Noto Sans TC 產生）投 consume → inotify 4 秒消化 → OCR 全文一字不差（含
+  「發票金額 新臺幣三千二百元整」）；API query/子字串/零命中三情境過。
+- DNS：paperless.home.arpa→192.168.20.70 走現行 dnsmasq hosts 檔（/etc/homelab/dns/hosts.home.arpa，
+  備份 .before-todo15-20260705）＋homelab-dns-push-to-24pve-core 推 24Bay＋AGH restart 清快取。
+  待辦原文寫「AGH rewrite」——依 2026-07-04 定案（AGH rewrite 屬 per-client filtering 會被跳過）
+  改走 dnsmasq 機制，非偏離。
+- OpenWrt：Allow-PC40-To-CT270-Paperless（trusted/192.168.40.4→192.168.20.70 tcp/8000；備份
+  firewall.before-20260705-todo15）。手機走 ts_phone_servers 既有整段放行，免新規則。
+- MCP（31b 同步結案）：server.py 加 paperless_search（讀 paperless.env；stdio 三情境煙測過）。
+- 備份面：host_vars/ct270.yml backup_find_cmd 加 /opt/paperless（唯 compose，.env 排除）；
+  手動跑 config-backup --limit ct270＋scan-secrets gate 乾淨（60 檔）。
+- 回滾：docker compose down + docker volume rm + DROP DATABASE/ROLE paperless + uci 刪規則 +
+  hosts 檔還原 .before 檔；squid 還原 .before-20260705-todo15。
+- 使用者待辦：①Kuma UI 加 http://192.168.20.70:8000 探活（302 即活）②手機裝 Paperless Mobile 指
+  http://paperless.home.arpa:8000（帳密在 CT260 ~/.config/homelab/paperless.env）。
+文件：拓樸 §3/§4.4/§10.5（Paperless 區塊+MCP 工具數）/§10.6（squid 白名單）、監控告警 §9.5b、
+  待辦清單 ✔15/31b✔、ansible host_vars/ct270.yml。

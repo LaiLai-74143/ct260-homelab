@@ -1,0 +1,46 @@
+# 待辦15:Paperless-ngx 2.20.15(文件管理+OCR chi_tra+eng)。2026-07-05。
+# DB 共用 /opt/nocodb postgres16(新庫 paperless,經 external network nocodb_default 連服務名 db)。
+# 機密全在 ./.env(chmod600,不入 config-backup;副本存 CT260 ~/.config/homelab/paperless.env)。
+# HTTP(S)_PROXY 僅供容器啟動時 apt 裝 tesseract-ocr-chi-tra(每次 recreate 重裝,經 CT202 squid,
+# 白名單 deb.debian.org);broker/db 為容器網內直連,在 NO_PROXY。
+services:
+  broker:
+    image: docker.io/library/redis:8.6.4
+    restart: unless-stopped
+    volumes: ["redisdata:/data"]
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
+    restart: unless-stopped
+    depends_on: [broker]
+    ports: ["8000:8000"]
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media
+      - ./export:/usr/src/paperless/export
+      - ./consume:/usr/src/paperless/consume
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DBPASS}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_TIME_ZONE: Asia/Taipei
+      PAPERLESS_OCR_LANGUAGE: chi_tra+eng
+      PAPERLESS_OCR_LANGUAGES: chi-tra
+      PAPERLESS_ALLOWED_HOSTS: paperless.home.arpa,192.168.20.70,ct270.home.arpa,life-ops.home.arpa
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: http://paperless.home.arpa:8000,http://192.168.20.70:8000
+      HTTP_PROXY: http://10.80.80.10:3128
+      HTTPS_PROXY: http://10.80.80.10:3128
+      http_proxy: http://10.80.80.10:3128
+      https_proxy: http://10.80.80.10:3128
+      NO_PROXY: localhost,127.0.0.1,broker,db,.home.arpa,192.168.0.0/16,10.0.0.0/8
+      no_proxy: localhost,127.0.0.1,broker,db,.home.arpa,192.168.0.0/16,10.0.0.0/8
+    networks: [default, nocodb]
+networks:
+  nocodb:
+    external: true
+    name: nocodb_default
+volumes: { data: {}, media: {}, redisdata: {} }

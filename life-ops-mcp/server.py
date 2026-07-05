@@ -8,6 +8,7 @@ Config:
   ~/.config/homelab/nocodb.env  -> NC_URL, NC_TOKEN, optional NC_BASE
   ~/.config/homelab/gcal.env    -> GCAL_CLIENT_ID, GCAL_CLIENT_SECRET,
                                    GCAL_REFRESH_TOKEN, optional GCAL_CALENDAR_ID
+  ~/.config/homelab/paperless.env -> PAPERLESS_URL, PAPERLESS_TOKEN (待辦15/31b)
 """
 import sys, os, json, urllib.request, urllib.parse, datetime
 
@@ -391,6 +392,38 @@ def t_list_todos(a):
            if n.get("type") == "待辦" and bool(n.get("done")) == bool(done)]
     return "\n".join(out) if out else "沒有符合的待辦。"
 
+# ---------- paperless (待辦15/31b) ----------
+_PCFG = None
+def pcfg():
+    global _PCFG
+    if _PCFG is None:
+        _PCFG = load_env("~/.config/homelab/paperless.env")
+    return _PCFG
+
+def _pl_api(params):
+    c = pcfg()
+    url = c["PAPERLESS_URL"].rstrip("/") + "/api/documents/?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Authorization": "Token " + c["PAPERLESS_TOKEN"]})
+    with urllib.request.urlopen(req, timeout=20) as f:
+        return json.loads(f.read())
+
+def t_paperless_search(a):
+    q = a["query"]
+    r = _pl_api({"query": q, "page_size": 10})
+    # whoosh 對中文連續字串斷詞粗糙(「測試」搜不到「測試文件」)，零命中時退子字串比對
+    mode = "全文"
+    if not r["count"] and any("一" <= ch <= "鿿" for ch in q):
+        r = _pl_api({"title_content": q, "page_size": 10})
+        mode = "子字串"
+    if not r["count"]:
+        return f"Paperless 找不到含「{q}」的文件。"
+    base = pcfg()["PAPERLESS_URL"].rstrip("/")
+    out = [f"共 {r['count']} 件（{mode}比對，列前 {len(r['results'])} 件）："]
+    for d in r["results"]:
+        snip = " ".join((d.get("content") or "")[:80].split())
+        out.append(f"[{d['id']}] {d.get('title')}（{dpart(d.get('created'))}）{snip} → {base}/documents/{d['id']}/")
+    return "\n".join(out)
+
 # ---------- daily brief ----------
 WD_STATE = "/var/tmp/wd-ct201.state"  # watchdog-ct201.sh 心跳（cron */2 分，待辦#4）
 
@@ -439,6 +472,7 @@ DISPATCH = {
     "overdue_debts": t_overdue_debts,
     "find_note": t_find_note, "add_note": t_add_note,
     "list_todos": t_list_todos, "daily_brief": t_daily_brief,
+    "paperless_search": t_paperless_search,
 }
 
 # ---------- tool schemas ----------
@@ -490,6 +524,9 @@ TOOLS = [
     {"name": "list_todos", "description": "列待辦(type=待辦)；done 預設 false。",
      "inputSchema": S({"done": BOOL})},
     {"name": "daily_brief", "description": "今日早報：日曆行程+要準備的事+待辦+逾期借貸。", "inputSchema": S()},
+    {"name": "paperless_search",
+     "description": "全文搜尋 Paperless-ngx 文件庫(CT270,掃描件/發票/證件 OCR 歸檔)。回傳標題+日期+內容片段+連結。",
+     "inputSchema": S({"query": STR}, ["query"])},
 ]
 
 # ---------- JSON-RPC stdio loop ----------

@@ -271,14 +271,22 @@
        另議：AGH rewrite wazuh.home.arpa。
 
 -------------------------------------------------------------------------------
-15. Paperless-ngx 部署
-    流程：
-    a. 放 CT270（個資節點定位吻合）：compose 加 paperless-ngx + redis（pin 版本），
-       DB 共用既有 postgres（新建 paperless 庫），卷放 hdd1。
-    b. 關鍵 env：PAPERLESS_OCR_LANGUAGE=chi_tra+eng、TZ=Asia/Taipei、consume 目錄掛出。
-    c. 入件路徑：官方手機 app 拍照上傳（Android 有）+ consume 資料夾。
-    d. AGH rewrite paperless.home.arpa；Kuma 探活；隨第 13 項 vzdump 一併備份。
-    e. 上線後接 MCP（見第 31 項 paperless_search）。
+✔15. Paperless-ngx 部署 —— 完成（2026-07-05；僅剩 Kuma 探活待使用者 UI 加）
+    a✔ CT270 /opt/paperless compose = paperless-ngx:2.20.15(ghcr) + redis:8.6.4；DB 共用
+       /opt/nocodb postgres16 新庫 paperless（external network nocodb_default，服務名 db）；
+       卷 data/media/redisdata 隨 rootfs 在 hdd1、vzdump（✔13 既有 job）自動涵蓋。
+    b✔ OCR chi_tra+eng＋TZ=Asia/Taipei＋consume/export bind 掛出。chi-tra 語言包=容器啟動時
+       apt 裝（每次 recreate 重裝）→ squid 白名單永久加 deb.debian.org＋容器帶 HTTP(S)_PROXY；
+       中文測試圖冒煙：OCR 全文一字不差。機密走 ${VAR}+.env(600)，副本 CT260
+       ~/.config/homelab/paperless.env（含 API token）。
+    c✔ 入件雙路：consume 資料夾（inotify 實測 4 秒消化）＋手機 app（Paperless Mobile 指
+       http://paperless.home.arpa:8000，手機經 ts_phone_servers 可達——app 設定待使用者手機操作）。
+    d◐ DNS paperless.home.arpa→20.70（非 AGH rewrite——照現行 dnsmasq hosts 檔機制＋推 24Bay 備援）；
+       PC40 防火牆 Allow-PC40-To-CT270-Paperless tcp/8000；Kuma 探活（http://192.168.20.70:8000，
+       302 即活）＝待使用者 UI 加。
+    e✔ MCP paperless_search 已上（31b 同步結案）：全文查詢＋中文零命中自動退 title_content 子字串
+       （whoosh 對 CJK 斷詞粗糙，「測試」搜不到「測試文件」——踩坑見缺改記錄）。
+    （另議：拉 image 時發現 Docker Hub blob CDN 已改 cloudfront，squid 註解行已修正域名。）
 
 -------------------------------------------------------------------------------
 16. OpenWrt 內網 22 埠絆線告警（tripwire，使用者澄清後定案）
@@ -423,7 +431,8 @@
     【說明】給 life-ops MCP（CT260 server.py）加工具，純寫程式零新硬體：
     a. homelab_status：subprocess 呼叫 hl-mon --json / hl-health，回傳結構化健康摘要
        （唯讀，無任何操作動詞）。
-    b. paperless_search(query)：GET /api/documents/?query=，token 進 .env（第 15 項後）。
+    b✔ paperless_search(query)：完成（2026-07-05 隨待辦15e）——GET /api/documents/?query=，
+       中文零命中自動退 title_content=；token 在 ~/.config/homelab/paperless.env。
     c. debts_monthly_report：月底自動對帳日報（讀 NocoDB Transactions 未結清單）。
     每個工具照現有 server.py 風格註冊 + docstring 寫清楚給模型看。
 
