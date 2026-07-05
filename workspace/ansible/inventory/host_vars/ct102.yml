@@ -1,0 +1,2 @@
+# mc-proxy:velocity + geyser/floodgate/viaversion 設定(排除節點上的歷史備份目錄)
+backup_find_cmd: "find /opt /srv -maxdepth 6 \\( -name velocity.toml -o -name config.yml \\) -size -256k ! -path '*backup*' ! -path '*_bak*' 2>/dev/null"

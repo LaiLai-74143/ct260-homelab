@@ -847,6 +847,15 @@ workspace/ForAI/ + ~/.local/bin/ 自製腳本 + life-ops-mcp/；秘鑰（.env/*t
 remote=GitHub private repo github.com:LaiLai-74143/ct260-homelab（deploy key ~/.ssh/github_ed25519，
 僅此 repo 寫入權；★帳號名含連字號，勿寫 lailai74143）。首次 push 2026-07-05 完成（finish-36.sh）。
 
+Ansible config-as-code（待辦#48 Phase 1，2026-07-05）：controller=本機（裁決：不建 VLAN90 host）。
+venv ~/.venvs/ansible（pip ansible 12/core 2.21+paramiko，不入庫）；樹 ~/workspace/ansible（入庫）。
+inventory：pve24/routerpve/openwrt 走 SSH（openwrt dropbear 無 sftp → transfer=piped）；
+ct100/102/201/202/203/270 走 community.proxmox.proxmox_pct_remote（ssh pve24 + sudo pct exec，
+CT 不開 SSH）；ct250/dxp4800 入 manual 群（常態關機／SSH 3h 關窗）；vm300 刻意排除（污染區）。
+playbooks/config-backup.yml 唯讀撈全站現役設定入 backups/（59 檔），scan-secrets.sh gate
+（明文秘鑰擋、雜湊可入 private repo）；hl-ansible-backup 包裝（gate 失敗回滾+直發 TG），
+cron 23:15 Taipei（=15:15 UTC，排在 23:30 autocommit 前）——cron 條目由使用者跑 finish-48.sh 加入。
+
 ---
 
 ## 10.5 CT270 Life-Ops（NocoDB 個人系統）

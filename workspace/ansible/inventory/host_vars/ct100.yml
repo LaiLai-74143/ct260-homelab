@@ -1,0 +1,2 @@
+# MC-server:只入 server.properties(世界檔/jar 不入庫)
+backup_find_cmd: "find /opt /srv /root -maxdepth 6 -name server.properties -size -256k 2>/dev/null"

@@ -1,0 +1,3 @@
+# life-ops:HA compose + HA configuration.yaml。
+# 排除 /opt/nocodb compose(chmod600、內含 DB 密碼,拓樸 §10.5)與 secrets.yaml
+backup_find_cmd: "find /opt/homeassistant -maxdepth 3 -type f \\( -name 'docker-compose.yml' -o -name 'configuration.yaml' \\) -size -256k ! -name 'secrets.yaml' 2>/dev/null"

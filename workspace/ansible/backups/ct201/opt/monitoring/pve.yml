@@ -1,0 +1,10 @@
+pve24:
+  user: monitor@pve
+  token_name: exporter
+  token_value: 3772e7ef-93b6-4301-ae57-0d18ad1176f0
+  verify_ssl: false
+routerpve:
+  user: monitor@pve
+  token_name: exporter
+  token_value: 32cc2687-24e6-4c49-b742-f0aaf3399977
+  verify_ssl: false

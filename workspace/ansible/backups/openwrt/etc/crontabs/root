@@ -1,0 +1,5 @@
+
+# portscan-autoban daily counter reset
+0 0 * * * for f in /tmp/portscan-autoban/*; do [ -f "$f" ] && rm -f "$f"; done; logger -t portscan-autoban "daily counter reset"
+* * * * * /usr/local/bin/agh-watchdog
+*/3 * * * * /etc/homelab/xiaomi-cloud-nftset.sh

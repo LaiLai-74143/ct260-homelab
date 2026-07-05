@@ -1,0 +1,12 @@
+# Count new WAN IPv4 TCP/UDP touches that are not the approved public service ports.
+# Approved public ports:
+#   qBittorrent/P2P: 44444/tcp, 44444/udp
+#   Minecraft Java: 49169/tcp
+#   Minecraft Bedrock/Geyser: 43915/udp
+#
+# This is intentionally log-only. fw4 still handles DNAT/drop decisions later;
+# portscan-autoban consumes the shared WAN-Portscan-Tripwire-Log prefix.
+chain input_wan {
+	meta nfproto ipv4 ct state new meta l4proto tcp tcp dport != { 44444, 49169 } limit rate 10/minute burst 20 packets counter log prefix "WAN-Portscan-Tripwire-Log: "
+	meta nfproto ipv4 ct state new meta l4proto udp udp dport != { 44444, 43915 } limit rate 10/minute burst 20 packets counter log prefix "WAN-Portscan-Tripwire-Log: "
+}

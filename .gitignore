@@ -6,6 +6,9 @@
 /workspace/*
 !/workspace/ForAI
 
+# --- 納管:Ansible config-as-code(待辦48;backups/ 為各節點設定唯讀入庫) ---
+!/workspace/ansible
+
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local
 /.local/*

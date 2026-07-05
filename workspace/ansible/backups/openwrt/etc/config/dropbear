@@ -1,0 +1,17 @@
+
+config dropbear
+	option PasswordAuth 'on'
+	option Port '52438'
+	option Interface 'lan'
+
+config dropbear
+	option Port '52438'
+	option Interface 'trusted_clients'
+	option PasswordAuth 'on'
+
+config dropbear
+	option Port '52438'
+	option Interface 'infra_core'
+	option PasswordAuth 'off'
+	option RootPasswordAuth 'off'
+

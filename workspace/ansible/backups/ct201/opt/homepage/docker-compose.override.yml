@@ -1,0 +1,4 @@
+services:
+  homepage:
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "monitor.home.arpa:3000,monitor-edge.home.arpa:3000,10.80.80.11:3000,localhost:3000,127.0.0.1:3000"

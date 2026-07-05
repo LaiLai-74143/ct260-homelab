@@ -1,0 +1,171 @@
+
+config dnsmasq
+	option domainneeded '1'
+	option localise_queries '1'
+	option rebind_protection '1'
+	option rebind_localhost '1'
+	option local '/lan/'
+	option domain 'lan'
+	option expandhosts '1'
+	option cachesize '1000'
+	option authoritative '1'
+	option readethers '1'
+	option leasefile '/tmp/dhcp.leases'
+	option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+	option localservice '1'
+	option ednspacket_max '1232'
+	option port '5353'
+	list address '/router.local/router.lan/192.168.31.1'
+	list address '/hl.lailai74143.com/100.100.1.2'
+	list addnhosts '/etc/homelab/dns/hosts.home.arpa'
+	list server '/home.arpa/'
+
+config dhcp 'lan'
+	option interface 'lan'
+	option start '51'
+	option limit '203'
+	option leasetime '12h'
+	option dhcpv4 'server'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	option ndp 'disabled'
+
+config dhcp 'wan'
+	option interface 'wan'
+	option ignore '1'
+
+config odhcpd 'odhcpd'
+	option leasefile '/tmp/odhcpd.leases'
+	option leasetrigger '/usr/sbin/odhcpd-update'
+	option loglevel '4'
+	option piodir '/tmp/odhcpd-piodir'
+	option hostsdir '/tmp/hosts'
+
+config host
+	option name 'PVE'
+	list mac '00:F0:4D:00:A0:97'
+	option ip '192.168.31.2'
+	option leasetime 'infinite'
+
+config dhcp 'iot'
+	option interface 'iot'
+	option start '50'
+	option limit '150'
+	option leasetime '12h'
+	list dhcp_option '3,192.168.50.1'
+	list dhcp_option '6,192.168.50.1'
+
+config host
+	option name 'PC'
+	list mac 'BC:FC:E7:D6:F6:F3'
+	option ip '192.168.40.4'
+	option leasetime 'infinite'
+
+config host
+	option name 'WiFiSub'
+	option mac '04:67:61:59:8E:6D'
+	option ip '192.168.50.42'
+	option leasetime 'infinite'
+
+config dhcp 'infra_core'
+	option interface 'infra_core'
+	option ignore '1'
+
+config host
+	option name 'WiFiMain'
+	list mac '04:67:61:58:C5:0A'
+	option ip '192.168.50.41'
+	option leasetime 'infinite'
+
+config dhcp 'servers'
+	option interface 'servers'
+	option dhcpv4 'disabled'
+	option ra 'server'
+	option dhcpv6 'server'
+	option ndp 'disabled'
+	option ra_mtu '1492'
+
+config dhcp 'trusted_clients'
+	option interface 'trusted_clients'
+	option start '4'
+	option limit '1'
+	option leasetime '12h'
+	option dhcpv4 'server'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	option ndp 'disabled'
+	list dhcp_option '3,192.168.40.1'
+	list dhcp_option '6,192.168.40.1'
+
+config dhcp 'dmz'
+	option interface 'dmz'
+	option ignore '1'
+
+config dhcp 'game_services'
+	option interface 'game_services'
+	option ignore '1'
+
+config dhcp 'mgmt_oob'
+	option interface 'mgmt_oob'
+	option ignore '1'
+
+config host
+	option name 'spk-yinhua'
+	option mac '90:FB:5D:D8:E2:57'
+	option ip '192.168.50.135'
+	option leasetime 'infinite'
+
+config host
+	option name 'spk-living'
+	option mac '90:FB:5D:DD:DF:CD'
+	option ip '192.168.50.181'
+	option leasetime 'infinite'
+
+config host
+	option name 'derh-yinhua'
+	option mac '1C:EA:AC:EE:59:E5'
+	option ip '192.168.50.186'
+	option leasetime 'infinite'
+
+config host
+	option name 'fan-yinhua'
+	option mac 'CC:DA:20:5C:02:BE'
+	option ip '192.168.50.116'
+	option leasetime 'infinite'
+
+config host
+	option name 'cam-door'
+	option mac '18:50:73:0E:D2:52'
+	option ip '192.168.50.67'
+	option leasetime 'infinite'
+
+config host
+	option name 'lt-yinhua-1'
+	option mac 'EC:4D:3E:15:F9:23'
+	option ip '192.168.50.56'
+	option leasetime 'infinite'
+
+config host
+	option name 'lt-yinhua-2'
+	option mac 'EC:4D:3E:15:7C:BF'
+	option ip '192.168.50.87'
+	option leasetime 'infinite'
+
+config host
+	option name 'lt-yinhua-3'
+	option mac 'EC:4D:3E:15:9F:EB'
+	option ip '192.168.50.196'
+	option leasetime 'infinite'
+
+config host
+	option name 'lt-yinhua-side'
+	option mac 'EC:4D:3E:15:5F:3B'
+	option ip '192.168.50.184'
+	option leasetime 'infinite'
+
+config host
+	option name 'lt-bathroom'
+	option mac 'EC:4D:3E:16:1C:02'
+	option ip '192.168.50.99'
+	option leasetime 'infinite'
+

@@ -121,7 +121,9 @@ Checker：OpenWrt `homelab-vlan80-observation-status`；CT201 `homelab-vlan80-ob
 可作 jump host / Ansible / maintenance controller。
 高權限入口受 MFA / Tailscale / SSH key / ACL 保護。
 ```
-待辦：是否部署 jump host；Ansible/backup controller 位置；VLAN90 -> VLAN10/20/30/80 最小權限規則。
+已裁決（2026-07-05 待辦48）：Ansible controller=CT260（VLAN20），沿用既有 ops key + pct 管理路徑，
+不建 VLAN90 host（「VLAN90 跳板」在待辦清單已決策不做）。
+殘留待辦：是否部署 jump host；VLAN90 -> VLAN10/20/30/80 最小權限規則（目前無 host，暫無需求）。
 
 ### VLAN666 / Honeypot / Polluted Zone
 蜜罐、惡意流量收集、完全隔離污染區：Cowrie。

@@ -1,0 +1,141 @@
+# 待辦48 Phase 1:全站設定唯讀入庫(只 fetch/讀,不寫任何目標)
+# 跑法:cd ~/workspace/ansible && ~/.venvs/ansible/bin/ansible-playbook playbooks/config-backup.yml
+# 跑完必跑 ./scan-secrets.sh 通過才准 commit(明文秘鑰不入庫;雜湊可入 private repo)
+---
+- name: OpenWrt 設定備份
+  hosts: openwrt
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+  tasks:
+    - name: 列自製腳本與 nft 附加檔
+      ansible.builtin.raw: find /usr/bin -maxdepth 1 -name 'homelab-*' 2>/dev/null; find /etc/nftables.d -type f 2>/dev/null; true
+      register: owrt_extra
+      changed_when: false
+    - name: fetch 設定
+      ansible.builtin.fetch:
+        src: "{{ item }}"
+        dest: "{{ backup_root }}"
+        fail_on_missing: false
+      loop: "{{ base_files + (owrt_extra.stdout_lines | default([]) | map('trim') | select() | list) }}"
+      vars:
+        base_files:
+          - /etc/config/network
+          - /etc/config/firewall
+          - /etc/config/dhcp
+          - /etc/config/system
+          - /etc/config/dropbear
+          - /etc/config/adguardhome
+          - /etc/adguardhome/adguardhome.yaml
+          - /etc/crontabs/root
+
+- name: RouterPVE 設定備份(root 直讀)
+  hosts: routerpve
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+  tasks:
+    - name: fetch 設定
+      ansible.builtin.fetch:
+        src: "{{ item }}"
+        dest: "{{ backup_root }}"
+        fail_on_missing: false
+      loop:
+        - /etc/pve/storage.cfg
+        - /etc/pve/qemu-server/101.conf
+        - /etc/pve/qemu-server/300.conf
+        - /etc/network/interfaces
+        - /etc/vzdump.conf
+
+- name: pve24 設定備份(codex-admin,sudo 僅 pct/qm/pvesh/pvesm → 用 pvesh/pct 輸出代替讀檔)
+  hosts: pve24
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+    ct_ids: [100, 102, 201, 202, 203, 250, 260, 270]
+  tasks:
+    - name: pvesh storage 定義
+      ansible.builtin.command: sudo pvesh get storage --output-format json-pretty
+      register: pvesh_storage
+      changed_when: false
+    - name: 建本地備份目錄
+      ansible.builtin.file:
+        path: "{{ backup_root }}/pve24"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+    - name: 存 storage 定義
+      ansible.builtin.copy:
+        content: "{{ pvesh_storage.stdout }}\n"
+        dest: "{{ backup_root }}/pve24/pvesh-storage.json"
+        mode: "0644"
+      delegate_to: localhost
+    - name: pct config 各 CT
+      ansible.builtin.command: "sudo pct config {{ item }}"
+      loop: "{{ ct_ids }}"
+      register: pct_cfg
+      changed_when: false
+    - name: 存 pct config
+      ansible.builtin.copy:
+        content: "{{ item.stdout }}\n"
+        dest: "{{ backup_root }}/pve24/pct-config-{{ item.item }}.conf"
+        mode: "0644"
+      loop: "{{ pct_cfg.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      delegate_to: localhost
+    - name: fetch 世界可讀設定檔
+      ansible.builtin.fetch:
+        src: "{{ item }}"
+        dest: "{{ backup_root }}"
+        fail_on_missing: false
+      loop:
+        - /etc/network/interfaces
+        - /etc/vzdump.conf
+
+- name: CT 服務設定備份(pct_remote,root)
+  hosts: ct:!ct250
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+  tasks:
+    - name: 列本機備份清單
+      ansible.builtin.shell: "{{ backup_find_cmd | default('true') }}"
+      register: found
+      changed_when: false
+    - name: 讀取檔案內容(slurp,pct_remote 無 sftp)
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop: "{{ (found.stdout_lines | default([]) | map('trim') | select() | list) + (backup_files | default([])) }}"
+      register: slurped
+      ignore_errors: true
+    - name: 建本地備份目錄
+      ansible.builtin.file:
+        path: "{{ (backup_root ~ '/' ~ inventory_hostname ~ item.item) | dirname }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ slurped.results | selectattr('content', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      delegate_to: localhost
+    - name: 存到 repo
+      ansible.builtin.copy:
+        content: "{{ item.content | b64decode }}"
+        dest: "{{ backup_root }}/{{ inventory_hostname }}{{ item.item }}"
+        mode: "0644"
+      loop: "{{ slurped.results | selectattr('content', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      delegate_to: localhost
+
+- name: 入庫前 redact 已知明文秘鑰欄位(政策:雜湊可入、明文不入)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+  tasks:
+    - name: redact server.properties 秘鑰欄位
+      ansible.builtin.shell: |
+        find {{ backup_root }} -name 'server.properties' -exec \
+          sed -i -E 's/^(management-server-secret|rcon\.password)=..*/\1=**REDACTED**/' {} +
+      changed_when: true

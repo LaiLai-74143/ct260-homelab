@@ -1,0 +1,8 @@
+# CT 連線:ssh 到 pve24(codex-admin)後 sudo pct exec 進 CT(root)。
+# 前提:pve24 sudoers 已有 codex-admin NOPASSWD /usr/sbin/pct *(拓樸 §1.2)
+ansible_connection: community.proxmox.proxmox_pct_remote
+ansible_host: 192.168.20.5
+ansible_user: codex-admin
+ansible_port: 22
+ansible_private_key_file: ~/.ssh/ct260_ops_ed25519
+ansible_paramiko_host_key_auto_add: true

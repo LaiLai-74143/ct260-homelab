@@ -1,0 +1,33 @@
+groups:
+  - name: pve
+    rules:
+      # 待辦11e:LXC 內 node_exporter 讀宿主 /proc 看不到單 CT 上限,pve-exporter 走 PVE API 補齊
+      - alert: PveGuestHighMemory
+        expr: 100 * pve_memory_usage_bytes{id=~"(lxc|qemu)/.+"} / pve_memory_size_bytes{id=~"(lxc|qemu)/.+"} > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVE guest 記憶體過高: {{ $labels.id }}"
+          description: "{{ $labels.instance }} 的 {{ $labels.id }} 記憶體使用率 {{ $value | humanize }}% (>90% 已持續 10 分鐘;此為 PVE API cgroup 準確值)"
+          priority: "5"
+
+      - alert: PveGuestUnexpectedStop
+        expr: pve_up{id=~"(lxc|qemu)/.+", id!="lxc/250"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PVE guest 非預期停止: {{ $labels.id }}"
+          description: "{{ $labels.instance }} 上的 {{ $labels.id }} 已停止超過 3 分鐘 (pve_up==0)。CT250 常態關機已排除,其餘 CT/VM 皆應常駐。"
+          priority: "8"
+
+      - alert: PveStorageAlmostFull
+        expr: 100 * pve_disk_usage_bytes{id=~"storage/.+"} / pve_disk_size_bytes{id=~"storage/.+"} > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVE storage 使用率過高: {{ $labels.id }}"
+          description: "{{ $labels.instance }} 的 {{ $labels.id }} 使用率 {{ $value | humanize }}% (>85%)。註:cifs 備份儲存已知 ~88%,清理見待辦38。"
+          priority: "5"

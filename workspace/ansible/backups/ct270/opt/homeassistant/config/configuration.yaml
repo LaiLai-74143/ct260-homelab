@@ -1,0 +1,19 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# --- HDD 調校（CT270 rootfs 在 5400rpm hdd1，與 postgres 共盤）---
+# commit_interval: 把 recorder 的 fsync 從每 1s 批次成每 30s，大幅減少隨機小寫入
+# purge_keep_days: 只留 7 天歷史，限制 SQLite DB 成長、控制 IO
+recorder:
+  commit_interval: 30
+  purge_keep_days: 7
+  auto_purge: true

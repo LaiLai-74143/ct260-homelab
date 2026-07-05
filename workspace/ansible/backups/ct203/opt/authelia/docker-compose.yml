@@ -1,0 +1,26 @@
+# CT203 /opt/authelia — Authelia + Redis（待辦③，版本 pin）
+# host network：Docker 以 iptables:false 運行（不碰 CT203 既有 tailscale/ctdmz nft 規則），
+# 故不用 bridge NAT；authelia 直聽 :9091/:9959，redis 只綁 127.0.0.1。
+services:
+  authelia:
+    image: docker.io/authelia/authelia:4.39.20
+    container_name: authelia
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Taipei
+    volumes:
+      - ./config:/config
+    depends_on:
+      - redis
+
+  redis:
+    image: docker.io/library/redis:7.4.9-alpine
+    container_name: authelia-redis
+    restart: unless-stopped
+    network_mode: host
+    command: ["redis-server", "--bind", "127.0.0.1", "--port", "6379", "--save", "60", "1"]
+    volumes:
+      - ./redis:/data

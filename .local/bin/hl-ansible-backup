@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# hl-ansible-backup: 每日全站設定唯讀入庫(待辦48)。
+# 流程:ansible config-backup.yml → scan-secrets gate;gate/playbook 失敗即回滾
+# workspace/ansible/backups/ 至 git 現狀(絕不讓髒檔留給 23:30 hl-git-autocommit),並直發 TG。
+# cron:23:15 Taipei(=15:15 UTC),刻意排在 autocommit(23:30)前。
+set -uo pipefail
+AD="$HOME/workspace/ansible"
+PB="$HOME/.venvs/ansible/bin/ansible-playbook"
+LOG="$HOME/.local/state/hl/ansible-backup.log"
+ENVF="$HOME/.config/homelab/notify-telegram.env"
+mkdir -p "$(dirname "$LOG")"
+
+tg() {  # 直發 TG(沿用 watchdog-ct201.sh 模式)
+    local token chat
+    token=$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$ENVF" | head -1 | sed "s/[\"']//g")
+    chat=$(sed -n 's/^TELEGRAM_CHAT_ID=//p' "$ENVF" | head -1 | sed "s/[\"']//g")
+    [ -n "$token" ] && [ -n "$chat" ] || return 1
+    curl -sf -m 20 "https://api.telegram.org/bot${token}/sendMessage" \
+        --data-urlencode "chat_id=${chat}" \
+        --data-urlencode "text=$1" >/dev/null
+}
+
+{
+  echo "== $(date -Is) hl-ansible-backup =="
+  if (cd "$AD" && "$PB" playbooks/config-backup.yml) && "$AD/scan-secrets.sh"; then
+    echo "backup + scan-secrets: ok"
+  else
+    echo "FAIL — 回滾 backups/,詳見本 log"
+    git -C "$HOME" checkout -- workspace/ansible/backups 2>/dev/null
+    git -C "$HOME" clean -qfd workspace/ansible/backups 2>/dev/null
+    tg "⚠️ hl-ansible-backup 失敗(playbook 或 scan-secrets gate),backups/ 已回滾未入庫。查 CT260 ~/.local/state/hl/ansible-backup.log"
+  fi
+} >> "$LOG" 2>&1

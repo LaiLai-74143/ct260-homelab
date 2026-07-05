@@ -1,0 +1,22 @@
+---
+providers:
+  openweathermap: openweathermapapikey
+  weatherapi: weatherapiapikey
+
+layout:
+  VLAN10 基礎設施: { style: column }
+  VLAN20 伺服器: { style: column }
+  VLAN30 儲存: { style: column }
+  VLAN40 可信終端: { style: column }
+  VLAN50 IoT: { style: column }
+  VLAN67 遊戲: { style: column }
+  VLAN80 監控入口: { style: column }
+  Grafana 圖表: { style: column }
+  監控與骨幹:
+    header: false
+    style: row
+    columns: 4
+    Prometheus 監控目標: { style: column }
+    Prometheus 監控目標 續: { style: column }
+    VLAN100 儲存骨幹: { style: column }
+    VLAN666 蜜罐: { style: column }

@@ -1,0 +1,30 @@
+groups:
+  - name: firewall-security
+    rules:
+      # absolute, not relative: bans naturally decay + daily reset, so only 0 is anomalous
+      - alert: PortscanBanListEmpty
+        expr: portscan_autoban_banned_ips == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "portscan-autoban ban list empty"
+          description: "portscan_autoban_banned_ips == 0 for 5m (state file lost / nft set flushed / service reset)."
+
+      - alert: PortscanBanSpike
+        expr: delta(portscan_autoban_banned_ips[10m]) > 80
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "portscan ban spike"
+          description: "Net +{{ $value | printf \"%.0f\" }} banned IPs in 10m (scan burst / rule anomaly)."
+
+      - alert: CowrieQuarantineSpike
+        expr: delta(cowrie_quarantine_quarantined_ips[10m]) > 30
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cowrie quarantine spike"
+          description: "Net +{{ $value | printf \"%.0f\" }} quarantined IPs in 10m (honeypot login burst)."

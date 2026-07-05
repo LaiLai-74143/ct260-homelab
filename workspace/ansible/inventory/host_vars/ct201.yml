@@ -1,0 +1,3 @@
+# monitor:compose + prometheus/rules + grafana provisioning + homepage(排除節點上的 _bak 歷史目錄)
+# 排除 alertmanager.yml(內含 TG bot token,明文秘鑰不入庫——scan-secrets gate 雙保險)
+backup_find_cmd: "find /opt/monitoring /opt/homepage -maxdepth 4 -type f \\( -name '*.yml' -o -name '*.yaml' \\) -size -256k ! -name 'alertmanager.yml' ! -path '*_bak*' ! -path '*backup*' 2>/dev/null"

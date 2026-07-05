@@ -1,0 +1,14 @@
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Asia/Taipei
+      HTTP_PROXY: http://10.80.80.10:3128
+      HTTPS_PROXY: http://10.80.80.10:3128
+      NO_PROXY: localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8,.home.arpa,.mi.com,.xiaomi.com,.miot-spec.org,.miot-spec.com
+    volumes:
+      - ./config:/config
+      - /etc/localtime:/etc/localtime:ro

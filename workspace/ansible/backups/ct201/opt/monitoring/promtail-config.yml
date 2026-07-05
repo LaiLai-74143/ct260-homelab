@@ -1,0 +1,58 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /positions/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: journal
+    journal:
+      max_age: 12h
+      path: /var/log/journal
+      labels:
+        job: journal
+        host: ct201
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: unit
+      - source_labels: ['__journal_syslog_identifier']
+        target_label: ident
+      - source_labels: ['__journal_priority_keyword']
+        target_label: level
+
+  # OpenWrt logread -r 遠端 syslog(唯一發送端;無 OpenWrt 放行時其他 zone 到不了 1514)
+  - job_name: openwrt-syslog
+    syslog:
+      listen_address: 0.0.0.0:1514
+      listen_protocol: udp
+      idle_timeout: 60s
+      label_structured_data: false
+      syslog_format: rfc3164
+      labels:
+        job: syslog
+        host: openwrt
+    relabel_configs:
+      - source_labels: ['__syslog_message_hostname']
+        target_label: syslog_host
+      - source_labels: ['__syslog_message_app_name']
+        target_label: ident
+      - source_labels: ['__syslog_message_severity']
+        target_label: level
+
+  # CT201 自身 docker 容器日誌(prometheus/grafana/kuma/gotify/loki 等)
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      - target_label: job
+        replacement: docker
+      - target_label: host
+        replacement: ct201

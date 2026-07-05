@@ -1,0 +1,72 @@
+groups:
+  - name: hardware-basic
+    rules:
+      - alert: HostHighCPU
+        expr: 100 - (avg by(instance,job)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU busy {{ $value | printf \"%.0f\" }}% (>60%) for 5m (job {{ $labels.job }})."
+
+      - alert: HostHighMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory on {{ $labels.instance }}"
+          description: "Available memory {{ $value | printf \"%.0f\" }}% (<30%) for 5m (job {{ $labels.job }})."
+
+      - alert: HostHighIOWait
+        expr: avg by(instance,job)(rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High IO wait on {{ $labels.instance }}"
+          description: "iowait {{ $value | printf \"%.0f\" }}% (>25%) for 5m (job {{ $labels.job }}); possible disk/IO pressure."
+
+      - alert: HostDiskLowSpace
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|fuse.*|iso9660"} / node_filesystem_size_bytes) * 100 < 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: "Mount {{ $labels.mountpoint }} {{ $value | printf \"%.1f\" }}% free (<10%) for 15m (job {{ $labels.job }})."
+
+      - alert: HostRebooted
+        expr: changes(node_boot_time_seconds[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host rebooted: {{ $labels.instance }}"
+          description: "{{ $labels.instance }} boot time changed in the last 10m (job {{ $labels.job }})."
+
+      # predict_linear over 6h trend hits empty within 24h; guarded by <30% free so a
+      # long-stable-but-full mount (DXP4800 ~88%, CT102 tight disk) does not flap.
+      - alert: HostDiskWillFillSoon
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|fuse.*|iso9660"}[6h], 24*3600) < 0
+          and
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|fuse.*|iso9660"} / node_filesystem_size_bytes) * 100 < 30
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk filling up on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: "Mount {{ $labels.mountpoint }} trending to full within 24h at current growth (job {{ $labels.job }}); check log/backup/volume growth."
+
+      # sustained high disk throughput (e.g. VM300 once read ~40MB/s). for:15m skips short
+      # backup/scan bursts; threshold tunable. Heads-up only, often attack/log-burst not fault.
+      - alert: FilesystemReadWriteSpike
+        expr: (sum by(instance,job)(rate(node_disk_read_bytes_total[5m])) + sum by(instance,job)(rate(node_disk_written_bytes_total[5m]))) / 1048576 > 60
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained disk IO on {{ $labels.instance }}"
+          description: "Disk read+write {{ $value | printf \"%.0f\" }}MB/s (>60) sustained 15m (job {{ $labels.job }}); backup/scan burst, log flood, or IO anomaly."

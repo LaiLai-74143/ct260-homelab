@@ -1,0 +1,3 @@
+# fwdproxy(squid :3128)
+backup_files:
+  - /etc/squid/squid.conf

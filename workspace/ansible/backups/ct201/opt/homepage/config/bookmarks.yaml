@@ -1,0 +1,93 @@
+- AI:
+
+    - ChatGPT:
+
+        - abbr: GPT
+
+          href: https://chatgpt.com/
+
+    - Claude:
+
+        - abbr: CL
+
+          href: https://claude.ai/
+
+    - DeepSeek:
+
+        - abbr: DS
+
+          href: https://chat.deepseek.com/
+
+    - Google Gemini:
+
+        - abbr: GM
+
+          href: https://gemini.google.com/
+
+    - Grok:
+
+        - abbr: GK
+
+          href: https://grok.com/
+
+- Social:
+
+    - Facebook:
+
+        - abbr: FB
+
+          href: https://www.facebook.com/
+
+    - Messenger:
+
+        - abbr: MS
+
+          href: https://www.messenger.com/
+
+    - Gmail:
+
+        - abbr: GL
+
+          href: https://mail.google.com/
+
+    - 雲端硬碟:
+
+        - abbr: GD
+
+          href: https://drive.google.com/
+
+- Video:
+
+    - YouTube:
+
+        - abbr: YT
+
+          href: https://www.youtube.com/
+
+    - BiliBili:
+
+        - abbr: BB
+
+          href: https://www.bilibili.com/
+
+- Private Tracker:
+
+    - M-Team:
+
+        - abbr: MT
+
+          href: https://kp.m-team.cc/
+
+    - U2分享園:
+
+        - abbr: U2
+
+          href: https://u2.dmhy.org/
+
+- Network:
+
+    - Tailscale:
+
+        - abbr: TS
+
+          href: https://login.tailscale.com/admin/machines

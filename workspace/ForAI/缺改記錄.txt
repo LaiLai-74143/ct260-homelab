@@ -1170,3 +1170,35 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
 - 驗證：main 3 commits（ac89b28/3dda0c5/b1bff62）上 GitHub private repo，branch tracking origin/main。
 - 常態運作：cron 每日 23:30 Taipei hl-git-autocommit 自動 commit+push；本節起文件更新由每日 auto-commit 收。
 文件：拓樸 §10 remote 補記、待辦清單 ✔36。
+
+### 待辦㊽ Phase 1（2026-07-05：Ansible config-as-code 唯讀入庫上線）
+- 裁決：controller=CT260，不建 VLAN90 host（VLAN90 跳板本在「已決策不做」）；
+  網段指導原則 §VLAN90 待辦行同步改記。
+- 實測翻案：OpenWrt VM101 可入管——已有 python3.13.9（x86_64 VM、磁碟 78G 幾乎全空），
+  dropbear 無 sftp、scp 亦失敗，但 ansible piped 傳輸可用；-m ping/setup/raw 三連過。
+  「Ansible 對 OpenWrt 相容性不好」屬實體路由器（無 python/空間）情境，不適用本站。
+- 安裝：pip venv ~/.venvs/ansible（ansible 12 / core 2.21.1 + paramiko；CT260 無 sudo，不動系統）。
+- 佈局：~/workspace/ansible 入庫（ansible.cfg / inventory / host_vars / playbooks /
+  scan-secrets.sh / finish-48.sh），.gitignore 白名單 +!/workspace/ansible。
+  CT 連線 = community.proxmox.proxmox_pct_remote（ssh pve24 codex-admin + sudo pct exec，
+  沿用 NOPASSWD pct 白名單；CT 不開 SSH）。★community.general 同名 plugin 已 deprecated
+  （15.0.0 將移除），起手即用 community.proxmox。
+- config-backup.yml 唯讀撈 59 檔：openwrt /etc/config/*+AGH yaml（/etc/adguardhome/
+  adguardhome.yaml，UCI wrapper 另收）+nftables.d+crontab、routerpve /etc/pve 直讀、
+  pve24 以 pvesh/pct config 輸出代替讀檔（sudo 僅 pct/qm/pvesh/pvesm 四指令，/etc/pve 0640 讀不到）、
+  CT 用 slurp（pct_remote 無 sftp）。節點上歷史備份目錄（velocity-backup-*、config_bak_*、
+  *.before-*）一律排除——repo 只收現役設定。
+- 秘鑰政策落地：明文不入（ct201 alertmanager.yml TG token、ct203 authelia configuration、
+  ct270 nocodb compose+HA secrets.yaml 直接不撈；ct100 management-server-secret/rcon.password
+  入庫前 sed redact）、雜湊可入 private repo（AGH bcrypt）。scan-secrets.sh gate：已知 token
+  格式+私鑰塊+明文賦值（跳過註解行/雜湊/REDACTED）；gate 曾正確攔下 mc secret 與
+  homepage 註解占位符——前者 redact、後者加註解跳過規則。
+- hl-ansible-backup 包裝：playbook+gate 失敗即回滾 backups/ 至 git 現狀（絕不讓髒檔留給
+  23:30 autocommit）並直發 TG（沿用 watchdog TG 模式）。手動實測 PASS（59 檔 clean）。
+  同 hl-git-autocommit 慣例：本地 cron 腳本，不入 hl-工具箱規格。
+- ★ 分類器樣本+1：agent 加 crontab 條目被攔（[Unauthorized Persistence]）→照 36 慣例收斂
+  ~/workspace/ansible/finish-48.sh（冪等；加 23:15 Taipei=15:15 UTC 條目，排 autocommit 前）。
+- 回滾：crontab 刪 ansbak 行 + rm -rf ~/.venvs/ansible ~/workspace/ansible + .gitignore 移除
+  ansible 白名單兩行。零現役服務變更（全程唯讀 + 新增檔案；openwrt 測試殘留 /root/.ansible 已清）。
+文件：拓樸 §10（Ansible 段新增）、網段指導原則 §VLAN90（裁決改記）、注意事項 §1（6/7 兩條）、
+待辦清單 ◐48。

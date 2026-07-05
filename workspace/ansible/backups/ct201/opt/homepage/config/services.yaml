@@ -1,0 +1,258 @@
+- VLAN10 基礎設施:
+    - Router PVE / N95:
+        icon: mdi-server-network
+        href: "https://router-pve.home.arpa:8006"
+        description: |
+          IP: 192.168.10.2
+          URL: https://router-pve.home.arpa:8006
+
+    - OpenWrt 閘道:
+        icon: mdi-router-wireless
+        href: "http://openwrt.home.arpa"
+        description: |
+          IP: 192.168.10.1
+          URL: http://openwrt.home.arpa
+
+    - 三樓交換機:
+        icon: mdi-switch
+        href: "http://switch3f.home.arpa"
+        description: |
+          IP: 192.168.10.21
+          URL: http://switch3f.home.arpa
+
+- VLAN20 伺服器:
+    - 24Bay PVE:
+        icon: mdi-server
+        href: "https://pve24.home.arpa:8006"
+        description: |
+          IP: 192.168.20.5
+          URL: https://pve24.home.arpa:8006
+
+    - CT250 Restore Lab:
+        icon: mdi-backup-restore
+        href: "ssh://ct250.home.arpa"
+        description: |
+          IP: 192.168.20.50
+          狀態: 目前可能關機
+
+    - CT260 Codex Ops:
+        icon: mdi-console
+        href: "ssh://ct260.home.arpa"
+        description: |
+          IP: 192.168.20.60
+          SSH: ct260.home.arpa
+
+    - CT270 Life-Ops:
+        icon: mdi-calendar-heart
+        href: "http://ct270.home.arpa:8080"
+        description: |
+          IP: 192.168.20.70
+          URL: http://ct270.home.arpa:8080 (NocoDB)
+
+- VLAN30 儲存:
+    - DXP4800 Pro / NAS:
+        icon: mdi-nas
+        href: "https://nas.home.arpa:8243"
+        description: |
+          IP: 192.168.30.3
+          URL: https://nas.home.arpa:8243
+          備用: http://nas.home.arpa:5243
+
+    - Vaultwarden:
+        icon: mdi-lock
+        href: "https://pw.example.com"
+        description: |
+          角色: DXP Docker / production
+          URL: https://pw.example.com
+
+- VLAN40 可信終端:
+    - Windows 主機:
+        icon: mdi-desktop-classic
+        href: "http://pc.home.arpa:18080/health"
+        description: |
+          IP: 192.168.40.4
+          URL: http://pc.home.arpa:18080/health
+
+- VLAN50 IoT:
+    - AP 主節點:
+        icon: mdi-wifi
+        href: "http://ap-main.home.arpa"
+        description: |
+          IP: 192.168.50.41
+          URL: http://ap-main.home.arpa
+
+    - AP 子節點:
+        icon: mdi-wifi-star
+        href: "http://ap-node.home.arpa"
+        description: |
+          IP: 192.168.50.42
+          URL: http://ap-node.home.arpa
+
+- VLAN67 遊戲:
+    - Minecraft 代理:
+        icon: mdi-server-network
+        href: "http://mc-proxy.home.arpa"
+        description: |
+          IP: 10.70.70.10
+          URL: http://mc-proxy.home.arpa
+
+    - Minecraft 後端:
+        icon: mdi-minecraft
+        href: "http://mc-backend.home.arpa"
+        description: |
+          IP: 10.70.70.20
+          URL: http://mc-backend.home.arpa
+
+    - Minecraft 公網入口:
+        icon: mdi-earth
+        href: "https://mc.lailai74143.com"
+        description: |
+          Java: mc.lailai74143.com:49169
+          Bedrock: mc.lailai74143.com:43915
+
+- VLAN80 監控入口:
+    - Homepage:
+        icon: mdi-home-assistant
+        href: "http://monitor.home.arpa:3000"
+        description: |
+          IP: 10.80.80.11
+          URL: http://monitor.home.arpa:3000
+
+    - Uptime Kuma:
+        icon: mdi-monitor-dashboard
+        href: "https://kuma.hl.lailai74143.com"
+        description: |
+          IP: 10.80.80.11
+          URL: http://monitor.home.arpa:3001
+
+    - Grafana:
+        icon: mdi-chart-box
+        href: "https://grafana.hl.lailai74143.com"
+        description: |
+          IP: 10.80.80.11
+          URL: http://monitor.home.arpa:3002
+
+    - Prometheus:
+        icon: mdi-chart-line
+        href: "https://prometheus.hl.lailai74143.com"
+        description: |
+          IP: 10.80.80.11
+          URL: http://monitor.home.arpa:9090
+
+- Grafana 圖表:
+    - 設備總覽 (Homelab):
+        icon: mdi-view-dashboard
+        href: "https://grafana.hl.lailai74143.com/d/homelab-overview"
+        description: |
+          Dashboard: 設備總覽 (Homelab)
+          內容: 9 台設備 CPU/記憶體/磁碟/溫度 + 總覽表 + 存活時間軸 + 趨勢
+
+    - 防火牆審計與 Cowrie 蜜罐:
+        icon: mdi-shield-bug
+        href: "https://grafana.hl.lailai74143.com/d/openwrt-portscan-autoban/openwrt-portscan-autoban"
+        description: |
+          Dashboard: OpenWrt 防火牆審計與 Cowrie 蜜罐
+          內容: 封鎖、GeoIP、Cowrie session、登入、命令、來源地圖
+
+- 監控與骨幹:
+    - Prometheus 監控目標:
+        - 24Bay PVE Node Exporter:
+            icon: mdi-server
+            href: "http://pve24-server.home.arpa:9100/metrics"
+            description: |
+              Job: pve-node
+              Target: pve24-server.home.arpa:9100
+
+        - CT102 Minecraft Proxy Node Exporter:
+            icon: mdi-server-network
+            href: "http://mc-proxy.home.arpa:9100/metrics"
+            description: |
+              Job: ct102-mc-proxy-node
+              Target: mc-proxy.home.arpa:9100
+
+        - OpenWrt System Metrics:
+            icon: mdi-router
+            href: "http://monitor.home.arpa:9105/openwrt-system-metrics.txt"
+            description: |
+              Job: openwrt-system
+              Target: 10.80.80.1:9105
+
+        - CT260 Codex Ops Node Exporter:
+            icon: mdi-console
+            href: "http://ct260.home.arpa:9100/metrics"
+            description: |
+              Job: ct260-codex-ops-node
+              Target: ct260.home.arpa:9100
+
+    - Prometheus 監控目標 續:
+        - N95 Router PVE Node Exporter:
+            icon: mdi-router-network
+            href: "http://router-pve.home.arpa:9100/metrics"
+            description: |
+              Job: n95-router-pve-node
+              Target: router-pve.home.arpa:9100
+
+        - CT100 Minecraft Node Exporter:
+            icon: mdi-minecraft
+            href: "http://mc.home.arpa:9100/metrics"
+            description: |
+              Job: mc-server-node
+              Target: mc.home.arpa:9100
+
+        - CT201 Monitor Node Exporter:
+            icon: mdi-monitor-dashboard
+            href: "http://monitor.home.arpa:9100/metrics"
+            description: |
+              Job: monitor-node
+              Target: node-exporter:9100 / monitor.home.arpa:9100
+
+        - CT270 Life-Ops Node Exporter:
+            icon: mdi-calendar-heart
+            href: "http://ct270.home.arpa:9100/metrics"
+            description: |
+              Job: ct270-life-ops-node
+              Target: ct270.home.arpa:9100
+
+    - VLAN100 儲存骨幹:
+        - PC Fast:
+            icon: mdi-desktop-classic
+            href: "http://pc-fast.home.arpa"
+            description: |
+              IP: 192.168.100.1
+              用途: 10G data fabric
+
+        - NAS Fast:
+            icon: mdi-harddisk
+            href: "http://nas-fast.home.arpa"
+            description: |
+              IP: 192.168.100.2
+              用途: 10G data fabric
+
+        - PVE24 Fast:
+            icon: mdi-server
+            href: "http://pve24-fast.home.arpa"
+            description: |
+              IP: 192.168.100.3
+              用途: 10G data fabric
+
+    - VLAN666 蜜罐:
+        - VM300 Honeypot Node Exporter:
+            icon: mdi-bug
+            href: "http://honeypot.home.arpa:9100/metrics"
+            description: |
+              Job: vm300-honeypot-node
+              Target: honeypot.home.arpa:9100
+
+        - Cowrie Exporter:
+            icon: mdi-bug-check
+            href: "http://honeypot.home.arpa:9116/metrics"
+            description: |
+              Job: cowrie-exporter
+              Target: honeypot.home.arpa:9116
+
+        - 蜜罐 VM300:
+            icon: mdi-bug
+            href: "http://honeypot.home.arpa"
+            description: |
+              IP: 10.66.66.10
+              角色: Cowrie honeypot

@@ -1,0 +1,101 @@
+groups:
+  - name: services-status
+    rules:
+      - alert: PortscanAutobanServiceDown
+        expr: portscan_autoban_service_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "portscan-autoban service down"
+          description: "portscan_autoban_service_up == 0 for 2m on OpenWrt (auto-ban not running)."
+
+      - alert: CowrieQuarantineServiceDown
+        expr: cowrie_quarantine_service_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "cowrie-quarantine service down"
+          description: "cowrie_quarantine_service_up == 0 for 2m on OpenWrt (honeypot quarantine not running)."
+
+      - alert: CowrieExporterUnhealthy
+        expr: cowrie_exporter_up == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cowrie exporter unhealthy"
+          description: "cowrie_exporter_up == 0 for 3m (exporter reachable but reports unhealthy)."
+
+      - alert: OpenWrtFirewallDown
+        expr: openwrt_service_up{service="firewall"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenWrt firewall service down"
+          description: "openwrt_service_up{service=firewall} == 0 for 2m on the router."
+
+      - alert: OpenWrtServiceDown
+        expr: openwrt_service_up{service!="firewall"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenWrt service down: {{ $labels.service }}"
+          description: "openwrt_service_up{service={{ $labels.service }}} == 0 for 3m."
+
+      - alert: PortscanMetricsStale
+        expr: time() - portscan_autoban_generated_timestamp_seconds > 180
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "portscan-autoban metrics stale"
+          description: "portscan_autoban metrics not regenerated for {{ $value | printf \"%.0f\" }}s (>180s); generator likely stopped."
+
+      - alert: CowrieQuarantineMetricsStale
+        expr: time() - cowrie_quarantine_generated_timestamp_seconds > 180
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cowrie-quarantine metrics stale"
+          description: "cowrie_quarantine metrics not regenerated for {{ $value | printf \"%.0f\" }}s (>180s); generator likely stopped."
+
+      - alert: OpenWrtSystemMetricsStale
+        expr: time() - openwrt_system_metrics_generated_timestamp_seconds > 180
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenWrt system metrics stale"
+          description: "openwrt-system metrics not regenerated for {{ $value | printf \"%.0f\" }}s (>180s)."
+
+      - alert: CowrieLogStale
+        expr: time() - cowrie_log_last_read_timestamp_seconds > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cowrie log not advancing"
+          description: "Exporter has not read a new Cowrie log line for {{ $value | printf \"%.0f\" }}s (>1800s); cowrie stopped or log path issue."
+
+      - alert: SquidProxyDown
+        expr: squid_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CT202 squid forward proxy down"
+          description: "squid_up == 0 for 2m on CT202 fwdproxy (CT270 HA/dockerd egress broken)."
+
+      - alert: SquidDeniedSpike
+        expr: increase(squid_access_denied_total[10m]) > 20
+        labels:
+          severity: warning
+          ai_analyze: "true"
+        annotations:
+          summary: "CT202 squid TCP_DENIED spike"
+          description: "{{ $value | printf \"%.0f\" }} TCP_DENIED in 10m on CT202 fwdproxy (whitelist bypass attempts or client misconfig)."

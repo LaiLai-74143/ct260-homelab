@@ -1,0 +1,116 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--enable-feature=promql-experimental-functions"
+      - "--web.external-url=https://prometheus.hl.lailai74143.com"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=https://grafana.hl.lailai74143.com
+
+  gotify:
+    image: gotify/server:latest
+    container_name: gotify
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    env_file:
+      - ./gotify.env
+    volumes:
+      - gotify_data:/app/data
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+
+  alertmanager-gotify-bridge:
+    image: ghcr.io/druggeri/alertmanager_gotify_bridge:latest
+    container_name: alertmanager-gotify-bridge
+    restart: unless-stopped
+    env_file:
+      - ./alertmanager-gotify-bridge.env
+    environment:
+      - EXTENDED_DETAILS=true
+    depends_on:
+      - gotify
+
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:3.9.0
+    container_name: pve-exporter
+    restart: unless-stopped
+    volumes:
+      - ./pve.yml:/etc/prometheus/pve.yml:ro
+    # 無 host port:僅 prometheus 經 compose 內網 scrape(pve-exporter:9221),比照 bridge 模式
+
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    command:
+      - "-config.file=/etc/loki/config.yml"
+
+  promtail:
+    image: grafana/promtail:3.6.11
+    container_name: promtail
+    restart: unless-stopped
+    ports:
+      - "1514:1514/udp"
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_positions:/positions
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    depends_on:
+      - loki
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  gotify_data:
+  alertmanager_data:
+  loki_data:
+  promtail_positions:

@@ -1,0 +1,70 @@
+[
+   {
+      "content" : "vztmpl,backup,import,iso,snippets",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "path" : "/var/lib/vz",
+      "storage" : "local",
+      "type" : "dir"
+   },
+   {
+      "content" : "backup",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "path" : "/mnt/pve/DXP4800-Backup-SMB100",
+      "prune-backups" : "keep-all=1",
+      "server" : "192.168.100.2",
+      "share" : "Back_up",
+      "shared" : 1,
+      "storage" : "DXP4800-Backup-SMB100",
+      "subdir" : "/24BaysNAS_PVE",
+      "type" : "cifs",
+      "username" : "Backuper"
+   },
+   {
+      "content" : "images,rootdir",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "nodes" : "24bay-pve",
+      "storage" : "SSD-2",
+      "thinpool" : "SSD-2",
+      "type" : "lvmthin",
+      "vgname" : "SSD-2"
+   },
+   {
+      "content" : "rootdir,images",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "nodes" : "24bay-pve",
+      "storage" : "hdd1",
+      "thinpool" : "hdd1",
+      "type" : "lvmthin",
+      "vgname" : "hdd1"
+   },
+   {
+      "content" : "images,rootdir",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "storage" : "local-lvm",
+      "thinpool" : "data",
+      "type" : "lvmthin",
+      "vgname" : "pve"
+   },
+   {
+      "content" : "vztmpl,backup,images,iso",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "path" : "/mnt/hdd500a",
+      "prune-backups" : "keep-all=1",
+      "shared" : 0,
+      "storage" : "HDD-0",
+      "type" : "dir"
+   },
+   {
+      "content" : "backup",
+      "digest" : "0f77ab9ad529a981705808a60ea745ceb27dd369",
+      "path" : "/mnt/pve/Nas",
+      "prune-backups" : "keep-all=1",
+      "server" : "192.168.100.2",
+      "share" : "Back_up",
+      "shared" : 1,
+      "storage" : "Nas",
+      "subdir" : "/24BaysNAS_PVE_McServer",
+      "type" : "cifs",
+      "username" : "Backuper"
+   }
+]

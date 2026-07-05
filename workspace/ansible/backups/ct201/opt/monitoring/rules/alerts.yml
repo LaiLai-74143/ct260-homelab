@@ -1,0 +1,41 @@
+groups:
+  - name: pipeline-heartbeat
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: info
+        annotations:
+          summary: "Watchdog heartbeat"
+          description: "Alerting pipeline is alive (Prometheus -> Alertmanager -> bridge -> Gotify). This alert always fires by design."
+
+  - name: prometheus-self
+    rules:
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: "Prometheus on {{ $labels.instance }} failed to reload its configuration."
+
+      - alert: PrometheusRuleEvaluationFailing
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation failing"
+          description: "Prometheus on {{ $labels.instance }} has rule evaluation failures in the last 10m."
+
+  - name: targets
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Target down: {{ $labels.job }}"
+          description: "{{ $labels.instance }} (job {{ $labels.job }}) has been unreachable for more than 3 minutes."
