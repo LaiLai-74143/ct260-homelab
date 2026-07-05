@@ -1,11 +1,12 @@
 # 待辦14b:wazuh-agent 4.14.6 鋪設(pin 版;manager=CT204 10.80.80.12)
 # 這是待辦48「審計常態、遙控例外」下的第一個窄範圍 push 試點:同質批次(一份 playbook 套 N 台)。
-# 對象:routerpve(ssh root)+ ct100/201/202/270(pct)+ ct260pct(CT260 經 pct,本機 codex 無 sudo)。
+# 對象:routerpve(ssh root)+ ct100/201/202/270(pct)+ ct260pct(CT260 經 pct,本機 codex 無 sudo)
+#      + ct102/ct203(2026-07-05 使用者「加唄」批准擴編;dmz→wazuh 放行同日開)。
 # pve24 host 刻意除外:codex-admin sudo 僅 pct/qm/pvesh/pvesm,無法 apt——由使用者跑 finish-14.sh。
 # 發佈方式:CT260 單點下載 deb + sha512 驗證後 copy 分發(CT270 無直接 WAN、各節點出站異質,不設 apt repo)。
 # 回滾:apt-get remove --purge wazuh-agent && rm -rf /var/ossec(agent 端);manager 端 dashboard 刪 agent。
 - name: Deploy wazuh-agent 4.14.6 (todo 14b)
-  hosts: routerpve,ct100,ct201,ct202,ct270,ct260pct
+  hosts: routerpve,ct100,ct102,ct201,ct202,ct203,ct270,ct260pct
   gather_facts: false
   vars:
     wazuh_manager_ip: 10.80.80.12

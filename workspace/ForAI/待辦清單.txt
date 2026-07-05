@@ -247,7 +247,7 @@
     確認含 nc_data/pg_data 卷、大小合理 → 缺改記錄。
 
 -------------------------------------------------------------------------------
-◐14. Wazuh HIDS —— a✔c✔d✔ 完成，b 剩 pve24 待使用者，e 調噪期進行中（2026-07-05）
+◐14. Wazuh HIDS —— a✔b✔c✔d✔ 完成（agent 9/9 Active），僅剩 e 調噪期（2026-07-05 起算一週）
     【說明】主機入侵偵測：檔案完整性（authorized_keys 變動告警）、可疑進程、rootkit，
     等於把手動 SSH key 稽核自動化。
     流程：
@@ -255,20 +255,20 @@
        wazuh-docker v4.14.6 single-node（詳見拓樸 §10.8；LXC 相容：刪 memlock、nofile 降 524288）。
        三組預設密碼全換：CT260 ~/.config/homelab/wazuh.env（dashboard 登入=admin）；
        compose 去密改 ${VAR}+CT204 本地 .env。快照 pct snapshot 204 baseline。
-    b◐ agent 6/7 台 Active：routerpve、ct100/201/202/270 + ct260（playbooks/wazuh-agent.yml，
-       窄範圍 push——待辦48「審計常態、遙控例外」首個同質批次試點；deb 單點下載 sha512 分發）。
-       ★ 剩 pve24 host：使用者跑 root@pve24# bash /home/codex-admin/finish-14.sh
-       （deb+腳本已放好；codex-admin sudo 白名單無 apt 故留人工）。
+    b✔ agent 9/9 台 Active（2026-07-05 全到齊）：routerpve、24bay-pve(pve24)、ct100/102/201/202/203/270
+       + ct260。除 pve24=使用者親跑 finish-14.sh（sudo 白名單無 apt；完成後暫存檔已清）外，
+       餘走 playbooks/wazuh-agent.yml（窄範圍 push——待辦48「審計常態、遙控例外」首個同質批次試點；
+       deb 單點下載 sha512 分發）。ct102/ct203 為使用者「加唄」批准擴編（dmz→wazuh 放行同日開）。
        OpenWrt 無官方 agent——跳過（tripwire+metrics 已覆蓋）；DXP 視 UGOS docker 權限決定（未做）。
-       後續候選：CT203（DMZ，item 撰寫時尚未建）、CT102——要加=跑同 playbook 加 hosts 即可。
     c✔ FIM shared agent.conf 集中派發：realtime /root/.ssh、/home/*/.ssh、/etc/sudoers{,.d}、
        /opt 深度2 compose/.env；local_rules 100100 把 .ssh|sudoers 變動升 level 10；
        custom-gotify integration（>=10）→ Gotify（TG 維持 egress 集中 CT260，不直發）。
        冒煙 PASS：routerpve 增檔 → L10 → Gotify 收到。
-    d✔ Allow-{Servers,Infra,Game}-To-Wazuh-Agent 1514-1515 逐項點名（拓樸 §4.4；
-       備份 /etc/config/firewall.before-20260705-todo14）。
-    e. 跑一週調噪音（排除 docker 高頻路徑）後轉常態——2026-07-05 起算。
-       另議：dashboard 443 開給 PC40（逐項同意項）、AGH rewrite wazuh.home.arpa。
+    d✔ Allow-{Servers,Infra,Game,DMZ}-To-Wazuh-Agent 1514-1515 逐項點名 +
+       Allow-PC40-To-Wazuh-Dashboard 443（使用者同意；dashboard=https://10.80.80.12，自簽憑證）
+       （拓樸 §4.4；備份 firewall.before-20260705-todo14 與 -todo14b2）。
+    e. 跑一週調噪音（排除 docker 高頻路徑）後轉常態——2026-07-05 起算，順帶觀察 CT204 記憶體。
+       另議：AGH rewrite wazuh.home.arpa。
 
 -------------------------------------------------------------------------------
 15. Paperless-ngx 部署

@@ -551,7 +551,9 @@ Allow/SNAT-Monitor-To-PC40-Health-18080          10.80.80.11 -> 192.168.40.4 tcp
 # Wazuh agent -> manager 註冊/回報（待辦14，2026-07-05；各 zone 逐項點名，非整段）
 Allow-Servers-To-Wazuh-Agent   192.168.20.5/.60/.70 -> 10.80.80.12 tcp/1514-1515（pve24/CT260/CT270）
 Allow-Infra-To-Wazuh-Agent     192.168.10.2 -> 10.80.80.12 tcp/1514-1515（RouterPVE）
-Allow-Game-To-Wazuh-Agent      10.70.70.20 -> 10.80.80.12 tcp/1514-1515（CT100；CT201/202 同段 L2 直達免規則）
+Allow-Game-To-Wazuh-Agent      10.70.70.20/.10 -> 10.80.80.12 tcp/1514-1515（CT100/CT102；CT201/202 同段 L2 直達免規則）
+Allow-DMZ-To-Wazuh-Agent       10.60.60.10 -> 10.80.80.12 tcp/1514-1515（CT203；同日使用者批准擴編）
+Allow-PC40-To-Wazuh-Dashboard  192.168.40.4 -> 10.80.80.12 tcp/443（trusted→service；同日使用者同意）
 
 # DMZ 反代/入口 CT203 -> storage DXP4800 單條放行（待辦②，逐一收編）
 Allow/SNAT-DMZProxy-To-Vaultwarden   10.60.60.10 -> 192.168.30.3 tcp/50303（SNAT 192.168.30.1；2026-07-04 cutover）
@@ -1067,20 +1069,24 @@ CT204  hostname wazuh  VLAN80 10.80.80.12/24  GW 10.80.80.1  DNS 10.80.80.1
   密碼：admin/kibanaserver/wazuh-wui 三組預設全換（securityadmin 套 internal_users 新 hash）。
         compose 檔用 ${VAR} 引用、實值在 CT204 /opt/wazuh-docker/single-node/.env（600）；
         副本＋Gotify app token 在 CT260 ~/.config/homelab/wazuh.env（600）。dashboard 登入=admin。
-  Agents（6+1）：routerpve/ct100(MC-server)/ct201(monitor)/ct202(fwdproxy)/ct260(codex-ops)/ct270(life-ops)
-        由 ansible playbooks/wazuh-agent.yml 鋪（deb 單點下載+sha512+copy 分發；ct260 走 wazuhct=pct 別名）；
-        pve24 host 由使用者跑 finish-14.sh（sudo 白名單無 apt）。OpenWrt 無官方 agent 跳過（tripwire+metrics 已覆蓋）。
+  Agents（9 台全 Active，2026-07-05）：routerpve/24bay-pve(pve24)/ct100(MC-server)/ct102(mc-proxy)/
+        ct201(monitor)/ct202(fwdproxy)/ct203(ct-dmz-proxy)/ct260(codex-ops)/ct270(life-ops)。
+        除 pve24 由使用者跑 finish-14.sh（sudo 白名單無 apt；已完成後清檔）外，餘由 ansible
+        playbooks/wazuh-agent.yml 鋪（deb 單點下載+sha512+copy 分發；ct260 走 wazuhct=pct 別名；
+        ct102/ct203 為使用者批准擴編）。OpenWrt 無官方 agent 跳過（tripwire+metrics 已覆蓋）。
   FIM（shared/default/agent.conf，manager 集中派發）：realtime 盯 /root/.ssh、/home/*/.ssh、
         /etc/sudoers{,.d}、/opt 深度2 的 docker-compose.yml/.env。
   告警：local_rules 100100——.ssh|sudoers 檔變動升 level 10；integration custom-gotify（level>=10）
         → Gotify 10.80.80.11:8090（同段 L2 免開牆；app "wazuh" id2）。TG 維持 egress 集中 CT260 原則，未直發。
-  OpenWrt：Allow-{Servers,Infra,Game}-To-Wazuh-Agent 1514-1515（見 §4.4）；dashboard 443 未開對外（僅 VLAN80 內）。
+  OpenWrt：Allow-{Servers,Infra,Game,DMZ}-To-Wazuh-Agent 1514-1515 + Allow-PC40-To-Wazuh-Dashboard 443（見 §4.4；
+        第二批備份 firewall.before-20260705-todo14b2）。dashboard=https://10.80.80.12（自簽憑證，登入 admin）。
   持久化：wazuh_etc/wazuh_integrations 等 named volumes；改 manager 設定=編 config/wazuh_cluster/
         wazuh_manager.conf 後 docker compose up -d --force-recreate wazuh.manager（★ docker restart 不重跑
         init 複製，改 mount 檔必須 force-recreate）。
   備份：ansible 待辦48 只收 docker-compose.yml（host_vars/ct204.yml；.env/config 憑證與 token 不入庫）。
   回滾：pct snapshot 204 baseline（棧+密碼+FIM+integration 完成點）；防火牆 /etc/config/firewall.before-20260705-todo14。
-  OPEN：14e 跑一週調噪音；pve24 agent 待使用者 finish-14.sh；DXP 視 UGOS docker 權限另議。
+  OPEN：14e 跑一週調噪音（2026-07-05 起算，順帶觀察 CT204 記憶體）；DXP 視 UGOS docker 權限另議；
+        AGH rewrite wazuh.home.arpa 另議。
 ```
 
 ---

@@ -1237,3 +1237,13 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
 - 回滾：pct snapshot 204 baseline；uci 刪三規則+reload；agent 端 apt purge wazuh-agent + rm -rf /var/ossec；
   manager 端 dashboard 刪 agent。
 文件：拓樸 §1.2/§2.10/§4.4/§10.8（新）、網段指導原則 §VLAN80、監控告警 §5f（新）、待辦清單 ◐14。
+
+### 待辦⑭ 補完（2026-07-05 同日：pve24 agent + 擴編 ct102/ct203 + dashboard 開 PC40 → b✔，剩 e 調噪）
+- 使用者親跑 finish-14.sh：24bay-pve agent 裝妥（ID 009 Active）；暫存 deb/腳本已清。
+- 使用者批准兩項：①dashboard 開 PC40——Allow-PC40-To-Wazuh-Dashboard（trusted/192.168.40.4 →
+  10.80.80.12:443）；②擴編 ct102/ct203——Allow-DMZ-To-Wazuh-Agent（10.60.60.10→1514-1515）+
+  allow_game_to_wazuh src_ip 改 list 加 10.70.70.10。備份 firewall.before-20260705-todo14b2。
+- playbook hosts 加 ct102/ct203 重跑：兩台一次綠（dmz/game 新路徑同步實證）。
+- 終態 agent 9/9 Active：routerpve/24bay-pve/MC-server/mc-proxy/monitor/fwdproxy/ct-dmz-proxy/
+  codex-ops/life-ops。AGH rewrite wazuh.home.arpa 另議（現用 https://10.80.80.12 直連）。
+文件：拓樸 §4.4/§10.8、待辦清單 ◐14（b✔d✔ 更新）。
