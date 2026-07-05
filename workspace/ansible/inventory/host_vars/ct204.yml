@@ -1,0 +1,4 @@
+# 待辦14:wazuh manager 棧(docker single-node v4.14.6,/opt/wazuh-docker/single-node)
+# 只收 compose 主檔——.env(機密)與 config/(憑證、wazuh.yml 含 API 密碼、internal_users hash)
+# 一律不收;compose 已改 ${VAR} 引用,無明文機密。
+backup_find_cmd: "find /opt/wazuh-docker/single-node -maxdepth 1 -name 'docker-compose.yml' 2>/dev/null"

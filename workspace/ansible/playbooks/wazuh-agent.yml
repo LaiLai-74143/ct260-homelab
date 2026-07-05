@@ -1,0 +1,59 @@
+# 待辦14b:wazuh-agent 4.14.6 鋪設(pin 版;manager=CT204 10.80.80.12)
+# 這是待辦48「審計常態、遙控例外」下的第一個窄範圍 push 試點:同質批次(一份 playbook 套 N 台)。
+# 對象:routerpve(ssh root)+ ct100/201/202/270(pct)+ ct260pct(CT260 經 pct,本機 codex 無 sudo)。
+# pve24 host 刻意除外:codex-admin sudo 僅 pct/qm/pvesh/pvesm,無法 apt——由使用者跑 finish-14.sh。
+# 發佈方式:CT260 單點下載 deb + sha512 驗證後 copy 分發(CT270 無直接 WAN、各節點出站異質,不設 apt repo)。
+# 回滾:apt-get remove --purge wazuh-agent && rm -rf /var/ossec(agent 端);manager 端 dashboard 刪 agent。
+- name: Deploy wazuh-agent 4.14.6 (todo 14b)
+  hosts: routerpve,ct100,ct201,ct202,ct270,ct260pct
+  gather_facts: false
+  vars:
+    wazuh_manager_ip: 10.80.80.12
+    wazuh_deb: wazuh-agent_4.14.6-1_amd64.deb
+    wazuh_deb_sha512: 52d64ae04699fa79f075354ec91eb279173af3a3c1ff4588cece315c941e25fee17cb3519f5fbff9b259e185d1c44fdf088f557eda7be30474f632cb61d483c5
+  tasks:
+    - name: 已裝則跳過(冪等閘)
+      ansible.builtin.raw: test -x /var/ossec/bin/wazuh-control && /var/ossec/bin/wazuh-control info | grep -o 'WAZUH_VERSION=.*' || echo ABSENT
+      register: wz_present
+      changed_when: false
+
+    - name: 分發 deb
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../files/{{ wazuh_deb }}"
+        dest: "/tmp/{{ wazuh_deb }}"
+        mode: "0644"
+        checksum: "{{ omit }}"
+      when: "'ABSENT' in wz_present.stdout"
+
+    - name: sha512 驗證
+      ansible.builtin.shell: |
+        echo "{{ wazuh_deb_sha512 }}  /tmp/{{ wazuh_deb }}" | sha512sum -c -
+      when: "'ABSENT' in wz_present.stdout"
+
+    - name: 安裝(WAZUH_MANAGER 指 CT204)
+      ansible.builtin.apt:
+        deb: "/tmp/{{ wazuh_deb }}"
+      environment:
+        WAZUH_MANAGER: "{{ wazuh_manager_ip }}"
+      when: "'ABSENT' in wz_present.stdout"
+
+    - name: enable + start
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: 清理 deb
+      ansible.builtin.file:
+        path: "/tmp/{{ wazuh_deb }}"
+        state: absent
+
+    - name: 驗證 agentd 運行
+      ansible.builtin.shell: /var/ossec/bin/wazuh-control status | grep wazuh-agentd
+      register: wz_status
+      changed_when: false
+
+    - name: 回報
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ wz_status.stdout }}"

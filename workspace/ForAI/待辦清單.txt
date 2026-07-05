@@ -247,18 +247,28 @@
     確認含 nc_data/pg_data 卷、大小合理 → 缺改記錄。
 
 -------------------------------------------------------------------------------
-14. Wazuh HIDS
+◐14. Wazuh HIDS —— a✔c✔d✔ 完成，b 剩 pve24 待使用者，e 調噪期進行中（2026-07-05）
     【說明】主機入侵偵測：檔案完整性（authorized_keys 變動告警）、可疑進程、rootkit，
     等於把手動 SSH key 稽核自動化。
     流程：
-    a. pve24 建 CT（4C/6G/80G，VLAN80），docker single-node 部署 wazuh-manager+indexer+dashboard
-       （官方 compose，pin 版本；資源緊則先 manager-only 無 dashboard）。
-    b. agent 鋪設：pve24、RouterPVE、CT100/201/202/260/270（apt 裝 wazuh-agent 指 manager）。
-       OpenWrt 無官方 agent——跳過（它已有 tripwire+metrics 覆蓋）；DXP 視 UGOS docker 權限決定。
-    c. FIM 重點監控路徑：**/.ssh/authorized_keys、/etc/sudoers*、compose/.env 目錄、
-       OpenWrt 之外的關鍵設定；告警等級 ≥10 者經 custom integration script 推 Gotify/TG。
-    d. OpenWrt：各 zone→wazuh CT:1514-1515 放行。
-    e. 跑一週調噪音（排除 docker 高頻路徑）後轉常態。
+    a✔ CT204 wazuh 10.80.80.12（4C/6G/80G SSD-2，nesting+keyctl，無 SSH）+ docker-ce +
+       wazuh-docker v4.14.6 single-node（詳見拓樸 §10.8；LXC 相容：刪 memlock、nofile 降 524288）。
+       三組預設密碼全換：CT260 ~/.config/homelab/wazuh.env（dashboard 登入=admin）；
+       compose 去密改 ${VAR}+CT204 本地 .env。快照 pct snapshot 204 baseline。
+    b◐ agent 6/7 台 Active：routerpve、ct100/201/202/270 + ct260（playbooks/wazuh-agent.yml，
+       窄範圍 push——待辦48「審計常態、遙控例外」首個同質批次試點；deb 單點下載 sha512 分發）。
+       ★ 剩 pve24 host：使用者跑 root@pve24# bash /home/codex-admin/finish-14.sh
+       （deb+腳本已放好；codex-admin sudo 白名單無 apt 故留人工）。
+       OpenWrt 無官方 agent——跳過（tripwire+metrics 已覆蓋）；DXP 視 UGOS docker 權限決定（未做）。
+       後續候選：CT203（DMZ，item 撰寫時尚未建）、CT102——要加=跑同 playbook 加 hosts 即可。
+    c✔ FIM shared agent.conf 集中派發：realtime /root/.ssh、/home/*/.ssh、/etc/sudoers{,.d}、
+       /opt 深度2 compose/.env；local_rules 100100 把 .ssh|sudoers 變動升 level 10；
+       custom-gotify integration（>=10）→ Gotify（TG 維持 egress 集中 CT260，不直發）。
+       冒煙 PASS：routerpve 增檔 → L10 → Gotify 收到。
+    d✔ Allow-{Servers,Infra,Game}-To-Wazuh-Agent 1514-1515 逐項點名（拓樸 §4.4；
+       備份 /etc/config/firewall.before-20260705-todo14）。
+    e. 跑一週調噪音（排除 docker 高頻路徑）後轉常態——2026-07-05 起算。
+       另議：dashboard 443 開給 PC40（逐項同意項）、AGH rewrite wazuh.home.arpa。
 
 -------------------------------------------------------------------------------
 15. Paperless-ngx 部署

@@ -274,6 +274,21 @@ cron 用 flock -w 50 與每分鐘 job 共用鎖序列化。
 
 ---
 
+## 5f. Wazuh HIDS 告警路徑（待辦14，2026-07-05）
+
+```text
+獨立於 Prometheus/Alertmanager 鏈：agent(6+1台) → CT204 manager(10.80.80.12) 分析
+  → level>=10 → /var/ossec/integrations/custom-gotify → Gotify 10.80.80.11:8090（app "wazuh" id2，同段 L2）。
+FIM 升級規則：local_rules 100100——.ssh|sudoers 路徑的檔案增/改/刪(base 550/553/554)一律 level 10。
+compose/.env 變動維持預設 level 7（只進 dashboard/索引，不推播；14e 調噪期後再議是否升級）。
+TG：維持「egress 集中 CT260」原則，wazuh 不直發 TG（token 不外散）；要 TG 可後續在
+  homelab-notify.py 加 Gotify/wazuh 來源整合。
+詳見拓樸 §10.8；dashboard=https://10.80.80.12（VLAN80 內；PC40 放行未開=逐項同意項）。
+冒煙實測（2026-07-05）：routerpve /root/.ssh 增檔 → rule 100100 L10 → Gotify 收到（全鏈 PASS）。
+```
+
+---
+
 ## 6. 必守修正原則（實作中發現，覆蓋一般直覺）
 
 ```text

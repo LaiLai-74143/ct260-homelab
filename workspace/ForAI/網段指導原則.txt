@@ -101,7 +101,8 @@ host＝.10 CT102 Velocity/Geyser、.11 CT201 game-obs、.20 CT100 backend。
 mc.home.arpa 已切 10.70.70.10；DNAT/hairpin/velocity/backend config 均已隨遷移更新（見缺改記錄 2026-07-05）。
 
 ### VLAN80 / Monitoring / Service Edge
-監控服務入口、觀測平面、service-edge：Homepage、Uptime Kuma、Grafana、Prometheus、Node Exporter Aggregator。
+監控服務入口、觀測平面、service-edge：Homepage、Uptime Kuma、Grafana、Prometheus、Node Exporter Aggregator、
+Wazuh HIDS（.12 CT204，2026-07-05 待辦14；agent 1514-1515 由各 zone 逐項點名進來，見拓樸 §4.4/§10.8）。
 Observation Policy：
 
 ```text

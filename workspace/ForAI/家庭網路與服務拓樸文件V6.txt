@@ -111,6 +111,7 @@ CT102  mc-proxy                  running
 CT201  monitor                   running
 CT202  fwdproxy                  running   # VLAN80 正向代理 squid，2026-07-01
 CT203  ct-dmz-proxy              running   # VLAN60 DMZ 反向代理 Caddy，2026-07-04（見 §10.7）
+CT204  wazuh                     running   # VLAN80 Wazuh HIDS manager 棧，2026-07-05（見 §10.8）
 CT250  vaultwarden-restore-test  running
 CT260  codex-ops                 running
 CT270  life-ops                  running
@@ -309,6 +310,7 @@ Gateway：10.80.80.1   Zone：service
 10.80.80.1     OpenWrt service gateway
 10.80.80.10    CT202 fwdproxy — 正向/出站代理（squid :3128，出站域名白名單），2026-07-01 建；見 §10.6
 10.80.80.11    CT201 Monitor 正式 IP（default route 經此）
+10.80.80.12    CT204 wazuh — Wazuh HIDS manager+indexer+dashboard，2026-07-05 建；見 §10.8
 ```
 
 ### 2.11 VLAN90 / Management / Out-of-Band（10.90.90.0/24）
@@ -545,6 +547,11 @@ Allow/SNAT-Monitor-To-DXP4800-Storage-Jellyfin-8096      10.80.80.11 -> 192.168.
 Allow/SNAT-Monitor-To-PC40-Health-18080          10.80.80.11 -> 192.168.40.4 tcp/18080（SNAT 192.168.40.1）
 （MCSManager 23333 與 backend node_exporter 9100 不經 OpenWrt：CT201 由 game-obs 10.70.70.11 直連 10.70.70.20，
  放行在 CT100 本機 nft；9100 於 2026-07-05 待辦⑨補，見缺改記錄）
+
+# Wazuh agent -> manager 註冊/回報（待辦14，2026-07-05；各 zone 逐項點名，非整段）
+Allow-Servers-To-Wazuh-Agent   192.168.20.5/.60/.70 -> 10.80.80.12 tcp/1514-1515（pve24/CT260/CT270）
+Allow-Infra-To-Wazuh-Agent     192.168.10.2 -> 10.80.80.12 tcp/1514-1515（RouterPVE）
+Allow-Game-To-Wazuh-Agent      10.70.70.20 -> 10.80.80.12 tcp/1514-1515（CT100；CT201/202 同段 L2 直達免規則）
 
 # DMZ 反代/入口 CT203 -> storage DXP4800 單條放行（待辦②，逐一收編）
 Allow/SNAT-DMZProxy-To-Vaultwarden   10.60.60.10 -> 192.168.30.3 tcp/50303（SNAT 192.168.30.1；2026-07-04 cutover）
@@ -1041,6 +1048,39 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
         Authelia default_redirection_url → gate.hl（登入即發通行證）。
         源檔：CT260 ~/.config/homelab/authelia/{gate.py,ts-gate.service,ctdmz.nft,configuration.yml}＋workspace/ct-dmz-proxy/Caddyfile。
         快照 pre-tsgate / post-tsgate。
+```
+
+## 10.8 CT204 wazuh（VLAN80 Wazuh HIDS）
+
+2026-07-05 建（待辦14）。主機入侵偵測：FIM（authorized_keys/sudoers/compose 變動告警）、rootkit、SCA 基線，
+把手動 SSH key 稽核自動化。放 VLAN80 觀測面（以「看」為主，符合 §2.10 定位）。
+
+```text
+CT204  hostname wazuh  VLAN80 10.80.80.12/24  GW 10.80.80.1  DNS 10.80.80.1
+  規格：Debian 13.1 unprivileged LXC，4 core / 6G / swap 2G / rootfs SSD-2:80G，
+        nesting=1,keyctl=1（跑 docker，比照 CT270），onboot=1。無 SSH、root console 鎖（pct 管理，比照 CT203）。
+  軟件：docker-ce 29.x（官方 repo，比照 CT270）+ wazuh-docker v4.14.6 single-node
+        （git clone -b v4.14.6 /opt/wazuh-docker，manager+indexer+dashboard 三容器，pin 版）。
+  ★ LXC 相容改動（docker-compose.yml，原檔存 .orig）：刪 ulimits memlock 區塊（unprivileged CT 禁 mlock，
+        且未啟 bootstrap.memory_lock 故無害）；nofile 655360→524288（CT hard cap）。
+        pve24 vm.max_map_count=1048576 原生達標（indexer 需 262144），host sysctl 免動。
+  密碼：admin/kibanaserver/wazuh-wui 三組預設全換（securityadmin 套 internal_users 新 hash）。
+        compose 檔用 ${VAR} 引用、實值在 CT204 /opt/wazuh-docker/single-node/.env（600）；
+        副本＋Gotify app token 在 CT260 ~/.config/homelab/wazuh.env（600）。dashboard 登入=admin。
+  Agents（6+1）：routerpve/ct100(MC-server)/ct201(monitor)/ct202(fwdproxy)/ct260(codex-ops)/ct270(life-ops)
+        由 ansible playbooks/wazuh-agent.yml 鋪（deb 單點下載+sha512+copy 分發；ct260 走 wazuhct=pct 別名）；
+        pve24 host 由使用者跑 finish-14.sh（sudo 白名單無 apt）。OpenWrt 無官方 agent 跳過（tripwire+metrics 已覆蓋）。
+  FIM（shared/default/agent.conf，manager 集中派發）：realtime 盯 /root/.ssh、/home/*/.ssh、
+        /etc/sudoers{,.d}、/opt 深度2 的 docker-compose.yml/.env。
+  告警：local_rules 100100——.ssh|sudoers 檔變動升 level 10；integration custom-gotify（level>=10）
+        → Gotify 10.80.80.11:8090（同段 L2 免開牆；app "wazuh" id2）。TG 維持 egress 集中 CT260 原則，未直發。
+  OpenWrt：Allow-{Servers,Infra,Game}-To-Wazuh-Agent 1514-1515（見 §4.4）；dashboard 443 未開對外（僅 VLAN80 內）。
+  持久化：wazuh_etc/wazuh_integrations 等 named volumes；改 manager 設定=編 config/wazuh_cluster/
+        wazuh_manager.conf 後 docker compose up -d --force-recreate wazuh.manager（★ docker restart 不重跑
+        init 複製，改 mount 檔必須 force-recreate）。
+  備份：ansible 待辦48 只收 docker-compose.yml（host_vars/ct204.yml；.env/config 憑證與 token 不入庫）。
+  回滾：pct snapshot 204 baseline（棧+密碼+FIM+integration 完成點）；防火牆 /etc/config/firewall.before-20260705-todo14。
+  OPEN：14e 跑一週調噪音；pve24 agent 待使用者 finish-14.sh；DXP 視 UGOS docker 權限另議。
 ```
 
 ---

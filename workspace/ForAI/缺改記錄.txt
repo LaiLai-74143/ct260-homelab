@@ -1210,3 +1210,30 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
   （sort(attribute='storage') + content split/sort/join）。兩輪 md5 一致驗證 STABLE。
   通則：命令輸出型備份（非讀檔）入庫前一律先確認輸出確定性。
 文件：待辦清單 ✔48。
+
+### 待辦⑭ Wazuh HIDS 部署（2026-07-05：a✔c✔d✔，b 剩 pve24 待使用者 finish-14.sh，e 調噪起算）
+- CT204 wazuh（VLAN80 10.80.80.12，4C/6G/80G SSD-2，unprivileged+nesting+keyctl，無 SSH/console 鎖）：
+  docker-ce + wazuh-docker v4.14.6 single-node（manager+indexer+dashboard，pin）。
+- ★ LXC 踩坑兩枚：compose ulimits memlock -1 → runc rlimit type 8 EPERM（unprivileged CT 禁）——刪之
+  （未啟 bootstrap.memory_lock 故無害）；manager nofile 655360 > CT hard cap 524288 → 降到 cap。
+  pve24 vm.max_map_count 原生 1048576 已達標，host sysctl 免動。
+- ★ 部署中 CT204 曾整台自重啟一次（研判初拉 image+hash.sh 額外 JVM 尖峰擠爆 6G cgroup），穩定後 ~2G;
+  14e 調噪期順帶觀察記憶體。
+- 密碼：admin/kibanaserver/wazuh-wui 三組預設全換（hash.sh→internal_users→securityadmin 套用）；
+  ★ securityadmin 容器內路徑=config/certs 與 config/opensearch-security（非文件慣用 certs/）。
+  compose 去密改 ${VAR}+CT204 .env(600)；副本+Gotify token 在 CT260 ~/.config/homelab/wazuh.env(600)。
+- ★ wazuh-docker 改 mount 設定檔（wazuh_manager.conf）後 docker restart 不會重跑 init 複製，
+  必須 docker compose up -d --force-recreate wazuh.manager 才生效。
+- OpenWrt：Allow-{Servers,Infra,Game}-To-Wazuh-Agent 1514-1515 三條逐項點名（備份
+  firewall.before-20260705-todo14）；CT201/202 同段 L2 免規則。實測 ct260/routerpve/pve24 →1514/1515 全通。
+- agent 6 台：playbooks/wazuh-agent.yml（待辦48 首個窄範圍 push 試點：deb 單點下載+sha512+copy 分發，
+  不設各節點 apt repo——CT270 無直接 WAN 亦不動 squid 白名單，缺 lsb-release 由 CT260 apt-get download 補推）。
+  ct260 走新 inventory 群 wazuhct（ct260pct 別名經 pct；不入 ct 群避免進備份掃描）。
+  ★ routerpve 主機名=pve 與 pve24 易混 → ossec.conf 補 enrollment/agent_name=routerpve 重註冊（ID 008）。
+- FIM+告警：shared/default/agent.conf realtime（.ssh/sudoers/compose+env 深度2）；local_rules 100100
+  （550/553/554 且路徑 .ssh|sudoers → level 10）；custom-gotify integration（wazuh_integrations named
+  volume 長存）→ Gotify app "wazuh"(id2)。冒煙：routerpve /root/.ssh 增檔→L10→Gotify 收到，全鏈 PASS。
+- 備份面：inventory 加 ct204；host_vars/ct204.yml 只收 docker-compose.yml（.env/config 不入庫）。
+- 回滾：pct snapshot 204 baseline；uci 刪三規則+reload；agent 端 apt purge wazuh-agent + rm -rf /var/ossec；
+  manager 端 dashboard 刪 agent。
+文件：拓樸 §1.2/§2.10/§4.4/§10.8（新）、網段指導原則 §VLAN80、監控告警 §5f（新）、待辦清單 ◐14。
