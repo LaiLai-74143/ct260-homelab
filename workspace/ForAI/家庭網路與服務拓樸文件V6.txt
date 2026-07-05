@@ -840,6 +840,13 @@ OpenAI / GLM key 仍維持「非必要不長期存放於 CT260」。
 promtail 3.6.11（原生 systemd，2026-07-05 待辦12b）：journal + ~/.local/state/homelab-notify/*.log
 → 10.80.80.11:3100（OpenWrt 放行）。notifier Tier2 另附 Loki 日誌上下文（見《監控告警.txt》§5）。
 
+git 統一 repo（待辦#36，2026-07-05）：repo root=/home/codex（branch main），.gitignore 白名單納管
+workspace/ForAI/ + ~/.local/bin/ 自製腳本 + life-ops-mcp/；秘鑰（.env/*token*/key）全域排除，
+機密仍只在 ~/.config/homelab/*.env（不入庫）。cron 每日 23:30 Taipei（=15:30 UTC）
+`~/.local/bin/hl-git-autocommit` 自動 commit+push（訊息帶日期；無變更跳過；remote 未就緒僅 commit）。
+remote=GitHub private repo（deploy key ~/.ssh/github_ed25519，僅此 repo 寫入權）；
+首次 push 待使用者跑 ~/workspace/git-repo-36/finish-36.sh（建 repo+貼公鑰後執行）。
+
 ---
 
 ## 10.5 CT270 Life-Ops（NocoDB 個人系統）

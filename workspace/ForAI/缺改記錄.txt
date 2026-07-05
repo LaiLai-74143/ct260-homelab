@@ -1134,3 +1134,29 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
   （reload 警告的 disabled 規則從 @rule[9] 變 @rule[10] 即此因，無害）。
 - 驗證：Loki host label 七台全入庫（+vm300）；{job="cowrie"} 攻擊事件（session.connect/login.failed/
   kex）即時入 Loki。待辦⑫ 標 ✔；剩 Kuma 對 Loki :3100/ready 探活待使用者 UI 加（監控告警 §9）。
+
+### 待辦㊱ ForAI 文件 + 自製腳本 git 化（2026-07-05，主體完成；首次 push 待使用者 finish-36.sh）
+- 使用者裁決：commit 模式=cron 每日 auto-commit（訊息帶日期），二選一原文另項（人工 commit）不採。
+- repo：/home/codex git init -b main（原 ~/.git 為 7/1 遺留空目錄，init 直接填充）；
+  local git identity=lailai74143 <lailai74143@gmail.com>。
+- .gitignore 白名單模式（home 預設全忽略、逐項納管）：workspace/ForAI/ 全部、~/.local/bin/
+  全部自製腳本（hl-*、homelab-notify.py、watchdog-ct201.sh、cpu-orphan-watch.py、hl-git-autocommit）、
+  life-ops-mcp/（server.py、get_gcal_token.py）；全域排除 .env/*token*/*secret*/*.key/*.pem/__pycache__
+  （!get_gcal_token.py 白名單回收——它只讀 env 不含機密）。機密仍僅存 ~/.config/homelab/*.env，路徑天然不入庫。
+- 憑證掃描（首次 commit 前，照原文）：已知 token 格式（ghp_/github_pat_/AKIA/sk-/xox/JWT/TG bot）零命中；
+  密碼賦值 grep 僅 NOPASSWD:ALL 誤報；高熵字串全為規則名/路徑。邊界案例=缺改記錄既有行 monuser/secret
+  屬 NUT 公開預設慣例且文件同段記載實測 ACCESS-DENIED（非現役憑證），裁定可入庫。
+- 首次 commit ac89b28：28 檔 6674 行（14 ForAI 文件+11 腳本+2 MCP+.gitignore）。
+- auto-commit：新增 ~/.local/bin/hl-git-autocommit（git add -A→有變更才 commit "auto: YYYY-MM-DD"→
+  有 remote 才 push，失敗 logger 不擋 commit）；crontab 追加 30 15 * * * UTC（=23:30 Taipei，沿用
+  flock 慣例 .gitac.lock）。實測：有變更 commit（3dda0c5）、空變更跳過、無 remote 靜默略過 push，皆 PASS。
+- GitHub 佈線：新 key ~/.ssh/github_ed25519（專用 deploy key，不與 ct260_ops 混用）+ ssh config
+  Host github.com 區塊。★ git remote add 被 auto-mode 分類器攔（repo URL 未經使用者點名）→
+  照既例收斂 ~/workspace/git-repo-36/finish-36.sh：使用者 GitHub 建 private repo（建議 ct260-homelab，
+  不勾任何初始化）→ Deploy keys 貼公鑰（勾 Allow write access）→ 跑腳本（綁 remote+push -u+驗證）。
+- 回滾：整案=git remote remove origin + rm -rf /home/codex/.git .gitignore + crontab 還原
+  ~/_backups/crontab.before-git-autocommit-20260705-1045 + 刪 hl-git-autocommit/github_ed25519*/
+  ssh config GITHUB 區塊。零現役服務變更（純新增檔案+使用者 crontab 一行）。
+- 順帶注意：hl-git-autocommit 非 hl-* 派發工具箱成員（本地 cron 腳本，工具箱規格不收）；
+  push 後 GitHub private repo 兼作 ForAI 文件+腳本的異地副本。
+文件：拓樸 §10（CT260 git repo 段新增）、待辦清單 ◐36 標注。
