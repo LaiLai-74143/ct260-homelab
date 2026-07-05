@@ -1305,7 +1305,8 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
   把 working file 從 JPG 換成 PDF 內容 → PIL「cannot identify image file」ConsumerError。
   解法：script 只轉發 PDF（頭 5 bytes 檢查）；圖片改由 ocr 容器 watcher 在 consume 資料夾先轉
   雙層 PDF（原圖刪、寫 X.pdf；X.pdf.tmp 過渡），webserver 以 PAPERLESS_CONSUMER_IGNORE_PATTERNS
-  忽略圖片與 *.tmp。副作用：手機 app「分享原始照片」（API 直傳圖片）仍走 tesseract 後備；
+  忽略圖片與 *.tmp。副作用：手機 app「分享原始照片」（API 直傳圖片）仍走 tesseract 後備
+  （使用者實拍後回報沒改善——同日「追加b」以 post-consume 補洞收掉，見下節）；
   app 內建掃描（產 PDF）不受影響。
 ★ 踩坑4（兩層）：文字層寫入/萃取的字型陷阱——
   a. pymupdf 內建 CJK 字型（china-t）無可攜 ToUnicode：pymupdf 自己讀得回、pdfminer/paperless
@@ -1335,3 +1336,48 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
     映像可再瘦身）；③nocodb 健康端點是 /api/v1/health（/api/health 為 404,設監控勿寫錯）；
   ④webserver 未設容器級 mem_limit（隨 CT 4G 上限）,大件併發時盯 swap（部署後 +56M）。
   合成測試文件（test-receipt/test-lease/failopen-test）驗畢已刪,庫內僅餘使用者文件與待辦15 舊測件。
+
+### 待辦⑮追加b API 直傳圖片補洞：post-consume 換 content（2026-07-05）
+背景：追加（上節）上線後使用者新拍照片經手機 app「分享原始照片」上傳仍辨識爛——該路＝API 直傳
+  圖片，不經 pre-consume 換型（踩坑3：parser 依原始 mime 先定）也不經 consume watcher，落 tesseract。
+方案（第三條路）：入庫完成後補救——sidecar app.py 新增 POST /text（圖片/PDF→RapidOCR 純文字；
+  抽出 run_engine() 共用、open_as_pdf() 共用；PDF 已有文字層≥50字直接萃取原文）；新
+  scripts/post-consume-ocr.sh（PAPERLESS_POST_CONSUME_SCRIPT）：僅處理圖片副檔名原件（PDF 立即
+  exit 0 不重跑），curl --noproxy '*' 送 /text，容器內 python3（Django 5.2.7 直接可 import，
+  免 token/免 API auth）覆寫 document.content（save(update_fields=[content,modified])，post_save
+  只掛檔名搬移 handler、未設 FILENAME_FORMAT 無副作用）＋index.add_or_update_document()（AsyncWriter，
+  鎖忙排隊）。任何失敗 exit 0 保留 tesseract content（fail-open）。
+取捨：archive PDF（圖片件）仍為 tesseract 版（僅供下載，搜尋/顯示走 content）；自動比對
+  （correspondent/tags）在 post-consume 之前以 tesseract content 跑——兩者皆接受，未動 paperless 內部。
+驗證（2026-07-05）：/text 冒煙 6/6 字串全對（陳大文/參萬伍仟/統編/完整日期，NFKC 生效）；端到端
+  API 直傳 PNG→content 20 秒內換成 RapidOCR（log：post-consume-ocr: doc N content -> RapidOCR）；
+  回歸：PDF 路（pre-consume）與 consume watcher 路皆正常；fail-open 實測（停 ocr 上傳照樣入庫、
+  log「sidecar unreachable, keep tesseract content」、任務 SUCCESS）；索引即時更新（獨特 token 可搜）。
+  既有壞件以手動 env 重跑正式 script 修復：doc 3（UI 照片）/doc 13（螢幕照 1169 字）content 換 RapidOCR。
+插曲（測試設計，非 bug）：fail-open 首測重用同一張 PNG 被 paperless dedup 拒收（ConsumerError
+  duplicate）——對抗/回歸測試的每張圖內容必須獨一無二。
+whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 token 不分詞」既有行為（`*租賃*` 萬用字元
+  與獨特英數 token 皆可搜，索引本身有更新），非本次回歸；另中英連寫（`路三驗證圖VRFY…`）會使
+  英數編號裸查不中、需 `*token*`（子代理觀察）。
+對抗驗證（獨立子代理,2026-07-05）：11 PASS／1 SKIP（Prometheus/Alertmanager 自 CT260 不可達,
+  位址待核）／15c 本身零缺陷；資源 web 706MiB、ocr 483MiB<1536m；測試件全自清。加碼以 git 舊版
+  app.py diff 證實 /ocr 與 watcher 逐行未變。低嚴重度留檔：post-consume curl -F 對路徑含 `,;"`
+  會破解析——現原件為數字命名無此面且 fail-open 保底,未來若設含 {title} 的 FILENAME_FORMAT 要回頭處理。
+★ 踩坑5（子代理揪出＋兩層根因）：短文本（總字數 ≤50）走 consume 路 content 出整齊 -0x100 錯字
+  （品項→品霅、送→輁、錄→鈄）。
+  表層：watcher 自產雙層 PDF 文字層 <MIN_EXISTING_TEXT=50 → pre-consume 又送 /ocr 重跑，第二層
+  insert_text 撞自嵌 subset 字型（span 變 \x00）。修法：build_searchable 產出時在 PDF metadata
+  打 producer 標記（paperless-ocr-sidecar rapidocr），入口見標記直接 skipped-own-layer。
+  深層（打標後仍錯字，第三波才證實）：paperless VALID_TEXT_LENGTH=50（paperless_tesseract/
+  parsers.py）——≤50 字判「無文字」→ OCR_SKIP_ARCHIVE_FILE=with_text 不生效，照樣 ghostscript 產
+  archive 且 content 取自 archive（ToUnicode 被改壞,同踩坑4c）。修法：post-consume 擴大吃「帶
+  producer 標記的 PDF 原件」（bash 以 grep -qa 偵測——標記在未壓縮 Info dict），/text 對標記件
+  直接回層內乾淨文字（不重 OCR）覆寫 content。同一修法順帶涵蓋路①短掃描 PDF。
+  驗證：短件 consume 端到端 content 全對（含 送/錄 高危字）；數位原生 PDF（>50字無標記）完整
+  no-op（pre-consume skipped-has-text、無 post-consume 行、content 原文）。
+順手修：pre-consume log 原本對 skipped-* 回應也印「RapidOCR layer applied」誤導（子代理發現）→
+  改讀 X-OCR header 印真實狀態（sidecar lines=N／skipped-own-layer／skipped-has-text）；
+  /text 的 existing-text 路徑補 NFKC（get_text 會帶 NBSP）。
+回滾：還原 docker-compose.yml.before-20260705-todo15c＋ocr/app.py.before-20260705-todo15c＋
+  scripts/pre-consume-ocr.sh.before-20260705-todo15c、刪 scripts/post-consume-ocr.sh、
+  docker compose build ocr && up -d ocr webserver。

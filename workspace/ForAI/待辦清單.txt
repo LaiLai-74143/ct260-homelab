@@ -292,6 +292,13 @@
        fail-open 落回 tesseract（已實測）；OCR_SKIP_ARCHIVE_FILE=with_text 防 ghostscript 弄壞
        ToUnicode。合成難字件全對、使用者原亂碼掃描件改可辨識。四踩坑見缺改記錄「待辦⑮追加」。
     （另議：拉 image 時發現 Docker Hub blob CDN 已改 cloudfront，squid 註解行已修正域名。）
+    g✔ API 直傳圖片補洞（2026-07-05 追加b，使用者實拍仍爛後回報）：手機 app「分享原始照片」
+       不經 pre-consume/watcher → 新增 sidecar POST /text＋PAPERLESS_POST_CONSUME_SCRIPT
+       （post-consume-ocr.sh）入庫後以 RapidOCR 純文字覆寫 content＋重建索引；fail-open 保留
+       tesseract content（停 ocr 實測過）；既有壞件 doc 3/13 已重跑修復。archive PDF（圖片件）
+       仍 tesseract 版、自動比對仍用 tesseract content＝已知取捨。對抗驗證 11 PASS/1 SKIP 零缺陷,
+       另揪出並修掉 15b 短文本（≤50字）-0x100 錯字鏈（producer 標記＋post-consume 吃標記 PDF,
+       根因 paperless VALID_TEXT_LENGTH=50）。見缺改記錄「待辦⑮追加b/踩坑5」。
 
 -------------------------------------------------------------------------------
 16. OpenWrt 內網 22 埠絆線告警（tripwire，使用者澄清後定案）

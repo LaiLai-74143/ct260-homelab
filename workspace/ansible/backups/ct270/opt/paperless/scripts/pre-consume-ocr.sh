@@ -9,12 +9,14 @@ URL="${OCR_SIDECAR_URL:-http://ocr:8080/ocr}"
 [ -n "${DOCUMENT_WORKING_PATH:-}" ] || exit 0
 head -c 5 "${DOCUMENT_WORKING_PATH}" 2>/dev/null | grep -q '%PDF-' || exit 0
 TMP="$(mktemp /tmp/preocr.XXXXXX)" || exit 0
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP" "$TMP.h"' EXIT
 # --noproxy '*':容器帶 squid proxy env,到 sidecar 是 compose 網內直連,不得繞道
-if curl -sfS --noproxy '*' --max-time 600 -F "file=@${DOCUMENT_WORKING_PATH}" -o "$TMP" "$URL"; then
+if curl -sfS --noproxy '*' --max-time 600 -D "$TMP.h" -F "file=@${DOCUMENT_WORKING_PATH}" -o "$TMP" "$URL"; then
     if [ -s "$TMP" ] && head -c 5 "$TMP" | grep -q '%PDF-'; then
         cat "$TMP" > "$DOCUMENT_WORKING_PATH"  # cat 覆寫,保留原檔權限
-        echo "pre-consume-ocr: RapidOCR layer applied ($(basename "$DOCUMENT_WORKING_PATH"))" >&2
+        # X-OCR:lines=N(已疊層)/skipped-*(原樣退回:已有文字層/自產件/頁數超限)
+        STATUS="$(grep -i '^x-ocr:' "$TMP.h" 2>/dev/null | tr -d '\r' | awk '{print $2}')"
+        echo "pre-consume-ocr: sidecar ${STATUS:-ok} ($(basename "$DOCUMENT_WORKING_PATH"))" >&2
     else
         echo "pre-consume-ocr: unexpected response, fallback to tesseract" >&2
     fi
