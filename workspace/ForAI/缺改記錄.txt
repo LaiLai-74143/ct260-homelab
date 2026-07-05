@@ -1202,3 +1202,11 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
   ansible 白名單兩行。零現役服務變更（全程唯讀 + 新增檔案；openwrt 測試殘留 /root/.ansible 已清）。
 文件：拓樸 §10（Ansible 段新增）、網段指導原則 §VLAN90（裁決改記）、注意事項 §1（6/7 兩條）、
 待辦清單 ◐48。
+
+### 待辦㊽ 全結（2026-07-05：使用者執行 finish-48.sh 成功 + 假 diff 修正）
+- 使用者親跑 finish-48.sh：cron 23:15 Taipei 條目加入成功；wrapper 端到端驗證 PASS（59 檔 clean）。
+- ★ 收尾踩坑：pvesh get storage 輸出「陣列序」與「content 逗號清單內部序」皆隨機（perl hash 序），
+  每輪備份產生假 diff 會污染每日 auto-commit。修法：playbook 存檔前雙重正規化
+  （sort(attribute='storage') + content split/sort/join）。兩輪 md5 一致驗證 STABLE。
+  通則：命令輸出型備份（非讀檔）入庫前一律先確認輸出確定性。
+文件：待辦清單 ✔48。

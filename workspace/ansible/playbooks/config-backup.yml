@@ -64,9 +64,15 @@
         state: directory
         mode: "0755"
       delegate_to: localhost
+    - name: 正規化 storage 定義(pvesh 的陣列序與 content 逗號清單序皆隨機,雙重排序消除假 diff)
+      ansible.builtin.set_fact:
+        storage_norm: "{{ (storage_norm | default([])) + [ item | combine({'content': item.content | default('') | split(',') | sort | join(',')}) ] }}"
+      loop: "{{ pvesh_storage.stdout | from_json | sort(attribute='storage') }}"
+      loop_control:
+        label: "{{ item.storage }}"
     - name: 存 storage 定義
       ansible.builtin.copy:
-        content: "{{ pvesh_storage.stdout }}\n"
+        content: "{{ storage_norm | to_nice_json }}\n"
         dest: "{{ backup_root }}/pve24/pvesh-storage.json"
         mode: "0644"
       delegate_to: localhost

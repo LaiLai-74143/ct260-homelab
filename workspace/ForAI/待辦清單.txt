@@ -505,7 +505,8 @@
     【說明】vzdump 每次全量吃空間；PBS 增量+去重+驗證。第 38 項清理後空間充裕可不急；
     若仍緊張：DXP docker 跑 PBS，datastore 掛 NAS 卷，pve24/RouterPVE 加 PBS storage 改推。
 
-◐48. Ansible / config-as-code — Phase 1 完成（2026-07-05），餘 cron 待使用者 finish-48.sh
+✔48. Ansible / config-as-code — Phase 1 全結（2026-07-05：使用者 finish-48.sh 加 cron 成功，
+    wrapper 實測 59 檔 clean；Phase 2 push 路徑屆時再議）
     【原文】全站設定入 git repo、改動=改代碼+自動套用；規模大且依賴 VLAN90（無計畫），遲延。
     前置為第 36 項 git 化；屆時再議。
     〔裁決〕controller=CT260，不建 VLAN90 host（網段指導原則 §VLAN90 已改記）。
@@ -515,8 +516,8 @@
     config-backup.yml 唯讀入庫 59 檔、scan-secrets.sh gate、hl-ansible-backup 失敗回滾+TG）。
     ansible -m ping 10/10 全綠；明文秘鑰不入庫（redact/排除），雜湊可入 private repo。
     細節見缺改記錄 2026-07-05 待辦㊽ 段。
-    〔待使用者〕跑 ~/workspace/ansible/finish-48.sh 加 cron 23:15 Taipei
-    （agent 改 crontab 被分類器攔，照 36 慣例收斂 finish 腳本）。
+    〔全結〕使用者跑 finish-48.sh 加 cron 23:15 Taipei 成功（agent 改 crontab 被分類器攔，
+    照 36 慣例收斂 finish 腳本）；收尾另修 pvesh 輸出不定序問題（見缺改記錄）。
     〔Phase 2 屆時再議〕改動=改代碼+套用（check-then-reload push 路徑）；先累積 Phase 1 慣性。
 
 ===============================================================================
