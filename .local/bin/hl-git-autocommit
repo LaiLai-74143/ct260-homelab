@@ -1,0 +1,18 @@
+#!/bin/bash
+# hl-git-autocommit — 待辦36:每日自動 commit(+push)ForAI 文件與自製腳本
+# 排程:使用者 crontab 30 23 * * *。訊息帶日期;無變更不產生空 commit。
+# push 盡力而為:remote 未就緒(GitHub repo/deploy key 未設)時略過,不算失敗。
+set -u
+cd /home/codex || exit 1
+export GIT_TERMINAL_PROMPT=0
+
+git add -A
+if git diff --cached --quiet; then
+    exit 0
+fi
+git commit -q -m "auto: $(date +%F)" || exit 1
+
+if git remote get-url origin >/dev/null 2>&1; then
+    git push -q origin main 2>/dev/null \
+        || logger -t hl-git-autocommit "push failed $(date +%F)"
+fi
