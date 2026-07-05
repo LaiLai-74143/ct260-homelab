@@ -844,8 +844,8 @@ git 統一 repo（待辦#36，2026-07-05）：repo root=/home/codex（branch mai
 workspace/ForAI/ + ~/.local/bin/ 自製腳本 + life-ops-mcp/；秘鑰（.env/*token*/key）全域排除，
 機密仍只在 ~/.config/homelab/*.env（不入庫）。cron 每日 23:30 Taipei（=15:30 UTC）
 `~/.local/bin/hl-git-autocommit` 自動 commit+push（訊息帶日期；無變更跳過；remote 未就緒僅 commit）。
-remote=GitHub private repo（deploy key ~/.ssh/github_ed25519，僅此 repo 寫入權）；
-首次 push 待使用者跑 ~/workspace/git-repo-36/finish-36.sh（建 repo+貼公鑰後執行）。
+remote=GitHub private repo github.com:LaiLai-74143/ct260-homelab（deploy key ~/.ssh/github_ed25519，
+僅此 repo 寫入權；★帳號名含連字號，勿寫 lailai74143）。首次 push 2026-07-05 完成（finish-36.sh）。
 
 ---
 

@@ -445,7 +445,7 @@
     先擴 Notes 表欄位（狀態/優先級/到期日）+ MCP 工具 add_todo/list_todos；不夠用再評估 Vikunja。
 
 -------------------------------------------------------------------------------
-◐36. ForAI 文件 + 自製腳本 git 化 — 主體完成（2026-07-05；首次 push 待使用者 finish-36.sh）
+✔36. ForAI 文件 + 自製腳本 git 化 — 完成（2026-07-05 全結：使用者 finish-36.sh push 成功）
     〔已完成〕repo root=/home/codex branch main；.gitignore 白名單納管 workspace/ForAI/ +
     ~/.local/bin/ 全部自製腳本 + life-ops-mcp/（含 server.py、notifier；grafana-overview-gen.py 在 ForAI 內）；
     秘鑰全域排除（.env/*token*/key，機密仍僅存 ~/.config/homelab/）。憑證 grep 掃描（已知 token 格式+
@@ -453,10 +453,10 @@
     commit 模式=使用者裁 cron auto-commit：~/.local/bin/hl-git-autocommit 每日 23:30 Taipei
     （crontab 30 15 UTC，flock 慣例；實測有變更 commit/無變更跳過/無 remote 略過 push）。
     GitHub SSH key ~/.ssh/github_ed25519 + ssh config Host github.com 已備。
-    〔OPEN=使用者動作〕git remote add 被分類器攔（repo 未經點名）→ 收斂 finish 腳本：
-    GitHub 建 private repo（建議 ct260-homelab，不勾任何初始化）→ Settings→Deploy keys 貼
-    ~/.ssh/github_ed25519.pub（勾 Allow write access）→ 跑 ~/workspace/git-repo-36/finish-36.sh
-    （綁 remote+首次 push+驗證；repo 名不同時帶 URL 參數）。
+    〔全結 2026-07-05〕使用者建 private repo+deploy key（Allow write access）後跑
+    ~/workspace/git-repo-36/finish-36.sh push 成功：remote=github.com:LaiLai-74143/ct260-homelab
+    （★帳號名含連字號；首跑腳本預設 lailai74143 踩 Repository not found，deploy key 綁單一 repo
+    路徑須逐字吻合，已修）。main 3 commits 上 GitHub，branch tracking origin/main。
     原文流程：CT260 git init 統一 repo（ForAI/、hl-*、grafana-overview-gen.py、server.py、notifier）
     → .gitignore 排除 .env/*token*/秘鑰 → GitHub private repo（出站白名單已含 github）
     → push；日常人工 commit，或 cron 每日 auto-commit（訊息帶日期）擇一。

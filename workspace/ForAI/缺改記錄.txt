@@ -1160,3 +1160,13 @@ VLAN67 介面/zone/proxy 規則刻意保留雙軌（Allow-Proxy-DNS/Ping、Block
 - 順帶注意：hl-git-autocommit 非 hl-* 派發工具箱成員（本地 cron 腳本，工具箱規格不收）；
   push 後 GitHub private repo 兼作 ForAI 文件+腳本的異地副本。
 文件：拓樸 §10（CT260 git repo 段新增）、待辦清單 ◐36 標注。
+
+### 待辦㊱ 全結（2026-07-05：使用者執行 finish-36.sh push 成功）
+- 首跑踩坑：GitHub 帳號實際 LaiLai-74143（含連字號），腳本預設 URL 用 email 前綴 lailai74143 →
+  deploy key 認證過（ssh -T 回 Hi LaiLai-74143/ct260-homelab）但 push Repository not found
+  （deploy key 綁單一 repo，URL 路徑須逐字吻合）。修正腳本預設 URL 後使用者重跑全過。
+- ★ 分類器補充樣本：agent 端 git remote set-url+push 亦被攔（[Data Exfiltration]——同會話重指推送
+  目的地視為切斷連續性）；推 GitHub 的 remote 綁定一律留使用者執行。
+- 驗證：main 3 commits（ac89b28/3dda0c5/b1bff62）上 GitHub private repo，branch tracking origin/main。
+- 常態運作：cron 每日 23:30 Taipei hl-git-autocommit 自動 commit+push；本節起文件更新由每日 auto-commit 收。
+文件：拓樸 §10 remote 補記、待辦清單 ✔36。
