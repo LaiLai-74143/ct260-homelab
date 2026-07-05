@@ -1,0 +1,122 @@
+# hl-* 遠端派發工具箱（規則類說明書）
+
+更新時間：2026-07-01
+本檔是 CT260 上 `hl-*` 系列命令列工具的「單一真實來源」規格 + 使用規則。
+與《常用脚本.txt》分工：常用脚本放「臨時貼上即用的原始命令」；本檔放「這套包裝工具
+的設計約束、節點對照、各命令契約、擴充方式」。改工具行為 -> 改這裡；別在常用脚本重抄。
+
+工具位置：CT260 `~/.local/bin/hl-run|hl-mon|hl-health|hl-promq|hl-push|hl-pull|hl-reload|hl-snapshot`（codex 擁有）。
+不含任何機密；TG/token 等仍由既有 env 檔負責，本工具不碰。
+
+===============================================================================
+## 0. 為什麼有這套工具（要解決的兩個成本）
+
+1. 錯誤點：CT260 -> pve24 -> `pct exec` -> `bash` 這種多跳命令，中間每經過一層 shell
+   就重新解析一次引號，巢狀單雙引號 / 全型半型符號 / `$` / 反引號極易被攤平失真
+   （見常用脚本.txt 末段那條 ssh 攤平警告）。
+2. Token：重量級 inline python/curl/jq 一條數百字元，每查一次就要完整輸出一次。
+
+hl-* 用「短命令 + 安全傳輸」同時打這兩點：一條 `hl-mon` 取代整段 curl|jq；
+一次派發只經過「一個」shell，引號永不被中間層咬。
+
+===============================================================================
+## 1. 核心設計約束（改工具時必須守）
+
+R1  單 shell 原則：payload 最終只能被「一個」shell 解析。
+    - 直接 ssh 節點（單跳）：payload 以「單一參數」原樣交給 ssh，遠端登入 shell 跑一次。
+      不用 base64（OpenWrt busybox 沒有 base64 applet，且單跳不需要）。
+    - pct / qm 節點（多跳）：payload 先 base64，跨過中間 shell，落地端 `base64 -d | bash`。
+      容器端一律 `env -u LC_ALL -u LANG -u LC_CTYPE` 消除 locale 警告污染輸出。
+R2  base64 內容只含 [A-Za-z0-9+/=]，天然無 shell 特殊字元，故可安全 `echo $b64` 不加引號。
+R3  退出碼要透傳：ssh/pct 由 ssh 自然帶回；qm guest-exec 回 JSON，需解析 exitcode 後 raise。
+R4  唯讀 vs 變更：hl-run/hl-mon/hl-health/hl-promq 是唯讀查詢，可放心重跑；
+    hl-push 會改遠端檔案/重啟服務，屬變更操作，套用前後照《操作規範與回滾.txt》驗證。
+R5  機密零落地：本工具與本檔都不寫 token/key，沿用既有 env 檔。
+
+===============================================================================
+## 2. 節點對照表（hl-run 內建 registry；擴充見 §5）
+
+```text
+節點       跳法                                       落地 shell   傳輸
+ct260      本機                                        bash         直接
+pve24      ssh pve24                                   bash         單跳原樣
+routerpve  ssh routerpve（經 OpenWrt SNAT .10.1）      bash         單跳原樣
+openwrt    ssh openwrt                                 sh(busybox)  單跳原樣
+dxp4800    ssh dxp4800                                 sh           單跳原樣
+ct201      ssh pve24 -> sudo pct exec 201              bash         base64 多跳
+ct250      ssh pve24 -> sudo pct exec 250              bash         base64 多跳
+ct270      ssh pve24 -> sudo pct exec 270              bash         base64 多跳
+vm300      ssh pve24 -> sudo qm guest exec 300         sh           base64 多跳(JSON)
+```
+註：pct/qm 走 pve24 的 sudo（codex-admin 已 NOPASSWD）。實際位址/別名以拓樸V6 + ssh config 為準。
+
+===============================================================================
+## 3. 命令契約
+
+### hl-run <節點> ['命令']            —— 地基，其他工具都建在它上
+  - 命令來源：有參數就用參數；沒參數則讀 stdin（可 heredoc 送多行，引號安全）。
+  - 退出碼 = 遠端命令退出碼。
+  - 輔助：`hl-run --list`（列節點）、`hl-run --resolve <節點>`（印傳輸描述，供 hl-push 用）。
+  例：
+    hl-run ct201 'systemctl is-active docker'
+    hl-run openwrt 'fw4 check'
+    hl-run vm300 'systemctl is-active cowrie'
+    hl-run ct201 <<'EOF'          # 多行 / 含引號 / 含全型，全部安全
+    cd /opt/monitoring && docker compose ps
+    EOF
+
+### hl-mon                            —— Prometheus 快照（唯讀）
+  在 CT201 上查 targets up/down + firing/pending 告警，緊湊輸出。
+  取代常用脚本.txt §7 那幾條 curl|jq 長命令。
+
+### hl-promq '<PromQL>'               —— 即時 PromQL 查詢（唯讀）
+  查詢字串以 base64 夾帶，任何引號/運算子都安全。輸出 `值<TAB>{標籤}`。
+  例：hl-promq 'up == 0' ；hl-promq 'count by (job)(up)'
+
+### hl-health [節點...]               —— 全機隊一行健檢（唯讀）
+  只用 /proc/loadavg + /proc/meminfo + df，coreutils / busybox 皆通吃。
+  無參數 = 預設全節點；離線節點顯示 UNREACHABLE（誠實，不當錯誤）。
+  取代常用脚本.txt §1 整串開工檢查。
+
+### hl-push <節點> <本地檔> <遠端路徑> [--recreate <compose目錄> <service>]   —— 變更！
+  以 cp-over（非 mv）覆蓋，保住 inode / bind-mount / 執行中服務的 fd。
+  流程：直接 ssh 節點 scp 到 <遠端>.hlnew；pct 節點先 scp 到 pve24:/tmp 再 pct push 進容器；
+        然後 hl-run 落地 `cp .hlnew -> 目標 && rm .hlnew`；--recreate 再 force-recreate 指定 service。
+  不支援 ct260（本機直接 cp 即可）與 vm300（無法 scp 進 guest）。
+
+### hl-pull <節點> <遠端路徑> [本地目的]     —— hl-push 的反向（唯讀取回）
+  用 hl-run cat 取回遠端「文字」設定檔到本機編輯，改完再 hl-push 回去。全節點通用（含 vm300）。
+  僅適合文字檔，非二進位。預設本地檔名 = 遠端 basename。
+
+### hl-reload [prometheus|alertmanager|both]  —— 變更（僅重讀設定）
+  在 CT201 先 check 再 reload：promtool/amtool 檢查不過，set -e 會在 reload 前中止 -> 壞設定不上線。
+  搭配 hl-push（cp-over 保 inode）改完規則即可安全 reload；預設 both。
+
+### hl-snapshot [tag]                        —— 唯讀，供改動前後比對
+  一鍵存 health + mon 時間戳快照到 ~/.local/state/hl/，同時印出。
+  改動前後各跑一次，`diff 舊 新` 看變化，配合《操作規範與回滾.txt》的驗證/回滾。
+
+===============================================================================
+## 4. 何時用 / 何時不用
+
+用：跨節點的重複查詢、含引號或全型的多跳命令、開工健檢、部署設定檔。
+不用：一次性土炮命令（直接 hl-run 帶命令即可，不必為它寫新包裝）；
+      節點本機已有專用 helper（OpenWrt 的 homelab-*-status 等）—— 直接用原生的，別再套一層。
+
+===============================================================================
+## 5. 擴充方式（加節點 / 加子命令）
+
+加節點：改 hl-run 的 resolve() case，回傳四類之一：
+  "local" | "ssh <host> <shell>" | "pct <ctid>" | "qm <vmid>"
+  並同步更新 --list 清單與本檔 §2 對照表。host 需先在 ~/.ssh/config 有別名。
+加子命令：新 hl-xxx 一律「建在 hl-run 之上」，不要自己重寫跳板邏輯（守 R1）。
+  唯讀類直接呼叫 hl-run；需帶不可信字串（如查詢語句）進遠端 python 時，用 base64 夾帶（見 hl-promq）。
+
+===============================================================================
+## 6. 驗證與回滾
+
+- 唯讀工具：重跑即可，無副作用。
+- hl-push：改前先 `hl-run <節點> 'cat <遠端路徑>'` 存底或確認；改後同法比對；
+  服務類再 hl-mon / 對應 status 確認健康。回滾＝把舊檔再 hl-push 回去（inode 不變）。
+- 首次部署後的驗證命令記錄在缺改記錄.txt 對應日期條目。
+```

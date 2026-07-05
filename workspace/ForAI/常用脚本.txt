@@ -1,0 +1,313 @@
+# 常用腳本 / 常用命令 / Homelab 操作索引
+
+更新時間：2026-07-01
+本文只放「可貼上即用的命令」。背景說明/設計/現況數字見對應文件：
+  位址·DNS·防火牆 -> 拓樸文件V6；監控/告警 -> 監控告警.txt；機密檔案清單 -> 注意事項.txt §11。
+  跨節點派發 / 健檢 / 監控查詢，優先用 CT260 的 hl-* 工具（規格見 hl-工具箱.txt）：
+    hl-run <節點> '命令'（安全多跳，免巢狀引號）、hl-mon、hl-health、hl-promq、hl-push。
+
+本文不保存密碼、token、API key、PPPoE 帳密、Cloudflare/Duplicati 機密參數。
+
+---
+
+## 0. 登入入口
+
+### Windows -> 各節點
+
+```powershell
+ssh ct260                                                                  # = codex@192.168.20.60, key pc_homelab_ed25519（~/.ssh/config 已設）
+ssh -i $env:USERPROFILE\.ssh\codex_ct250_ed25519 codex-admin@192.168.20.5  # PVE24
+ssh -i $env:USERPROFILE\.ssh\codex_ct250_ed25519 codex-audit@192.168.20.50 # CT250
+ssh -p 52438 -i $env:USERPROFILE\.ssh\codex_ct250_ed25519 root@192.168.10.1 # OpenWrt（救援 root@192.168.31.1）
+```
+
+### CT260 -> 各節點（SSH alias，~/.ssh/config 已設；key ~/.ssh/ct260_ops_ed25519）
+
+```sh
+ssh pve24      # codex-admin@192.168.20.5:22
+ssh openwrt    # root@192.168.31.1:52438
+ssh dxp4800    # My-Big-Nas@192.168.30.3:45123
+ssh routerpve  # root@192.168.10.2（經 OpenWrt SNAT .10.1）
+```
+
+---
+
+## 1. 開工前健康檢查
+
+### OpenWrt
+
+```sh
+homelab-firewall-status
+homelab-vlan80-observation-status
+homelab-dns-status
+homelab-dns-compare
+/etc/init.d/portscan-autoban status
+/etc/init.d/portscan-autoban-metrics status
+```
+
+### 24Bay PVE
+
+```sh
+homelab-pve24-host-status
+pvesm status
+pct list
+qm list
+pct exec 201 -- /usr/local/bin/homelab-vlan80-observation-test
+```
+
+### CT201 Monitoring
+
+```sh
+pct exec 201 -- bash -lc '
+hostname; ip -br addr
+cd /opt/monitoring && docker compose ps
+curl -s http://127.0.0.1:9090/api/v1/targets | jq -r ".data.activeTargets[] | [.labels.job,.health,.scrapeUrl] | @tsv"
+'
+```
+
+### CT260 Codex Ops
+
+```sh
+ssh ct260 'hostname; id; codex --version; sudo -n true 2>/dev/null && echo sudo-ok || echo sudo-not-available'
+```
+
+---
+
+## 2. PVE / LXC / VM 查詢
+
+```sh
+pct list; qm list
+pct config 100   # 102 / 201 / 250 / 260
+qm config 300; qm status 300 --verbose; qm agent 300 ping; qm agent 300 network-get-interfaces
+pct exec 201 -- bash -lc 'hostname; ip -br addr; ip route'
+pct exec 260 -- bash -lc 'hostname; ip -br addr; ip route; cat /etc/resolv.conf; id codex; codex --version'
+```
+
+---
+
+## 3. CT260 Codex Ops
+
+```sh
+codex --version
+codex login --device-auth
+codex
+cat ~/.codex/config.toml      # model gpt-5.5 / reasoning high / sandbox workspace-write / cred store file
+```
+
+VSCode Remote-SSH：Connect to Host... -> ct260。
+
+---
+
+## 4. CT250 Claude Code / 模型切換
+
+```sh
+pct exec 250 -- cc-model status        # 或在 CT250 內：cc-model status
+cc-model deepseek    # 日常穩定
+cc-model glm         # GLM-5.2 thinking + tool_use
+cc-model glm-fast    # 短任務較省
+cc-model proxy-lab   # 舊 mixed proxy，只作實驗
+pct exec 250 -- bash -lc 'cc-model status; systemctl is-active claude-proxy 2>/dev/null||true; systemctl is-enabled claude-proxy 2>/dev/null||true'
+```
+
+---
+
+## 5. OpenWrt 防火牆 / DNAT / Hairpin
+
+（DNAT/規則現況見拓樸 §4）
+
+```sh
+nft list chain inet fw4 dstnat_wan
+uci show firewall | grep -A12 -B2 'Trusted-Hairpin-Minecraft'
+nft list ruleset | grep -Ei 'Trusted-Hairpin|49169|43915'
+uci show firewall | grep -F 'Allow-PC40-To-CT260-CodexOps-SSH'
+# VLAN40 / PC40 正式配置
+uci -q show network.trusted_clients; uci -q show dhcp.trusted_clients; uci -q show firewall.trusted
+ip -br addr show eth1.40
+nslookup pc.home.arpa 127.0.0.1; nslookup pc40.home.arpa 127.0.0.1
+fw4 check
+fw4 reload
+```
+
+```powershell
+Test-NetConnection mc.lailai74143.com -Port 49169
+```
+
+---
+
+## 6. portscan-autoban / Cowrie quarantine
+
+```sh
+/etc/init.d/portscan-autoban status
+/etc/init.d/portscan-autoban-metrics status
+/etc/init.d/cowrie-quarantine status
+/etc/init.d/cowrie-quarantine-metrics status
+/usr/bin/cowrie-quarantine once
+/usr/bin/cowrie-quarantine-metrics once
+
+nft list set inet portscanban banned_ipv4
+nft list set inet cowriequarantine quarantined_ipv4
+
+curl -s http://10.80.80.1:9105/metrics.txt | sed -n '1,120p'
+curl -s http://10.80.80.1:9105/cowrie-quarantine-metrics.txt | sed -n '1,120p'
+
+logread | grep -Ei 'cowrie-quarantine|Portscan|Tripwire|autoban|WAN-Portscan' | tail -n 120
+
+# 手動清未達門檻 counter（不影響已封鎖 nft set）
+rm -f /tmp/portscan-autoban/* 2>/dev/null || true
+```
+
+---
+
+## 7. CT201 Monitoring / Grafana / Prometheus
+
+（規則/notifier/dashboard 說明見《監控告警.txt》；這裡只放命令）
+
+```sh
+# compose / prometheus
+pct exec 201 -- bash -lc 'cd /opt/monitoring && docker compose ps'
+pct exec 201 -- sed -n '1,220p' /opt/monitoring/prometheus.yml
+pct exec 201 -- curl -X POST http://127.0.0.1:9090/-/reload
+pct exec 201 -- bash -lc 'curl -s http://127.0.0.1:9090/api/v1/targets | jq -r ".data.activeTargets[] | [.labels.job,.health,.scrapeUrl] | @tsv"'
+
+# 告警相關 container
+pct exec 201 -- bash -lc 'cd /opt/monitoring && docker compose ps gotify alertmanager alertmanager-gotify-bridge prometheus'
+# 改規則（同檔內容變更只需 reload；★ 若改的是 bind-mount 單檔需 docker restart 重綁 inode）
+pct exec 201 -- docker exec prometheus promtool check rules /etc/prometheus/rules/alerts.yml
+pct exec 201 -- curl -s -X POST http://127.0.0.1:9090/-/reload
+pct exec 201 -- docker exec alertmanager amtool check-config /etc/alertmanager/alertmanager.yml
+pct exec 201 -- curl -s -X POST http://127.0.0.1:9093/-/reload
+# 目前 firing/pending
+pct exec 201 -- bash -lc 'curl -s http://127.0.0.1:9090/api/v1/alerts | jq -r ".data.alerts[] | [.labels.alertname,.state,.labels.severity] | @tsv"'
+pct exec 201 -- bash -lc 'curl -s http://127.0.0.1:9093/api/v2/alerts | jq -r ".[] | [.labels.alertname,.status.state] | @tsv"'
+# 手動測整條鏈路（送一則到 Gotify）
+pct exec 201 -- bash -lc 'NET=$(docker inspect alertmanager-gotify-bridge -f "{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}"); docker run --rm --network $NET curlimages/curl:latest -s -X POST http://alertmanager-gotify-bridge:8080/gotify_webhook -H "Content-Type: application/json" -d "{\"version\":\"4\",\"status\":\"firing\",\"alerts\":[{\"status\":\"firing\",\"labels\":{\"alertname\":\"ManualTest\"},\"annotations\":{\"summary\":\"manual test\",\"description\":\"chain check\"}}]}"'
+
+# node 清單 / OpenWrt system metrics
+pct exec 201 -- python3 -c 'import json,urllib.parse,urllib.request as u; q=urllib.parse.urlencode({"query":"node_uname_info"}); data=json.load(u.urlopen("http://127.0.0.1:9090/api/v1/query?"+q, timeout=10)); [print(r["metric"].get("job"), r["metric"].get("instance"), r["metric"].get("nodename")) for r in data["data"]["result"]]'
+/etc/init.d/openwrt-system-metrics status
+/usr/bin/openwrt-system-metrics once
+curl -s http://10.80.80.1:9105/openwrt-system-metrics.txt | sed -n '1,120p'
+
+# Grafana dashboard 檔
+pct exec 201 -- ls -lh /opt/monitoring/grafana-dashboards/
+# 改 dashboard 後部署：scp -> pct push 到 grafana-dashboards/，Grafana 30s 自動 reload
+#   本站總覽由 ForAI/grafana-overview-gen.py 生成：python3 grafana-overview-gen.py > homelab-overview.json 再 pct push 覆蓋
+
+# CT270 node_exporter（原生 systemd）
+pct exec 270 -- systemctl is-active node_exporter
+pct exec 270 -- curl -s http://127.0.0.1:9100/metrics | grep -m1 node_uname_info
+pct exec 201 -- curl -sf http://192.168.20.70:9100/metrics | grep -m1 node_uname_info   # 跨段 scrape 驗證
+
+# Homepage（CT201 /opt/homepage，gethomepage）改 config 後：★ 必須 force-recreate 才重繪（restart 無效, .next 快取）
+ssh pve24 'sudo pct exec 201 -- sh -c "cd /opt/homepage && docker compose up -d --force-recreate homepage"'
+#   config 部署：本機編好 -> scp pve24:/tmp -> pct push 201 到 /opt/homepage/config/xxx.new -> 容器內 cp 覆蓋(保 inode)
+# ★ ssh 遠端跑複雜命令的坑：`ssh h -- pct exec N -- bash -lc "..."` 會被 ssh 攤平失去引號；
+#   要嘛用「直接 argv」(pct exec N -- cmd arg1 arg2，不經 shell)，要嘛整條包成單一參數：ssh h 'sudo pct exec N -- sh -c "..."'
+```
+
+### CT260 Telegram notifier（命令；說明見監控告警.txt §5）
+
+```sh
+crontab -l
+cat ~/.local/bin/homelab-notify.py
+tail -f ~/.local/state/homelab-notify/notify.log
+cat ~/.local/state/homelab-notify/state.json
+python3 ~/.local/bin/homelab-notify.py --selftest    # 送測試到 Telegram
+python3 ~/.local/bin/homelab-notify.py --dry-run     # 只印不送
+python3 ~/.local/bin/homelab-notify.py               # 正常跑一次
+python3 ~/.local/bin/homelab-notify.py --daily-report # 手動日報（有計數才發，發完歸零）
+cat ~/.local/state/homelab-notify/daily_counts.json
+```
+
+---
+
+## 8. Honeypot / VM300
+
+```sh
+qm status 300 --verbose; qm config 300; qm agent 300 network-get-interfaces
+qm guest exec 300 -- /bin/sh -lc 'hostname; systemctl is-active cowrie; ss -lntp | grep -E ":(2222|2223|8294)" || true'
+qm guest exec 300 -- /bin/sh -lc 'systemctl is-active cowrie-prometheus-exporter; ss -lntp | grep :9116 || true'
+qm guest exec 300 -- /bin/sh -lc 'curl -fsS --max-time 5 http://10.66.66.10:9116/metrics | sed -n "1,40p"'
+
+# CT201 端 cowrie target / geoip
+pct exec 201 -- systemctl is-active cowrie-geoip-exporter
+pct exec 201 -- curl -fsS http://10.80.80.11:9117/metrics | sed -n '1,80p'
+pct exec 201 -- python3 -c 'import json,urllib.request as u; data=json.load(u.urlopen("http://127.0.0.1:9090/api/v1/targets", timeout=10)); [print(t["labels"].get("job"), t.get("health"), t.get("scrapeUrl"), t.get("lastError"), sep="\t") for t in data["data"]["activeTargets"] if t["labels"].get("job") in ("cowrie-exporter","cowrie-geoip")]'
+```
+
+---
+
+## 9. DNS / hosts.home.arpa
+
+（正式 records 全表見拓樸 §3）
+
+```sh
+# OpenWrt source-of-truth
+vi /etc/homelab/dns/hosts.home.arpa
+homelab-dns-compare
+homelab-dns-push-to-24pve         # 正式走 24Bay VLAN20 192.168.20.5
+sleep 5; homelab-dns-compare
+grep -n 'DST_HOST=' /usr/local/bin/homelab-dns-push-to-24pve-core
+ssh -i /root/.ssh/homelab_dns_sync_ed25519 root@192.168.20.5 'echo OK'
+# 24Bay backup DNS
+homelab-dns-status; homelab-dns-verify; homelab-dns-reload
+```
+
+---
+
+## 10. Storage / 備份
+
+```sh
+pvesm status
+cat /etc/pve/storage.cfg
+cat /etc/pve/jobs.cfg 2>/dev/null || true
+```
+
+重要 storage 速記：DXP4800-Backup-SMB100=正式 PVE backup；Nas=指 DXP 10G SMB（命名偏舊）；
+SSD-2=主要 LXC rootfs；local-lvm=CT260 rootfs；HDD-0=VM300 disk/cloudinit；hdd1=sdc lvmthin/CT270 rootfs。
+
+---
+
+## 10.5 CT270 Life-Ops（NocoDB）
+
+```sh
+# WAN 出網切換（OpenWrt root，助手在 /usr/local/bin；預設 BLOCKED）
+ct270-net-status                 # 查目前開/關
+ct270-net-on                     # 維護開網（裝套件/更新 image 前）
+ct270-net-off                    # 維護後關回（務必）
+
+# NocoDB 服務（pve24）
+sudo pct exec 270 -- sh -c 'cd /opt/nocodb && docker compose ps'
+sudo pct exec 270 -- sh -c 'curl -s localhost:8080/api/v1/health'   # {"message":"OK"...}
+
+# Agent 呼叫 API（CT260；token 存 ~/.config/homelab/nocodb.env chmod600）
+set -a; . ~/.config/homelab/nocodb.env; set +a
+curl -s -H "xc-token: $NC_TOKEN" "$NC_URL/api/v2/meta/bases"        # 401=token 無效需重抄
+
+# Google Calendar（MCP v2.0；憑證 ~/.config/homelab/gcal.env chmod600）
+python3 ~/life-ops-mcp/get_gcal_token.py       # 一次性取/重取 refresh token（測試模式久置失效時重跑）
+# 行事曆功能透過 MCP 工具用（新 claude session 載入）：
+#   calendar_agenda / calendar_add / calendar_update / calendar_delete / calendar_conflicts / prep_check / daily_brief
+# 註：Google API 由 CT260 發出(有 WAN)，CT270 維持斷網不受影響。
+
+# MCP server 自我煙測（stdio 餵 JSON-RPC，不動資料可只跑 tools/list）
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python3 ~/life-ops-mcp/server.py
+```
+
+---
+
+## 11. 常用測試命令
+
+```powershell
+Test-NetConnection 192.168.20.60 -Port 22
+Test-NetConnection mc.lailai74143.com -Port 49169
+ssh-keyscan -t ed25519 192.168.20.60 | ssh-keygen -lf -
+ssh-keygen -R 192.168.20.60
+```
+
+---
+
+## 12. 機密檔案
+
+不要貼出的具體機密檔案清單見《注意事項.txt》§11（單一來源，本文不重列）。

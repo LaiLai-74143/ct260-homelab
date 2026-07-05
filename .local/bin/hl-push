@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# hl-push: deploy a local file to a node path, preserving the target inode
+# (cp-over, not mv) so bind-mounts / running services keep their fd.
+#
+#   hl-push <node> <localfile> <remotepath>
+#   hl-push <node> <localfile> <remotepath> --recreate <composedir> <service>
+#
+# node: pve24 openwrt dxp4800 routerpve (direct scp) | ct201 ct250 ct270 (pct push)
+#       ct260 = just use cp; vm300 unsupported (no scp into guest).
+# The remote cp/rm/recreate steps reuse hl-run, so hop logic lives in one place.
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+SSH="ssh -o BatchMode=yes"
+
+[ $# -ge 3 ] || { echo "usage: hl-push <node> <local> <remote> [--recreate <dir> <svc>]" >&2; exit 2; }
+node=$1 local=$2 remote=$3; shift 3
+recreate_dir="" recreate_svc=""
+if [ "${1:-}" = "--recreate" ]; then recreate_dir=${2:?}; recreate_svc=${3:?}; fi
+[ -f "$local" ] || { echo "hl-push: no such file: $local" >&2; exit 1; }
+
+desc=$("$DIR/hl-run" --resolve "$node")
+read -r kind p2 _ <<<"$desc"
+new="$remote.hlnew"
+
+case "$kind" in
+  ssh)   # p2 = host
+    scp -q "$local" "$p2:$new" ;;
+  pct)   # p2 = ctid ; stage on pve24 then pct push into the container
+    scp -q "$local" "pve24:/tmp/hlpush.$$"
+    $SSH pve24 "sudo pct push $p2 /tmp/hlpush.$$ '$new' && rm -f /tmp/hlpush.$$" ;;
+  *) echo "hl-push: unsupported node kind '$kind' for $node" >&2; exit 2 ;;
+esac
+
+# atomic-ish swap that keeps the inode, then optional compose recreate
+"$DIR/hl-run" "$node" "cp '$new' '$remote' && rm -f '$new' && echo 'pushed -> $remote'"
+if [ -n "$recreate_dir" ]; then
+  echo "recreating $recreate_svc in $recreate_dir ..."
+  "$DIR/hl-run" "$node" "cd '$recreate_dir' && docker compose up -d --force-recreate '$recreate_svc'"
+fi

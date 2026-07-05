@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# hl-health: one-line health per node (load / mem / rootfs), fanned out.
+# Uses only /proc + df so it works on coreutils and busybox (OpenWrt/NAS) alike.
+#   hl-health                # all default nodes
+#   hl-health ct201 pve24    # subset
+set -uo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+NODES=${*:-ct260 pve24 ct201 ct250 ct270 vm300 openwrt dxp4800}
+
+read -r -d '' PROBE <<'EOF' || true
+L=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)
+M=$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{if(t)printf "%dMB free/%dMB",a/1024,t/1024}' /proc/meminfo 2>/dev/null)
+D=$(df -P / 2>/dev/null | awk 'NR==2{print $5" used"}')
+echo "load[$L] mem[$M] root[$D]"
+EOF
+
+for n in $NODES; do
+  if out=$("$DIR/hl-run" "$n" "$PROBE" 2>/dev/null); then
+    printf '%-10s %s\n' "$n" "$out"
+  else
+    printf '%-10s %s\n' "$n" "UNREACHABLE"
+  fi
+done

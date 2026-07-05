@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# hl-snapshot: capture a timestamped state snapshot (health + Prometheus) to a
+# file for before/after change comparison (rollback discipline). Prints to
+# stdout and saves; diff two files to see what a change moved.
+#   hl-snapshot [tag]                 # e.g. hl-snapshot before-fw-change
+#   ls ~/.local/state/hl/             # saved snapshots
+#   diff <old> <new>                  # compare
+set -uo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+OUT_D="$HOME/.local/state/hl"; mkdir -p "$OUT_D"
+tag=${1:-snap}
+ts=$(date +%Y%m%d-%H%M%S)
+f="$OUT_D/$ts-$tag.txt"
+{
+  echo "# hl-snapshot [$tag] $ts"
+  echo; echo "== health =="; "$DIR/hl-health"
+  echo; echo "== mon =="; "$DIR/hl-mon"
+} | tee "$f"
+echo "saved: $f" >&2

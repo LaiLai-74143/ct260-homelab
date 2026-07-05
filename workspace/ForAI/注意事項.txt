@@ -1,0 +1,214 @@
+# 注意事項 / Homelab 操作戒律
+
+更新時間：2026-07-04
+依據：家庭網路與服務拓樸文件 V6 現況
+
+本文只收「操作時仍然有效的 DO / DON'T 與待辦」。
+  - 現況事實（位址/DNS/規則/服務埠）以《家庭網路與服務拓樸文件V6.txt》為準。
+  - 安全改動流程、遠端腳本修改規範、回滾步驟 -> 《操作規範與回滾.txt》。
+  - 已完成/已修正/已刪除的歷史項目 -> 《缺改記錄.txt》（本文不再保留過時敘述）。
+  - 監控/告警/notifier 細節 -> 《監控告警.txt》。
+
+本文不保存密碼、token、API key、PPPoE 帳密、Cloudflare/Duplicati 機密參數。
+
+---
+
+## 0. 最高原則
+
+```text
+先查現況，再改設定。
+先備份，再 reload/restart。
+先驗證單點，再擴大範圍。
+不要把臨時維護權限當成長期權限。
+不要把 192.168.100.x 當管理面。
+不要把 observation plane 當 management plane。
+```
+
+---
+
+## 1. CT260 Codex Ops
+
+CT260 是乾淨的 Codex 操作節點，不是全權管理節點（基本資訊見拓樸 §10）。
+
+```text
+1. codex 使用者沒有 sudo，這是刻意設計。
+2. 不要把 PVE root / OpenWrt root 私鑰複製到 CT260。
+3. 若要讓 CT260 管理 homelab，應建 CT260 專用 SSH key + 最小 sudo allowlist，不要沿用舊 key 或全 sudo。
+4. 用完臨時權限後要有撤銷 runbook。
+5. DeepSeek key 可長期放 ~/.config/homelab/deepseek.env（codex 擁有, chmod 600；notifier 需要）；
+   OpenAI / GLM key 仍維持「非必要不長期存放於 CT260」。
+```
+
+---
+
+## 2. CT250 Claude / GLM / DeepSeek
+
+```text
+1. 日常穩定操作建議用 cc-model deepseek。
+2. GLM thinking 可用，但避免超大上下文測試。
+3. 遇到 reasoning_content 但無 final/tool_use，通常是 thinking token 耗盡或工具調用格式不相容。
+4. proxy-lab 只作實驗，不作日常預設；不要再用自製 mixed proxy 當主要工作入口。
+5. 切模型後若 VSCode/Claude session 還握著舊環境變數，要重開 session 或 reload window。
+```
+
+---
+
+## 3. OpenWrt DNAT / Hairpin
+
+（DNAT 表見拓樸 §4.2、hairpin 見 §4.3）
+
+```text
+1. wan6.device 必須指向 @wan，不要錯綁 LAN interface。
+2. LAN hairpin 是額外規則，不是 WAN DNAT 自然生效。
+3. Minecraft hairpin 綁定公網 IP 125.228.123.224；PPPoE 公網 IP 改變時要同步更新，或改 split DNS/SRV。
+4. 改 DNAT 前先 `nft list chain inet fw4 dstnat_wan`。
+5. 改完 fw4 reload 後務必從 PC 與外部路徑實測。
+6. OpenWrt 上的 samba4-server 是「刻意」裝的，只為 nmbd 當 iot 段 NBNS 代答者（門口相機掃 NAS 用，見拓樸 §4.4）。
+   別把它當檔案伺服器、別擴大 uci samba4 interface（現為 'loopback iot'）；smbd 監聽 .50.1:445/139 是被 DNAT/input-REJECT 遮蔽的無害副產物，勿為此另開 iot→router 445/139。
+   相機的 iot→storage DNAT（.50.1:445/139 → .30.3）在 dstnat_iot，非 dstnat_wan。
+```
+
+---
+
+## 4. portscan-autoban / Cowrie quarantine
+
+```text
+1. 每日清空的是未達門檻 counter，不影響已封鎖 IP。
+2. 不要把 44444 / 49169 / 43915 納入封鎖計算，否則正常服務會被誤傷。
+3. Cowrie 小黑屋用獨立 nft table inet cowriequarantine，不要混入 portscanban set。
+4. Cowrie 小黑屋 timeout 10 天；新登入嘗試會刷新該 IP timeout。
+5. 小黑屋 IP 仍可連 WAN tcp/22,23（進 Cowrie），其餘 WAN 入口會被 drop。
+6. 小黑屋流量速率圖只反映「已進小黑屋來源」的 drop/放行速率，不是全站 DDoS 偵測。
+7. GeoIP 只是輔助，不應作為唯一判斷依據。
+8. 可視化在 CT201 Prometheus/Grafana（見《監控告警.txt》）。
+```
+
+---
+
+## 5. Honeypot（VM300）
+
+```text
+1. Honeypot 不應主動連內網服務。
+2. Honeypot 不應使用可解析內網服務的 DNS，除非做了嚴格限制。
+3. Cowrie 原始 JSON / TTY log 應留在 VM300 作證據源；CT201 只保 Prometheus 指標，不取代原始 log。
+4. cowrie-exporter 只讀 cowrie.json；9116 只允許 CT201 scrape。
+5. cowrie-geoip-exporter 在 CT201 跑（對 Cowrie Top IP 查 ip-api.com/batch）；VM300 不主動對外查 GeoIP。
+6. VM300 PVE net0 必須保留 tag=666, firewall=0。
+7. 要查完整攻擊 session/命令全文，未來再加 Loki/Promtail 或等價日誌管線。
+8. PVE WebUI 記憶體用量跟 Grafana（vm300-honeypot-node）看起來差很大是正常現象，非監控故障：
+   - VM300 是全宿主唯一一台真正的 KVM VM（其餘 CT 皆 LXC，不吃 balloon），宿主記憶體吃緊時
+     automatic ballooning 只會壓它一個，一路壓到 `balloon:` 下限（現況 512MB）。
+   - PVE WebUI 的 % = guest 已用量 ÷ `memory:` 設定上限（4096MB，分母是「潛在上限」）→ 數字看起來很低。
+   - Grafana/node_exporter 的 % = (MemTotal−MemAvailable) ÷ MemTotal，而 MemTotal 本身已被 balloon
+     同步壓縮到跟 balloon actual 差不多大（現況 ~338MB，分母是「目前實際拿到的量」）→ 數字看起來很高。
+   - 兩邊算的分母不同，不是同一件事對不上；判斷 VM300 guest 內部是否真的緊繃要看 Grafana/node_exporter
+     這條（MemAvailable），PVE WebUI 的百分比只能看「相對於上限」的粗略趨勢。
+   - 2026-07-04 首次診斷時：宿主 24bay-pve 可用記憶體 17%、VM300 guest 內部可用僅 ~5%，
+     两条 HostHighMemory 同時 firing；使用者選擇暫不處理（balloon 下限/宿主壓力來源皆未動），純觀察。
+```
+
+---
+
+## 6. CT201 觀測面（VLAN80）
+
+```text
+1. CT201 是觀測面，不是管理面。允許「看」，禁止操作面（PVE 8006 / LuCI / AP/Switch Web / NAS admin /
+   SMB·NFS write / Docker socket / DB write / SSH 到任意內網）。完整 observation policy 見《網段指導原則.txt》VLAN80。
+2. 開觀測面跨段放行要「逐項點名」，不要一次性開整個管理面（blast radius 過大）。
+3. 監控 LXC「整體」資源，node-exporter 必須「原生」跑（在容器主 cgroup），不要在容器內用 Docker
+   —— 否則會繞過 lxcfs、把宿主機數據當成該 CT。（沿革見缺改記錄 2026-06-29）
+4. 新增 scrape 前先確認 CT201 能直接 curl 到目標 /metrics，避免長期 down target。
+5. 硬體溫度 / SMART 以 PVE host 層 node_exporter 為準；LXC 內 node_exporter 看該 CT 的 fs/process/memory 趨勢。
+```
+
+---
+
+## 7. DNS
+
+```text
+1. OpenWrt 是 DNS source-of-truth；24Bay 是 backup（正式同步目標 192.168.20.5）。
+2. 改 DNS 前先備份 hosts.home.arpa。
+3. 改完先 homelab-dns-compare；push 到 24Bay 後再 compare。
+4. DNS push timeout 124 不一定等於失敗，要看 compare 和 TG sync 結果。
+5. readiness check 以 openwrt.home.arpa -> 192.168.10.1 為準。
+6. AGH 出現 openwrt-53 connection refused，可重啟後再 compare。
+7. AGH cache_optimistic + max_age 12h：改現役 DNS 後須 `/etc/init.d/adguardhome restart` 清快取，否則舊值最長端 12h。
+8. CT102 已改內部 DNS 10.70.70.1（2026-07-05；走 Allow-Game-DNS-To-Router）。
+```
+
+---
+
+## 8. VLAN30 / VLAN40 / VLAN100
+
+```text
+1. DXP4800/NAS 出 WAN 維持 host-scoped，不要開整個 storage -> wan forwarding。
+2. 192.168.100.x 只作 10G data/SMB/backup，不要當管理 IP、不要加 gateway、不要跑 DHCP/上網。
+3. 不要把 VLAN40 直接 forward 到所有內網；跨 VLAN 維持 host/port allowlist。
+（各段設計原則見《網段指導原則.txt》）
+```
+
+---
+
+## 9. Minecraft
+
+```text
+1. mc.home.arpa 已指 Velocity 10.70.70.10（玩家入口）；mc-backend.home.arpa -> 10.70.70.20（2026-07-05 遷 VLAN70）。
+2. 修改 Velocity / Geyser / backend 設定前要先備份。
+3. 改 OpenWrt DNAT 後務必從 PC 與外部路徑測試。
+4. CT100 backend Java 25565 只允許 Velocity 10.70.70.10；監控面例外：CT201 game-obs 10.70.70.11
+   可 23333/9100/icmp（CT100 本機 nft 放行，直連 L2 不經 OpenWrt）。
+5. CT102 DNS 已改內部 10.70.70.1（2026-07-05）。
+6. MCSManager 實例 Fabric-MC autoStart=true（2026-07-05 開；CT100 重啟後 MC 會自起）。
+```
+
+---
+
+## 10. 臨時維護權限 / SSH key
+
+目前 key 分佈見拓樸 §10（CT260 段）。原則：
+
+```text
+1. 所有臨時 key 都應有建立日期、用途、撤銷方式；用完即撤。
+2. OpenWrt root authorized_keys 應定期盤點，不留不明用途 key。
+3. RouterPVE = root-of-trust，管理來源刻意收斂；擴大信任來源（如新增 CT260）需使用者同意。
+4. 管理流量盡量經 OpenWrt SNAT 收斂成單一來源 IP，讓被連端只信任一個來源。
+（2026-06-30 全節點 SSH key 稽核結果與清理，見缺改記錄）
+```
+
+---
+
+## 11. 機密資料處理
+
+不要貼到聊天、文件、Git、issue、log：
+
+```text
+OpenAI / GLM / DeepSeek API key、Claude / Codex auth token、~/.codex/auth.json
+Cloudflare Tunnel credentials、Vaultwarden admin token、Duplicati encryption passphrase
+Tailscale auth/state、SSH private keys、Grafana / Kuma token、/root/notify.env
+```
+
+具體機密檔案位置（要檢查時只貼名稱/redacted，優先讓我用命令在本機/遠端讀取並遮罩）：
+
+```text
+OpenWrt：  /root/.ssh/homelab_dns_sync_ed25519、/root/.ssh/authorized_keys 內容
+24Bay PVE：/root/notify.env、/root/.ssh/authorized_keys 內容
+CT201：    /opt/homepage/config/.env、/opt/monitoring/gotify.env、alertmanager-gotify-bridge.env
+DXP4800：  Cloudflare Tunnel credentials、Vaultwarden admin token/DB/attachments、Duplicati passphrase/target creds
+CT250/CT260：~/.codex/auth.json、Claude/GLM/DeepSeek API key/token、~/.config/homelab/*.env
+RouterPVE：/root/Nas.pw.bak.*、/root/Nas.storage.cfg.bak.*（機密備份，留原處不外傳，見備份索引 §2）
+```
+
+---
+
+## 12. 本輪未結待辦（OPEN）
+
+```text
+1. Honeypot 完整 session / 原始 log 可視化管線（Loki/Promtail 或等價）尚未建立。
+2. ✔已解（2026-07-05 待辦⑨）：mc-backend node-exporter 已被抓（mc-backend.home.arpa:9100 -> 10.70.70.20，
+   CT201 eth1 直連 L2 + CT100 nft 放行）。
+3. Nas（24Bay cifs storage）命名偏舊，待整理/正名。
+4. DXP4800 NAS 備份盤點：SSH(192.168.30.3:45123) 待恢復後盤點並收進標準 _backups（見備份索引 §5）。
+5. ✔已解（2026-07-05 待辦㊵）：CT102 已改內部 DNS 10.70.70.1。
+6. IPv6 目前只 servers(.20) 有 GUA；storage/trusted/infra/lan 要不要加（照 server 模式套）。
+7. DMZ60 / OOB90 介面與 zone 已落地待規劃；Game70 已於 2026-07-05 正式啟用（Minecraft 全遷入，VLAN67 拆除）。
+```

@@ -1,0 +1,183 @@
+# 網段指導原則（設計意圖與目標規劃）
+
+更新時間：2026-06-30
+本文只談「為什麼這樣分區 / 目標規劃 / 各段該與不該」。
+現況部署的實際位址、DNS、防火牆規則一律以《家庭網路與服務拓樸文件V6.txt》為準，本文不重抄。
+
+---
+
+## 0. 設計總綱
+
+採用「功能分區 VLAN」設計。原 192.168.31.0/24 保留為 legacy / 帶外救援 LAN，不再是正式架構核心。
+
+目標網段配置：
+
+```text
+192.168.10.0/24   Infrastructure / Network Core
+192.168.20.0/24   Servers / Hypervisors
+192.168.30.0/24   Storage
+192.168.40.0/24   Trusted Clients
+192.168.50.0/24   IoT / Smart Home
+10.60.60.0/24     DMZ / Public Services        （interface/zone deployed；no host）
+10.70.70.0/24     Game Services                （Minecraft proxy/backend 正式網，2026-07-05 啟用）
+10.80.80.0/24     Monitoring / Service Edge
+10.90.90.0/24     Management / Out-of-Band      （interface/zone deployed；no host）
+10.66.66.0/24     Honeypot / Polluted Zone
+192.168.100.0/24  10G Storage Fabric
+```
+
+跨段通用原則：
+
+```text
+1. 跨 VLAN 一律 host/port allowlist，不開整段 forward。
+2. 管理流量盡量 SNAT 收斂成單一來源，讓被連端只需信任一個 IP（主機端防火牆不必逐一改）。
+3. 對外公開服務不放 servers / legacy LAN，應放 DMZ。
+4. 高權限管理走 VLAN90 / Tailscale / jump host，不讓一般 client 常駐高權限段。
+5. 觀測面（VLAN80）以「看」為主，不持有操作面權限（見《注意事項.txt》§CT201）。
+```
+
+---
+
+## 1. Legacy LAN（192.168.31.0/24）保留原則
+
+定位：untagged 扁平「帶外救援 L2」。OpenWrt 跑在 RouterPVE 上，VLAN/防火牆壞掉時可經此 L2 直連救機，有保留價值。
+
+```text
+只保留三核心：.1 OpenWrt / .2 RouterPVE / .5 pve24。
+workload（mc/monitor）與死址（.31.3）已遷移或消滅（沿革見缺改記錄）。
+RouterPVE 主管理面已遷 192.168.10.2（2026-07-05 待辦⑧完成）；.31.2 為純救援位址。
+新服務一律不要再落在 192.168.31.x。
+```
+
+---
+
+## 2. 各功能段設計意圖
+
+### VLAN10 / Infrastructure / Network Core
+核心網路設備與基礎設施管理面：OpenWrt、Router PVE、交換機、AP 管理面、UPS/BMC/管理設備。
+DHCP disabled。AP 管理面未來可遷入 VLAN10，但 AP 承載的 IoT/client traffic 仍應依 SSID 分流到 VLAN50/40。
+
+### VLAN20 / Servers / Hypervisors
+伺服器、hypervisor、基礎設施服務：24Bay PVE、Docker Host、基礎設施伺服器。DHCP disabled。
+對外公開型服務不應直接放這裡，應放 DMZ。
+
+### VLAN30 / Storage（可路由儲存服務網）
+SMB / NFS / 備份服務：DXP4800 Pro、（TrueNAS 預留）、備份伺服器。
+- 與 VLAN100 差異：VLAN30 可路由、可被指定 client/server 經 allowlist 存取；VLAN100 是純 L2 fabric。
+- DXP4800 出 WAN 維持 host-scoped，不開整個 storage -> wan。
+- 後續 TrueNAS/備份伺服器加入沿用 host/port allowlist。
+
+### VLAN40 / Trusted Clients
+一般可信終端：主力 PC、筆電、手機、平板。
+- 可允許存取 NAS / Homepage / Kuma / 內部服務（經 allowlist）。
+- 不應直接擁有所有管理面權限；高權限應走 VLAN90 / Tailscale / jump host。
+
+### VLAN50 / IoT / Smart Home
+IoT、智慧家庭、不可信設備：Apple TV、小米攝影機、智慧家電等。
+安全策略（IoT -> 內網一律 block，只放必要）：
+
+```text
+IoT -> legacy/infra/servers/storage/service-edge/honeypot/game  全 block
+IoT -> WAN                                                        allow
+IoT -> router DNS/NTP/ICMP                                        allow
+```
+
+### VLAN60 / DMZ / Public Services
+對外公開服務、Cloudflare Tunnel backend、公開服務隔離區：cloudflared、Vaultwarden、Jellyfin、未來公開服務。
+現況：OpenWrt interface/zone 已部署（10.60.60.1/24、DHCP disabled、DMZ->WAN enabled），尚無正式 host。
+原則：
+
+```text
+DMZ 可向 WAN / Cloudflare Tunnel 出站。
+DMZ 不應 broad access 到 LAN / Servers / Storage；要讀後端資料用單向最小權限 allowlist。
+```
+待辦：規劃 cloudflared/Vaultwarden/Jellyfin 是否遷入；設計 DMZ->Storage/DB/NAS 最小權限。
+
+### VLAN70 / Game Services
+正式遊戲服務網：Minecraft Backend、Velocity Proxy、Geyser、其它遊戲伺服器。
+現況（2026-07-05 待辦⑥完成）：10.70.70.1/24、DHCP disabled、Game->WAN enabled；
+host＝.10 CT102 Velocity/Geyser、.11 CT201 game-obs、.20 CT100 backend。
+過渡網 VLAN67（10.67.67.0/24）已於同日拆除（介面/zone/規則/trunk 全收），禁止新增依賴。
+mc.home.arpa 已切 10.70.70.10；DNAT/hairpin/velocity/backend config 均已隨遷移更新（見缺改記錄 2026-07-05）。
+
+### VLAN80 / Monitoring / Service Edge
+監控服務入口、觀測平面、service-edge：Homepage、Uptime Kuma、Grafana、Prometheus、Node Exporter Aggregator。
+Observation Policy：
+
+```text
+允許：ping selected gateways/hosts、scrape node_exporter、service->wan 更新/外部檢查、service->router DNS/NTP/ICMP。
+禁止：PVE 8006、AP Web、Switch Web、Router PVE 8006/SSH、service->其他 VLAN broad forwarding。
+```
+Checker：OpenWrt `homelab-vlan80-observation-status`；CT201 `homelab-vlan80-observation-test`。
+註：2026-06-30 為 Uptime Kuma 監控，使用者逐項同意後對 AGH/qBittorrent/Jellyfin web 開了點對點放行（現況見拓樸 §4.4），仍維持「逐項點名才開、不一次性開整面」原則。
+
+### VLAN90 / Management / Out-of-Band
+管理專用：跳板機、維運工具、Ansible、備份控制、管理專用服務。
+現況：OpenWrt interface/zone 已部署（10.90.90.1/24、DHCP disabled、no broad forwarding），尚無正式 host。
+原則：
+
+```text
+權限高於 VLAN40；不讓一般 PC/手機常駐。
+可作 jump host / Ansible / maintenance controller。
+高權限入口受 MFA / Tailscale / SSH key / ACL 保護。
+```
+待辦：是否部署 jump host；Ansible/backup controller 位置；VLAN90 -> VLAN10/20/30/80 最小權限規則。
+
+### VLAN666 / Honeypot / Polluted Zone
+蜜罐、惡意流量收集、完全隔離污染區：Cowrie。
+安全原則：
+
+```text
+假設 honeypot 可能被打穿；honeypot 不應能橫向移動。
+Cowrie log 應外送（指標到 CT201；原始 log 留 VM300）。
+honeypot -> WAN 是否允許應另行確認與收斂。
+```
+
+### VLAN100 / 10G Storage Fabric
+純高速傳輸 fabric：PC / DXP4800 / 24Bay / CT100 的 10G 介面。
+設計鐵則：
+
+```text
+無 gateway、無 DHCP、無 internet、不被 VLAN80 直接路由監控。
+只作 SMB / backup / data transfer。
+監控 10G 介面狀態應透過各主機「正式管理 IP」做，不要為 VLAN100 加 gateway 或變成 routed management network。
+```
+
+---
+
+## 3. 目標網段總表（含角色）
+
+```text
+192.168.10.0/24  Infrastructure / Network Core
+├─ OpenWrt / Router PVE / 交換機 / AP 管理面 / UPS·BMC·管理設備
+
+192.168.20.0/24  Servers / Hypervisors
+├─ 24Bay PVE / Docker Host / 基礎設施伺服器
+
+192.168.30.0/24  Storage
+├─ DXP4800 Pro / TrueNAS 預留 / 備份伺服器 / SMB·NFS
+
+192.168.40.0/24  Trusted Clients
+├─ 主力 PC / 筆電 / 手機 / 平板
+
+192.168.50.0/24  IoT / Smart Home
+├─ Apple TV / 小米攝影機 / 智慧家電 / 其它不可信設備
+
+10.60.60.0/24  DMZ / Public Services（interface/zone deployed；no host）
+├─ Cloudflare Tunnel Backend / Vaultwarden / Jellyfin / 未來公開服務
+
+10.70.70.0/24  Game Services（2026-07-05 正式啟用）
+├─ Minecraft Backend(.20) / Velocity+Geyser Proxy(.10) / CT201 game-obs(.11) / 其它遊戲伺服器
+
+10.80.80.0/24  Monitoring / Service Edge
+├─ Homepage / Uptime Kuma / Grafana / Prometheus / Node Exporter Aggregator
+
+10.90.90.0/24  Management / Out-of-Band（interface/zone deployed；no host）
+├─ 跳板機 / 維運工具 / Ansible / 備份控制 / 管理專用服務
+
+10.66.66.0/24  Honeypot / Polluted Zone（VLAN666）
+├─ Cowrie / 惡意流量收集 / 完全隔離污染區
+
+192.168.100.0/24  10G Storage Fabric
+├─ PC 10G / DXP4800 10G / 24Bay 10G / 純高速傳輸網
+```

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# hl-run: safe multi-hop command dispatch for the homelab.
+#
+# Transports the payload as base64 so nested quotes / full-width chars / $ /
+# backticks NEVER get mangled across  ssh -> pct exec -> bash  (the quote-
+# flattening trap noted in ForAI/常用脚本.txt). Remote side does
+# `echo <b64> | base64 -d | <shell>`, so the payload only ever meets one shell.
+#
+#   hl-run <node> 'command...'      # command from args; or omit to read stdin
+#   printf '%s' 'cmd' | hl-run <node>
+#   hl-run <node> <<'EOF' ... EOF   # multi-line payload, quoting-safe
+#   hl-run --list                   # known nodes
+#   hl-run --resolve <node>         # print transport descriptor (for hl-push)
+#
+# Exit code is the remote command's exit code (JSON-extracted for vm300).
+set -euo pipefail
+
+SSH="ssh -o BatchMode=yes"
+
+resolve() {  # -> echoes: "local" | "ssh <host> <shell>" | "pct <ctid>" | "qm <vmid>"
+  case "$1" in
+    ct260)     echo "local" ;;
+    pve24)     echo "ssh pve24 bash" ;;
+    routerpve) echo "ssh routerpve bash" ;;
+    openwrt)   echo "ssh openwrt sh" ;;
+    dxp4800)   echo "ssh dxp4800 sh" ;;
+    ct201)     echo "pct 201" ;;
+    ct202)     echo "pct 202" ;;
+    ct250)     echo "pct 250" ;;
+    ct270)     echo "pct 270" ;;
+    vm300)     echo "qm 300" ;;
+    *) return 1 ;;
+  esac
+}
+
+usage() {
+  cat >&2 <<'U'
+usage: hl-run <node> ['command']        # command from args, or stdin if omitted
+       hl-run --list | --resolve <node>
+nodes: ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct250 ct270 vm300
+U
+  exit 2
+}
+
+[ $# -ge 1 ] || usage
+case "$1" in
+  --list|-l)  printf '%s\n' ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct250 ct270 vm300; exit 0 ;;
+  --resolve)  shift; resolve "${1:-}" || { echo "hl-run: unknown node '${1:-}'" >&2; exit 2; }; exit 0 ;;
+  -h|--help)  usage ;;
+esac
+
+node=$1; shift
+desc=$(resolve "$node") || { echo "hl-run: unknown node '$node'" >&2; usage; }
+read -r kind p2 p3 <<<"$desc"
+
+if [ $# -gt 0 ]; then payload=$*; else payload=$(cat); fi
+b64=$(printf '%s' "$payload" | base64 -w0)
+
+case "$kind" in
+  local)
+    printf '%s' "$payload" | bash ;;
+  ssh)   # p2=host ; single hop -> pass payload verbatim as one arg (no base64:
+         #           OpenWrt busybox has no base64 applet, and one hop needs none)
+    $SSH "$p2" "$payload" ;;
+  pct)   # p2=ctid ; env -u clears the container locale warnings
+    $SSH pve24 "sudo pct exec $p2 -- env -u LC_ALL -u LANG -u LC_CTYPE bash -c 'echo $b64 | base64 -d | bash'" ;;
+  qm)    # p2=vmid ; guest-exec wraps output in JSON -> unwrap, propagate rc
+    out=$($SSH pve24 "sudo qm guest exec $p2 -- /bin/sh -lc 'echo $b64 | base64 -d | sh'")
+    printf '%s' "$out" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.stdout.write(d.get("out-data",""))
+sys.stderr.write(d.get("err-data",""))
+raise SystemExit(d.get("exitcode",0) or 0)' ;;
+esac

@@ -1,0 +1,367 @@
+# 監控告警（CT201 觀測面單一參考）
+
+更新時間：2026-07-05
+本文是監控/告警/notifier 的單一來源：Prometheus 目標、告警規則現況、Alertmanager+Gotify、
+CT260 Telegram notifier + DeepSeek 分層 AI、Grafana 總覽 dashboard、必守修正原則、設計規劃。
+
+  - 節點位址/介面/服務埠以《家庭網路與服務拓樸文件V6.txt》為準。
+  - 實際操作命令（查 target / reload / 改規則 / 測鏈路）見《常用脚本.txt》§7-8。
+  - 規則上線/階段完成的歷史時序見《缺改記錄.txt》。
+
+CT201 容器與位址見拓樸 §5。Gotify/notifier secrets 勿外流。
+
+---
+
+## 1. 架構
+
+```text
+1. 各機器/CT/VM/OpenWrt/exporter 持續暴露 metrics。
+2. CT201 Prometheus(9090) scrape 所有目標。
+3. Prometheus 載入 rule files(/etc/prometheus/rules/*.yml) 判斷異常。
+4. Alertmanager(9093) 接 alerts，依嚴重度/類型發送。
+5. 通知雙軌：
+   - Gotify(8090) 內網全收（observation plane 零對外）。
+   - CT260 Telegram notifier 外送 warning/critical（egress 集中在 CT260）。
+6. Grafana(3002) 可視化；Uptime Kuma(3001) 作外層服務探活（含 CT201/Prometheus/Gotify 自身，避免 SPOF 盲點）。
+```
+
+Telegram 走 CT260 而非 CT201 的原因：CT201 維持零對外；CT260 本來就是 AI/ops 節點、已有 outbound。
+CT260 不能直連 VLAN80，故經 `ssh pve24 -> pct exec 201 -- curl localhost:9093` poll Alertmanager。
+管線自身的第二層防護（待辦#4，2026-07-05 上線）：站外看門狗 watchdog-ct201（§5c）
++ notifier fetch 自檢（連續 3 次讀不到 Alertmanager 直發 TG，見 §5c 末）。
+
+---
+
+## 2. Prometheus 監控目標（job -> target）
+
+node_exporter 設備（device/order label 來自 prometheus.yml，供 Grafana 中文名+排序）：
+
+```text
+order device          job                      target
+01    CT100 MC-server  mc-server-node           mc-backend.home.arpa:9100（-> 10.70.70.20；2026-07-05 修正：原誤指 mc.home.arpa=proxy，待辦⑨）
+02    CT102 mc-proxy   ct102-mc-proxy-node      10.70.70.10:9100（2026-07-05 隨待辦⑥遷 VLAN70）
+03    CT201 monitor    monitor-node             host.docker.internal:9100（原生 exporter）
+04    CT202 出站代理   ct202-fwdproxy-node      10.80.80.10:9100（apt 原生；同段直達不經 OpenWrt；2026-07-05 待辦⑩）
+05    CT203 DMZ反代    ct-dmz-proxy-node        10.60.60.10:9100（原生 systemd node_exporter 1.9.0；2026-07-04 新增，待辦②地基）
+06    CT260 codex-ops  ct260-codex-ops-node     192.168.20.60:9100
+07    CT270 life-ops   ct270-life-ops-node      192.168.20.70:9100（原生 systemd node_exporter；2026-07-01 新增）
+08    VM300 honeypot   vm300-honeypot-node      10.66.66.10:9100
+09    24Bay PVE        pve-node                 pve24-server.home.arpa:9100（含 smartmon/nvme）
+10    DXP4800 Pro      dxp4800-node             nas.home.arpa:9100 (-> 192.168.30.3)
+11    N95 Router PVE   n95-router-pve-node      router-pve.home.arpa:9100 (-> 192.168.10.2)
+
+（★ 2026-07-05 待辦⑩同窗 order 全面重編：node 設備 01-11 依「CT 遞增 → VM300 → 24Bay → DXP4800 → RouterPVE」
+ 使用者指定序；服務類順移 12-18、Prometheus 收尾 19（順修 CT203/Prometheus 原撞號 10）。
+ CT202 監控流量與 CT201 同段 10.80.80.0/24 同 L2 直達，無需 OpenWrt 放行。）
+```
+
+OpenWrt / 安全類 exporter（order 12-19，2026-07-05 重編後）：
+
+```text
+12  openwrt-system              http://10.80.80.1:9105/openwrt-system-metrics.txt
+13  openwrt-portscan-autoban    http://10.80.80.1:9105/metrics.txt
+14  openwrt-cowrie-quarantine   http://10.80.80.1:9105/cowrie-quarantine-metrics.txt
+15  cowrie-exporter             10.66.66.10:9116
+16  cowrie-geoip                10.80.80.11:9117（CT201 原生 cowrie-geoip-exporter）
+17  portscan-geoip              host.docker.internal:9115（CT201 原生 exporter；prometheus 是容器，故走 host-gateway）
+18  authelia                    10.60.60.10:9959（Authelia SSO metrics；OpenWrt Allow-Monitor-To-CTDMZ-Proxy 已含 9959）
+19  prometheus                  自身
+```
+
+Loki / PVE API targets（2026-07-05 待辦11/12 新增，order 20-22）：
+
+```text
+20  loki(日誌庫)          loki:3100（compose 容器名；Loki 自身 metrics）
+21  pve(24Bay PVE API)    job=pve  pve24.home.arpa → pve-exporter:9221 /pve?module=pve24（multi-target）
+22  pve(N95 路由PVE API)  job=pve  router-pve.home.arpa → 同上 module=routerpve
+（2026-07-05 finish-11-12.sh 啟用完成，22/22 up；job=pve 60s 間隔）
+```
+
+CT202 squid 指標（待辦⑩b 極簡方案，2026-07-05）：
+
+```text
+來源：CT202 /usr/local/bin/squid-metrics.sh（cron /etc/cron.d/squid-metrics 每分鐘）
+      解析 /var/log/squid/access.log -> /var/lib/prometheus/node-exporter/squid.prom（textfile collector，隨 :9100 出）
+指標：squid_up（systemd active 與否）、squid_access_denied_total（TCP_DENIED 行數）、
+      squid_access_allowed_total（其餘行數）；counter 隨 logrotate 歸零，increase() 容忍 reset。
+告警：SquidProxyDown（squid_up==0 for 2m，critical）
+      SquidDeniedSpike（increase(squid_access_denied_total[10m])>20，warning，ai_analyze=true 首發即 Tier2）
+Kuma：monitor id 17「CT202 fwdproxy」type=port 10.80.80.10:3128（通知綁 TG）
+```
+
+三個 OpenWrt job 共用同一個 9105 endpoint：腳本掛了但 web server 還在時 up==1 仍回舊資料
+-> stale 告警必須用 *_generated_timestamp_seconds，不可只看 up（見 §6）。
+
+---
+
+## 3. 告警規則現況（CT201 /opt/monitoring/rules/，共 ~21 條）
+
+```text
+alerts.yml   （核心）Watchdog（vector(1) 心跳）、PrometheusConfigReloadFailed、
+             PrometheusRuleEvaluationFailing、TargetDown（up==0 for 3m）
+
+hardware.yml （全 node_exporter，severity=warning）
+             HostHighCPU(>60%/5m)、HostHighMemory(可用<30%/5m)、HostHighIOWait(>25%/5m)、
+             HostDiskLowSpace(<10% free/15m，已排除 tmpfs/overlay/squashfs)、HostRebooted(boot time 變)、
+             HostDiskWillFillSoon(predict_linear 24h 滿盤 且 <30% free/30m)、FilesystemReadWriteSpike(讀寫>60MB/s/15m)
+
+services.yml （service_up + staleness）
+             service_up==0：PortscanAutobanServiceDown(crit)、CowrieQuarantineServiceDown(crit)、
+                            OpenWrtFirewallDown(crit, openwrt_service_up{service=firewall})、
+                            OpenWrtServiceDown(warn 其餘)、CowrieExporterUnhealthy(warn)
+             staleness：PortscanMetricsStale、CowrieQuarantineMetricsStale、
+                        OpenWrtSystemMetricsStale、CowrieLogStale
+
+security.yml （防火牆/蜜罐）
+             PortscanBanListEmpty(banned_ips==0，絕對值避開每日 reset 誤報)、
+             PortscanBanSpike(delta>80/10m)、CowrieQuarantineSpike(delta>30/10m)
+
+pve.yml      （PVE API 指標，待辦11e，2026-07-05；pve-exporter 啟用前無指標=不觸發）
+             PveGuestHighMemory(單 CT/VM mem>90% for 10m，warning；LXC 內 node_exporter 做不到的 cgroup 準確值)、
+             PveGuestUnexpectedStop(pve_up==0 for 3m，critical，排除 lxc/250 常態關機)、
+             PveStorageAlmostFull(storage>85% for 15m，warning
+               ★ 上線即會對兩座 cifs 備份儲存(~88%)觸發——屬正確訊號，收斂靠待辦38 清理或 amtool silence)
+```
+
+```text
+閾值說明：硬件閾值依現況定（現況：記憶體最高 ~60%、iowait <2%、CPU 最高 N95 ~40%）。
+spike 閾值為起始猜值，誤報多再調。
+DXP4800(nas) 某掛載點剩餘 ~11.6%（使用者表示不理會），逼近 10% 跌破才會通知。
+改規則內容：promtool check rules 後 curl -X POST .../-/reload（同檔內容變更不需重建容器）；
+  新增「規則檔目錄掛載」才需重建 prometheus 容器。
+```
+
+---
+
+## 4. Alertmanager + Gotify
+
+```text
+gotify        host 8090->80   Web UI http://monitor.home.arpa:8090   admin 密碼 /opt/monitoring/gotify.env
+alertmanager  host 9093       設定 /opt/monitoring/alertmanager.yml
+bridge        alertmanager-gotify-bridge：把 AM webhook JSON 轉成 Gotify message API（內網，無 host port）
+              env /opt/monitoring/alertmanager-gotify-bridge.env（含 Gotify app token，勿外流）
+```
+
+bridge 取值：title=annotation.summary，內文=annotation.description，priority=annotation.priority（預設 5）。
+**寫新規則務必帶 summary / description**（方案 A：hardware+services staleness 規則 description 已加 {{ $value }}）。
+改 alertmanager.yml：amtool check-config 後 curl -X POST .../-/reload。
+
+---
+
+## 5. CT260 Telegram notifier + DeepSeek 分層 AI
+
+程式：CT260 `~/.local/bin/homelab-notify.py`（codex 擁有），cron 每分鐘 + flock。
+狀態/日誌：`~/.local/state/homelab-notify/{state.json,notify.log,daily_counts.json}`。
+設定/secret（codex 擁有, chmod 600，勿外流）：
+
+```text
+~/.config/homelab/notify-telegram.env   TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID / NOTIFY_SEVERITIES
+~/.config/homelab/deepseek.env          DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL=https://api.deepseek.com
+                                        DEEPSEEK_MODEL_FAST=deepseek-v4-flash   （Tier1 一句話分流 ⚡）
+                                        DEEPSEEK_MODEL_DEEP=deepseek-v4-pro      （Tier2 深度 🔬 / 關聯 / 日報）
+                                        ESCALATE_AFTER_MIN=5、FLASH_SEVERITIES、AI_BATCH_THRESHOLD=3
+```
+
+過濾與並存：預設只送 severity=warning,critical（info/Watchdog 不送）。
+Gotify（內網全收）與 Telegram（外送 warning/critical）並存，互不影響。只在狀態轉變時發一次（持續中不每分鐘重發）。
+
+## 5b. CT260 extension-host 空轉偵測 cpu-orphan-watch（本機獨立 cron，非 Prometheus）
+
+程式：CT260 `~/.local/bin/cpu-orphan-watch.py`（codex 擁有），cron `*/30` + flock（`.cow.lock`）。
+用途：抓 VS Code 遠端 `type=extensionHost` 因 dangling pipe(readable-on-EOF) 空轉的高 CPU（見《缺改記錄》2026-07-01）。
+判定：取樣 4s，extensionHost 持續 CPU ≥ 門檻即告警；門檻預設 40%（env `COW_CPU_THRESHOLD`；另 `COW_STALE_MINUTES`=6h、`COW_COOLDOWN_SECS`=2h）。
+輸出：寫 log 並發 Telegram（沿用同一 notify-telegram.env）；訊息附長存活 claude/codex 候選孤兒 PID + tmux 進程數。
+cooldown 2h 不洗版、恢復正常補發一則。狀態/日誌：`~/.local/state/homelab-notify/{cpu-orphan-watch.log,cpu-orphan-watch.state.json}`。
+處置指引：kill 告警中的殘留 session PID，或 VS Code → Developer: Restart Extension Host。
+
+## 5c. CT201 站外看門狗 watchdog-ct201（監控的監控，本機獨立 cron，不經 Alertmanager；待辦#4，2026-07-05）
+
+程式：CT260 `~/.local/bin/watchdog-ct201.sh`（codex 擁有），cron `*/2` + flock（`.wd201.lock`）。
+用途：CT201 或其上告警要件死亡時仍能收到通知（Prometheus/Alertmanager 全滅時的最後一層）。
+檢查四點（單次 ssh pve24 -> pct；CT260 不能直連 VLAN80，未動防火牆）：pct status 201 running、
+  Prometheus :9090/-/healthy、Uptime Kuma :3001（實際回 302，curl -sf 成功即判活）、Gotify :8090/health。
+防抖：連續 >=2 輪（約 4 分鐘）失敗才直發 TG（沿用 notify-telegram.env）；恢復補發一則；
+  ALERTED 旗標保證告警一次不洗版。ssh pve24 不通 -> 四項全失敗（訊息標明 ssh-pve24不通）。
+狀態檔 `/var/tmp/wd-ct201.state` 兼心跳（LAST_RUN/LAST_STATUS/FAIL_COUNT/ALERTED/FAIL_DETAIL）；
+  life-ops daily_brief 讀之輸出【看門狗】行（>10 分鐘無心跳判停擺）。log：`~/.local/state/homelab-notify/watchdog-ct201.log`。
+測試鉤子：`WD_SSH_HOST=<不存在主機>` 模擬全鏈失敗（2026-07-05 已實測 🚨告警+✅恢復雙向實收）。
+盲區：CT260/pve24 自身死亡（CT260 與 CT201 同宿主，本鏈無法自救）——由 UPS 關機序 + 復電自啟涵蓋。
+另一層自檢（待辦#4d）：homelab-notify.py poll Alertmanager 連續失敗 >=3 次 -> 直發 TG「告警管線異常」
+  （只在跨門檻那次發一則），恢復發「告警管線恢復」並歸零；計數檔 `~/.local/state/homelab-notify/fetch_fail_count`。
+
+DeepSeek 分層（成本感知）：
+
+```text
+Tier1（新 FIRING）：fast 模型給「一句話分流」（什麼節點什麼狀況、故障 or 被攻擊），附告警末（⚡）。
+Tier2（連續 firing >= ESCALATE_AFTER_MIN=5m，只發一次）：deep 模型，
+   呼叫前先撈 Prometheus「即時快照 + 近 30m 趨勢」餵入，輸出「數據判讀/定位/根因/影響/處置/可信度」（🔬）。
+   告警中途 resolved 再 fire -> startsAt 變 -> 計時與 escalated 重置（必須連續燒滿才升級）。
+ai_analyze:"true" label -> 首次 fire 就直接 Tier2。
+同週期 >= AI_BATCH_THRESHOLD(3) 個新 FIRING -> 額外送一則關聯分析。
+宿主告警（HOST_GUESTS，目前 pve24-server.home.arpa:9100）：deep/batch 額外附「底下各 CT/VM 即時占用」
+   （CT100/102/201/260/VM300 node_exporter 快照；CT250 無 exporter 不列），定位哪台 guest 造成宿主壓力。
+```
+
+關鍵實作鐵則：
+
+```text
+★ v4-flash / v4-pro 都是 reasoning 模型：回應含 reasoning_content + content，答案在 content；
+  reasoning 先吃 token，max_tokens 要夠大（flash 600 / deep 2000-3000 / 日報 2500），否則 content 會空。
+★ API model 名是 deepseek-v4-pro；「[1m]」是 context 標籤，不可放進 id（會 400）。
+★ DEEP/BATCH 輸出已要求純文字並在程式端 _plain() 去反引號/code fence（Telegram 無 parse_mode，反引號會原樣顯示）。
+★ Telegram 4096 字上限：telegram_send 已自動分段（<=3900/則，多則標 (n/N)）。
+★ 資料可信度：本環境 CPU/iowait/mem 百分比皆 avg 正規化(0-100%)，>100%/負值一律判 exporter/規則 bug，
+  不可合理化成多核總和；數據與告警矛盾要先質疑數據。（已用 5 組特徵數據測 v4-pro，5/5 通過）
+失敗一律自動退回純告警，不擋通知。
+```
+
+提示詞常數（要調 AI 判斷品質改這裡，改完 cron 下次跑即生效）：
+
+```text
+TOPOLOGY（完整 IP/VLAN/主機/CT/VM/job 對應，取自拓樸文件）、JUDGE_RULES（判斷原則 + 資料可信度質疑）、
+FAST_SYSTEM_PROMPT（flash 一句話）、DEEP/BATCH/DAILY_REPORT_SYSTEM_PROMPT（pro 用）。
+reasoning 模型原則：只給目標+數據+輸出格式，不寫 step-by-step 腳手架。
+離線預覽：importlib 載入後呼叫 deepseek_call / flash_oneliner / deep_analysis。
+```
+
+Tier2 Loki 日誌上下文（待辦12e，2026-07-05）：
+
+```text
+deep_analysis 組 prompt 時另附告警主機近 15 分鐘 Loki 日誌（最新 40 行，行截 240 字，總量 6000 字上限）：
+  loki_host_for() 由 device label(CT\d+/VM\d+/OpenWrt) 或 instance 對照表 → promtail host label；
+  無 promtail 的主機（pve24/RouterPVE/DXP/AP）回 None 靜默跳過。
+  查詢走 CT260 → 10.80.80.11:3100 直連（OpenWrt Allow-CT260-To-Monitor-Loki-3100），非 ssh 跳板。
+  Loki 不可達 / 查無日誌 → 一律 None 退回純告警（鐵則：日誌管線故障不得影響告警）。
+同窗修正：HOST_GUESTS stale instance（mc.home.arpa→mc-backend.home.arpa、10.67.67.10→10.70.70.10、
+  node-exporter→host.docker.internal）並補列 CT202/CT203/CT270——Tier2 宿主告警的 guest 分解自此 8 台全覆蓋。
+回滾：CT260 ~/_backups/homelab-notify.py.before-loki12e-20260705_072215。
+```
+
+## 5e. Loki + promtail 日誌管線（待辦12，2026-07-05）
+
+```text
+Loki 3.7.3（CT201 docker compose，:3100，retention 30d=720h，tsdb v13/filesystem，loki_data 卷=SSD rootfs）
+  ——2026-07-05 使用者執行 finish-11-12.sh 啟用完成；冒煙測試(12f)通過：ssh 錯登入×3 → Loki 查得
+  {host="ct260"} |= "smoketest"（Invalid user × 3 全中，且由 CT260 直連 3100 查得=notifier 路徑同驗）。
+promtail 3.6.11（官方二進位含 journal 支援 tags=promtail_journal_enabled；全節點 journald-only 故免裝 rsyslog）：
+  CT201  docker 容器（journal + docker_sd 自身容器日誌 + syslog listener :1514/udp 收 OpenWrt）
+  CT260/270/202/100  原生 systemd active（/usr/local/bin/promtail + /etc/promtail/config.yml + /var/lib/promtail）
+  VM300  同上 active（cowrie.json + journal；zip 經 qm guest exec 分塊 base64 傳入、sha256 驗證後裝——
+    蜜罐無 WAN、無檔案傳輸路徑）。放行規則經 uci reorder 移到 Block-Honeypot-To-10.80.80.0 前
+    （2026-07-05 使用者執行）後全通：{job="cowrie"} 攻擊事件即時入庫實測。
+  host label 現況：ct100/ct201/ct202/ct260/ct270/openwrt/vm300 七台全入庫（2026-07-05）。
+各節點收集內容：全部=journal（label unit/ident/level）；CT260 另收 ~/.local/state/homelab-notify/*.log；
+  CT270 另收 docker 容器（NocoDB/HA）；CT202 另收 /var/log/squid/{access,cache}.log；
+  CT100 另收 /root/minecraft/logs/latest.log + /var/log/mcsmanager/*.log；VM300=cowrie JSON+journal。
+網路路徑：CT260/270→OpenWrt 放行 3100；CT202 同段 L2 直達；CT100→CT201 eth1 10.70.70.11:3100
+  （VLAN70 L2 直達免 OpenWrt，比照待辦⑨）；VM300→10.80.80.11:3100（蜜罐唯一入內放行，單向）；
+  OpenWrt 本體不裝 promtail：logread -f -r 10.80.80.11 1514（udp，rfc3164，uci system log_ip/log_port/log_proto）。
+label 慣例：host=ct100/ct102?/ct201/ct202/ct260/ct270/vm300/openwrt；job=journal/docker/squid/minecraft/
+  mcsmanager/cowrie/syslog/hl-notify。查詢：Grafana datasource uid=loki（provisioned）；
+  LogQL 例：{host="ct260"} |= "sshd"、{job="cowrie"} | json、{host="openwrt"}。
+★ promtail 已 EOL（deprecated；最後隨 Loki v3.6.11 出貨，v3.7 起不再附）——push API 穩定、與 Loki 3.7.3
+  相容；長期遷移 Grafana Alloy 列入 §9 待辦。
+★ 風險注記：Loki :3100 無認證；VM300 有單向放行 → 蜜罐若被攻破可打 Loki HTTP API（含查詢端點，可讀
+  他機日誌）。使用者已於待辦12d 裁決接受單向放行；後續可 Caddy 前置只放 /loki/api/v1/push 收斂。
+★ 已知缺口（獨立驗證代理發現，2026-07-05）：CT202 systemd-journald 自 2026-07-01 失敗
+  （243/CREDENTIALS，unprivileged LXC + credential 掛載問題，早於本部署）→ 該台 journal 為空、
+  Loki 只會收到 squid log；且 CT202 本機已多日零系統日誌，待修（修復後驗證 journal 進 Loki）。
+```
+
+每日報告：每條新 FIRING 計入 daily_counts.json；每天 20:00 台北（cron 12:00 UTC，CT260 時鐘 UTC、台北無 DST）
+跑 --daily-report：當日有達閾值就用 deep 模型生日報（總評/重點/需人介入），送出後計數歸零，全 0 則跳過。
+cron 用 flock -w 50 與每分鐘 job 共用鎖序列化。
+
+---
+
+## 6. 必守修正原則（實作中發現，覆蓋一般直覺）
+
+```text
+1. Stale 告警一律用 *_generated_timestamp_seconds，不要用 up
+   （三個 OpenWrt job 共用 9105 endpoint，腳本掛了 web 還在時 up==1 仍是舊資料）。
+   可用：portscan_autoban_generated_timestamp_seconds、cowrie_quarantine_generated_timestamp_seconds、
+        openwrt_system_metrics_generated_timestamp_seconds、cowrie_log_last_read_timestamp_seconds。
+2. BanList 異常不要用「相對下降幅度」。portscan ban 6h 到期 + 每日 reset（已對齊台灣午夜）本就每天掉一次，
+   降幅會每天誤報。改用絕對值：portscan_autoban_banned_ips==0 或 portscan_autoban_service_up==0。
+3. 封禁/隔離數量用現成 summary gauge（portscan_autoban_banned_ips、cowrie_quarantine_quarantined_ips、
+   *_service_up），不要 count() per-IP series（*_remaining_seconds{ip=...} 是高基數）。
+4. per-CT 記憶體告警目前做不到：node_exporter 在 LXC 內讀宿主 /proc，看不到單一 CT 的 cgroup 上限。
+   要真做到需 cgroup metrics 或 pve-exporter。列為缺口。
+5. image 目前皆 :latest，告警關鍵系統建議後續 pin 版本，避免 pull 到 breaking change 讓告警靜默。
+6. Alertmanager 與 Prometheus 同在 CT201 屬 SPOF -> 保留 Uptime Kuma 外層探活 CT201/Prometheus/Gotify。
+7. OpenWrtRuleReloadFailure 未做：OpenWrt 無 fw4 reload metric，改用 OpenWrtFirewallDown 代替。
+```
+
+---
+
+## 7. Grafana 總覽 dashboard
+
+```text
+中文總覽：CT201 /opt/monitoring/grafana-dashboards/homelab-overview.json
+  provisioned，folder=Homelab，uid=homelab-overview，title「設備總覽 (Homelab)」。
+  內容：10 台設備橫向比較（CPU/記憶體/磁碟/溫度 bargauge）+ 設備總覽表（位址/狀態/CPU/記憶體/磁碟/負載/溫度/開機時長）
+        + 服務存活時間軸（19 Prometheus 目標 + 9 OpenWrt 服務）+ 趨勢（CPU/記憶體/網路收發/磁碟讀寫/swap/溫度）。
+        （★ 2026-07-05 版面：bargauge/stat h=13、總覽表 h=14、時間軸 h=12、趨勢圖 h=12——11 台 node 全顯免滾動；
+         總覽表 excludeByName 隱去 join 殘留 order 1..7 與 __name__/job 欄；在線設備數綠閾值 11。）
+生成器：ForAI/grafana-overview-gen.py（改面板就改這支，重跑覆蓋 json 再 pct push；Grafana 30s 自動 reload）。
+
+設備中文名 + 固定排序：來自 prometheus.yml 每個 target 的 device / order label。
+  改顯示名/順序 -> 改 prometheus.yml 對應 job static_configs 的 labels(device/order)，reload prometheus 即可（不必改 dashboard）。
+  order 用 "01".."19" 字串；面板用 PromQL sort_by_label(expr,"order") 排序、legend 用 {{device}}。
+  sort_by_label 是實驗函式 -> prometheus 已加 --enable-feature=promql-experimental-functions。
+  node 面板查詢用 {order=~"(0[1-9]|1[01])"} 選 11 台（順便排除改 label 前的 stale series）。
+  （2026-07-01：8→9 加 CT270；2026-07-04：9→10 加 CT203；2026-07-05：10→11 加 CT202 + 全面重編）
+順序（使用者指定，2026-07-05 重編）：01 CT100 / 02 CT102 / 03 CT201 / 04 CT202 / 05 CT203 / 06 CT260 / 07 CT270 /
+  08 VM300 / 09 24Bay PVE / 10 DXP4800 / 11 N95 RouterPVE；
+  12-19 為 OpenWrt系統/自動封禁/蜜罐隔離/Cowrie exporter/Cowrie GeoIP/Portscan GeoIP/Authelia/Prometheus。
+
+另一張：openwrt-portscan-autoban（title「OpenWrt 防火牆審計與 Cowrie 蜜罐」）。
+  Firewall 審計 + Cowrie session(SSH/Telnet 兩張) + 攻擊來源世界地圖 + 來源國家排行 + 攻擊來源明細
+  + 小黑屋統計/趨勢/流量速率/名單；狀態 stat 以「正常/不正常」顯示。
+  URL http://monitor.home.arpa:3002/d/openwrt-portscan-autoban/openwrt-portscan-autoban
+
+社群「Node Exporter Full」是手動 import（不在檔案裡），可在 Grafana UI 自行刪除。
+注意：Grafana admin 密碼非預設 admin，API 操作要用實際密碼。
+
+反向代理（待辦③ SSO，2026-07-04）：Grafana GF_SERVER_ROOT_URL=https://grafana.hl.lailai74143.com、
+  Prometheus command --web.external-url=https://prometheus.hl.lailai74143.com（皆在 /opt/monitoring/docker-compose.yml，
+  改後 docker compose up -d 重建）。經 CT203 Caddy forward_auth(Authelia) 反代＝grafana.hl / prometheus.hl / kuma.hl / homepage.hl。
+  ★ 直連 :3002/:9090/:3001/:3000（PC40 放行）保留為後備，未收（反代/SSO 故障時排障用）。
+  ★ Homepage services.yaml 服務 href 已指 .hl（點擊走 SSO）；description 的 URL 文字仍標內網位置（後備參考）。
+  ★ Grafana 的 Prometheus datasource 維持容器內直連（prometheus:9090），不走反代（API 走 SSO 會被擋）。
+```
+
+---
+
+## 8. 設計/規劃參考（告警分層藍圖）
+
+現況已覆蓋第一~四階段（見 §3）。以下保留為「告警分類藍圖」與後續方向。
+
+```text
+第五階段 長時間/並發複合判讀（用 recording rules 整理關鍵狀態後再建複合告警；這層才給 ai_analyze 或靠 batch）：
+  - 高 CPU + 高 iowait + 高磁碟讀取 -> 磁碟壓力/備份/壞盤重試/異常程序。
+  - 記憶體飆升 + swap 增加 -> CT/VM 服務記憶體洩漏。
+  - 某 VM disk r/w 異常 + Cowrie/防火牆事件同步升高 -> 攻擊流量/log 爆量/exporter 重讀。
+  - OpenWrt CPU 高 + 封禁數暴增 -> 掃描爆發/規則壓力。
+  - 多個 exporter 同時 down -> 先疑網路/VLAN/OpenWrt/CT201/scrape 路徑，而非單點服務。
+  - 單一內部設備長時間 unreachable -> 先查該設備/放行規則/VLAN tag/exporter 綁定 IP。
+第六階段 Grafana 告警總覽面板：firing/pending（按 severity/instance/job）、硬件異常、服務狀態、防火牆安全總覽。
+告警嚴重度分級：info=狀態變化/重啟/短暫異常；warning=持續異常但未必中斷；critical=監控核心/防火牆核心/主要服務不可用。
+靜默策略：維護時段 silence；已知關機設備（如 CT250）避免常駐噪音。
+```
+
+---
+
+## 9. 監控待辦（OPEN）
+
+```text
+1. ✔已解（2026-07-05 待辦⑨）：mc-backend node_exporter 已被抓——target 改 mc-backend.home.arpa:9100，
+   放行走 CT201 eth1(10.70.70.11) 直連 L2 + CT100 本機 nft 加 9100，無需 OpenWrt 規則。
+2. 告警關鍵 image 由 :latest 改 pin 版本（新增的 loki/promtail/pve-exporter 已 pin；存量 :latest 待辦㉑）。
+3. 視需要把 Uptime Kuma 的部分監控逐步收斂到 Prometheus（核心告警集中，Kuma 留外層探活）。
+4. ✔已解（2026-07-05 待辦12）：Loki/Promtail 管線上線，七台 host 全入庫＋冒煙測試通過（§5e）；
+   殘餘小尾巴＝Kuma 對 Loki http://10.80.80.11:3100/ready 探活待 UI 加。
+5. promtail 已 EOL → 長期遷移 Grafana Alloy（收集端替換，Loki 端不動）。
+6. pve-exporter（待辦11）啟用後：Grafana「PVE 虛擬化總覽」(uid pve-overview) 檢視微調；
+   PveStorageAlmostFull 對兩座 cifs(~88%) 將常駐 firing → 待辦38 清理或 silence。
+```

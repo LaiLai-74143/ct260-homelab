@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# hl-reload: check-THEN-reload Prometheus / Alertmanager on CT201.
+# The config/rules check runs first; if it fails, set -e aborts before the
+# reload POST -> a broken config never goes live.
+#   hl-reload [prometheus|alertmanager|both]   (default: both)
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+run(){ "$DIR/hl-run" ct201 "$1"; }
+
+do_prom(){
+  echo "[prometheus] check config+rules ..."
+  run 'docker exec prometheus promtool check config /etc/prometheus/prometheus.yml'
+  echo "[prometheus] reload ..."
+  run 'curl -sf -X POST http://127.0.0.1:9090/-/reload && echo "  reloaded ok"'
+}
+do_am(){
+  echo "[alertmanager] check config ..."
+  run 'docker exec alertmanager amtool check-config /etc/alertmanager/alertmanager.yml'
+  echo "[alertmanager] reload ..."
+  run 'curl -sf -X POST http://127.0.0.1:9093/-/reload && echo "  reloaded ok"'
+}
+
+case "${1:-both}" in
+  prometheus|prom)  do_prom ;;
+  alertmanager|am)  do_am ;;
+  both)             do_prom; do_am ;;
+  *) echo "usage: hl-reload [prometheus|alertmanager|both]" >&2; exit 2 ;;
+esac

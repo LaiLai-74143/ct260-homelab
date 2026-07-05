@@ -1,0 +1,100 @@
+# 備份位置及策略索引
+
+更新時間：2026-07-02
+本文記錄各節點「設定/狀態備份檔」的收納位置、命名規範、保留策略。
+回滾的實際操作步驟見《操作規範與回滾.txt》§4（本文不重列）。
+本文不存任何密碼/token/key 內容；機密備份只記「存在 + 所在主機」。
+
+---
+
+## 0. 核心規範
+
+```text
+1. 每台主機一個標準備份資料夾，集中收納，不再散落在設定檔旁。
+2. 收納用「移動(move)」：同機內搬，回滾仍在本地，不跨網搬大檔，機密不外傳。
+3. 改設定前備份命名：<原檔名>.before-<用途>-<YYYYmmdd_HHMMSS>  或  <原檔名>.bak-<用途>-<時間戳>。
+   產生後移進該機 _backups。
+4. 機密備份（密碼/儲存憑證等）一律留原機原處，不進 _backups、不進本索引、不外傳。
+5. 已自成體系的備份目錄（如 CT102 的 *-upgrade-backup-*/）保持原樣，不打散。
+```
+
+---
+
+## 1. 各節點標準備份資料夾
+
+```text
+節點             標準資料夾                          內容                                        數量(2026-06-30)
+OpenWrt          /root/_backups                      firewall/dhcp/dnsmasq/uhttpd/adguardhome/    102
+                                                     hosts.home.arpa/crontab/sysupgrade/
+                                                     dropbear authorized_keys 等 .before/.bak
+CT201 Monitor    /opt/monitoring/_backups            prometheus.yml/docker-compose.yml/            31
+                                                     rules/*.yml/grafana-dashboards/*.json .before-*
+  └ Kuma DB      容器內 uptime-kuma:/app/data/_backups   kuma.db.bak_*                            3+
+CT100 mc-backend /root/_backups                       nftables.conf/minecraft 設定/interfaces      11+
+CT102 mc-proxy   /root/_backups                       velocity.toml/interfaces 散檔                3
+  └ 既有目錄(原樣保留)：/root/velocity-backup-*/、velocity-upgrade-backup-*/、
+     geyser-floodgate-upgrade-backup-*/、viaversion-install-backup-*/
+routerpve(N95)   /root/_backups                       lvm.conf/network interfaces/                 4+
+                                                     vm101.sfdisk/authorized_keys.bak-dedup/
+                                                     firewall(.before-ct260-routerpve / -routerpve-dxp-smb)
+CT260 Codex Ops  /root/_backups (root 帳號)           authorized_keys 備份                         1
+CT202 fwdproxy   /root/_backups                      squid.conf .orig + .before-xiaomi-allowlist（已還原）        1+
+CT203 dmz-proxy  /root/_backups                      ctdmz.nft / Caddyfile 之 .before-*（2026-07-04 起）          3+
+CT270 Life-Ops   /root/_backups                      docker-compose.yml .bak/.before-*（含 xiaomi-noproxy）       1+
+DXP4800 NAS      (SSH 待補)                            SSH(45123) 仍 refused、CT260 直連不可達；        ?
+                                                     但經 routerpve 既有 SMB 掛載可達
+                                                     //192.168.30.3/Back_up/Router_PVE_OpenWrt
+                                                     (=routerpve:/mnt/pve/Nas)：dump/=PVE vzdump 備份；
+                                                     ForAI/=ForAI 文件副本(2026-07-02，非備份、勿當回滾源)
+```
+
+備註：
+
+```text
+- CT201 Kuma 備份在 docker volume(/app/data)，不在宿主檔系，故獨立列。
+- routerpve /root/.ssh/authorized_keys 是 symlink -> /etc/pve/priv/authorized_keys（PVE 叢集管理），
+  備份檔是普通檔已移入 _backups。
+- 上面數量為 2026-06-30 盤點值，之後會增長；以該機實際 ls 為準。
+```
+
+---
+
+## 2. 機密備份（只記存在，不入 _backups、不外傳）
+
+```text
+routerpve:/root/Nas.pw.bak.20260630           NAS 相關密碼備份 —— 留原處，不收納、不索引內容。
+routerpve:/root/Nas.storage.cfg.bak.20260630  NAS 儲存設定備份(可能含憑證) —— 同上。
+```
+
+處理原則：要清理時由使用者親自確認後刪除；不複製、不集中、不寫進任何同步區或 ForAI/ForCodex。
+
+---
+
+## 3. 保留策略（建議，不自動執行，清理前先確認）
+
+```text
+1. .before-* / .bak-* 設定備份：對應變更「確認穩定」後可刪；保守保留每個目標最近 3 份，其餘按時間清。
+   大量同類（如 OpenWrt firewall.before-* 近百份）可優先精簡到近 1 個月 + 每目標最近 3 份。
+2. Kuma DB 備份（各 ~100MB）：只留最近 2 份，舊的刪，避免吃滿 CT201。
+3. 既有 *-upgrade-backup-*/ 目錄：升級驗證穩定後整目錄可刪。
+4. 任何刪除前：先確認對應變更已上線穩定、且不是唯一回滾點。
+```
+
+---
+
+## 4. 回滾
+
+回滾標準步驟見《操作規範與回滾.txt》§4。
+要點：到該機 _backups 找對應 .before-* -> diff 確認 -> 還原前先再備份現行檔 -> reload/restart -> 驗證。
+
+---
+
+## 5. 待辦（OPEN）
+
+```text
+1. DXP4800 NAS：SSH(192.168.30.3:45123) 仍 refused，CT260 直連全 closed；目前僅經 routerpve 的
+   SMB 掛載(//192.168.30.3/Back_up/Router_PVE_OpenWrt → /mnt/pve/Nas)可達。待 SSH 恢復後盤點並
+   收納其備份到標準 _backups。ForAI 文件副本已放 /mnt/pve/Nas/ForAI（副本，非收納備份）。
+2. 視需要對 OpenWrt /root/_backups（102 份）做一次保留策略精簡。
+3. 其他節點（CT250 等）若日後產生備份，一律收進該機 /root/_backups 或對應 _backups。
+```

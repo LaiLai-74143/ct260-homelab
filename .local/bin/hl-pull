@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# hl-pull: fetch a remote TEXT file to local (reverse of hl-push), so you can
+# edit configs with real tooling then hl-push back. Uses hl-run cat, so it works
+# on every node incl. vm300. For text/config files, not binaries.
+#   hl-pull <node> <remotepath> [localdest]
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+[ $# -ge 2 ] || { echo "usage: hl-pull <node> <remotepath> [localdest]" >&2; exit 2; }
+node=$1 remote=$2 dest=${3:-$(basename "$2")}
+"$DIR/hl-run" "$node" "cat '$remote'" > "$dest"
+echo "pulled $node:$remote -> $dest ($(wc -c <"$dest") bytes)"

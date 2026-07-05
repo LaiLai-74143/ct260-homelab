@@ -1,0 +1,153 @@
+# 操作規範與回滾（安全改動 playbook）
+
+更新時間：2026-06-30
+本文是「如何安全地改東西」的單一規範，供改動前/中/後與回滾時引用。
+備份檔的收納位置/命名/保留策略見《備份位置及策略索引.txt》（本文只談流程，不重列備份清單）。
+
+---
+
+## 1. 改動前後標準流程
+
+改動前：
+
+```text
+1. 讀現況。
+2. 找 source-of-truth（位址/DNS/防火牆以拓樸文件為準）。
+3. 備份設定（命名規範見備份索引 §0）。
+4. 說明會改哪些檔案 / 規則。
+```
+
+改動中：
+
+```text
+1. 小步改，每步有輸出。
+2. 不塞超長遠端腳本。
+3. 避免多層 PowerShell / SSH / guest-agent 引號地獄（見 §3）。
+```
+
+改動後：
+
+```text
+1. reload / restart。
+2. 查 service status。
+3. 測 TCP / HTTP / DNS / ping（依用途）。
+4. 查 Prometheus target / dashboard。
+5. 記錄 rollback path（備份檔位置）。
+```
+
+---
+
+## 2. 重要變更額外要求
+
+```text
+- 跨 VLAN 放行：逐項點名 host/port，不開整段 forward；管理流量盡量 SNAT 收斂單一來源。
+- 改現役 DNS：改完 compare + push + compare；AdGuardHome 要 restart 清快取（cache_optimistic 12h）。
+- 改 IPv6 / wan6：reload 會讓 wan6 重新協商、GUA/PD 換新（PPPoE 重撥本就會漂移），屬正常。
+- 動 RouterPVE 管理面（root-of-trust）或擴大其信任來源：需使用者同意。
+- 開觀測面（VLAN80）跨段：碰「不該開」清單者需使用者明確點名才開。
+```
+
+---
+
+## 3. 遠端腳本修改規範（跨 CT / 跨機器）
+
+適用：修改別的 CT 或別台機器上的腳本/設定檔（OpenWrt、PVE host、VM300、NAS、PC、CT100/201/250…），
+不論從 CT260 還是從 PC 經 PowerShell 操作。
+
+### 3.0 核心原則
+
+```text
+改檔內容時，把內容當「資料」傳，不要當「指令參數」塞。
+能整檔推送，就不要用指令逐行改。
+每多穿過一層 shell，就多一層引號 / 跳脫 / 編碼風險。
+```
+
+根因：腳本內容若經 echo/sed/bash -c "..." 內嵌傳遞，會經過多層解析
+（本地 shell -> ssh / pct exec / qm guest-agent -> 遠端 shell -> 工具），
+每層重新解讀引號/`$`/反斜線/反引號，中文遇全形半形或編碼不一致就會變形。
+整檔推送只走「傳輸」，不經遠端 shell 解析內容，從根本避開。
+
+### 3.1 預設做法：本地寫好 -> 整檔推送
+
+```text
+1. 在來源節點（通常 CT260 或本機）把腳本完整寫好、存檔。
+2. 本地先檢查語法：bash -n script.sh（或對應直譯器）。
+3. 用檔案傳輸把整檔送過去，不要用指令內嵌內容。
+4. 傳完做完整性 + 語法驗證（見 §3.4）。
+5. 再於遠端套用 / reload / restart。
+6. 保留舊檔作 rollback path。
+```
+
+傳輸方式對照：
+
+```text
+同台 PVE 跨 LXC：   pct push <vmid> /local/script.sh /target/script.sh
+                    （必要時先 push 到 /tmp，再於 CT 內 install/mv 到正式路徑並設權限）
+LXC 取出檔案：      pct pull <vmid> /target/script.sh /local/script.sh
+跨機器（有 SSH）：  scp /local/script.sh user@host:/target/script.sh
+                    rsync -a --checksum ...（大量檔案 / 要比對）
+VM（走 guest-agent）：qm guest exec-file 或先放共享路徑，避免 guest exec 塞長字串。
+OpenWrt 無 sftp-server（scp 會失敗）：用 `cat local | ssh openwrt 'cat > file'`。
+```
+
+權限/屬主：`install -m 0755 -o root -g root /tmp/script.sh /usr/local/bin/script.sh`
+
+### 3.2 必須遠端就地產生內容時：單引號 here-doc
+
+```sh
+cat > /target/script.sh <<'EOF'
+#!/bin/sh
+# 內容原樣寫入，$VAR、引號、反斜線都不被展開
+EOF
+```
+
+```text
+1. 界定符一定加單引號 <<'EOF'，不要用裸 EOF（會展開變數）。
+2. 不要用 echo "多行內容" >> file 累加（容易斷行/跳脫錯亂）。
+3. here-doc 內容不要再包一層 ssh "..."；必須遠端時讓 ssh 讀 stdin：ssh host 'cat > /path' < local.sh。
+```
+
+### 3.3 唯一可接受的「指令就地改」
+
+```text
+只在：單行、單一數值/開關小修改；內容不含引號/$/反斜線/中文/全形字元；改前備份；錨點精準匹配。
+  sed -i.bak 's|^KEY=.*|KEY=value|' file
+其餘一律走 §3.1 整檔推送。不要用一長串 sed/awk/echo 重建整個腳本。
+```
+
+### 3.4 套用前後驗證（必做）
+
+```text
+傳輸後、套用前：
+1. 完整性：兩端 sha256sum 一致。
+2. 語法：bash -n / sh -n / nft -c -f / promtool / amtool 等對應 lint。
+3. 權限/屬主/換行（避免 CRLF）：file script.sh；head -1 看 shebang。
+套用後：
+4. reload/restart 對應 service，查 status。
+5. 功能實測（TCP/HTTP/DNS/ping）。
+6. 記錄 rollback path。
+★ Docker 單檔 bind-mount + sed -i 換 inode 坑：改檔 reload 後容器仍讀舊 inode
+  -> 必須 docker restart 該容器重綁（prometheus.yml / 規則檔常踩）。
+```
+
+### 3.5 速記
+
+```text
+跨 CT / 跨機器改腳本：
+  預設 = 本地寫好 + pct push / scp 整檔 + sha256 驗證。
+  例外 = 單行無特殊字元小改，可 sed -i.bak。
+  禁止 = 用 echo / 多層 bash -c 重建整個腳本內容。
+  根因 = 多層 shell 引號 / 全形半形 / 編碼，整檔傳輸可避開。
+```
+
+---
+
+## 4. 回滾標準步驟
+
+```text
+1. 找備份：到該機標準 _backups 找 <原檔名>.before-<用途>-<時間戳>（位置見備份索引 §1）。
+2. 比對：diff 現行檔 vs 備份，確認差異符合預期。
+3. 還原：先把現行檔再備份一次，再 cp _backups/<備份檔> <原路徑>。
+4. 套用：對應服務 reload/restart（firewall reload / nft -f / docker restart / prometheus -/reload …）。
+5. 驗證：service status + 功能實測。
+```

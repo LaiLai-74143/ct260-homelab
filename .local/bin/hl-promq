@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# hl-promq: run an instant PromQL query on CT201, print "value  {labels}" lines.
+# Query is carried as base64 so any quotes/operators survive intact.
+#   hl-promq 'up == 0'
+#   hl-promq 'node_filesystem_avail_bytes{mountpoint="/"}'
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+[ $# -ge 1 ] || { echo "usage: hl-promq '<promql>'" >&2; exit 2; }
+qb64=$(printf '%s' "$*" | base64 -w0)
+
+"$DIR/hl-run" ct201 <<EOF
+python3 - <<'PY'
+import json, base64, urllib.parse, urllib.request as u
+q = base64.b64decode("$qb64").decode()
+url = "http://127.0.0.1:9090/api/v1/query?" + urllib.parse.urlencode({"query": q})
+with u.urlopen(url, timeout=15) as r:
+    d = json.load(r)
+if d.get("status") != "success":
+    raise SystemExit("query error: " + str(d))
+res = d["data"]["result"]
+if not res:
+    print("(empty result)")
+for m in res:
+    lbl = dict(m["metric"]); lbl.pop("__name__", None)
+    val = (m.get("value") or ["", ""])[1]
+    print(f"{val}\t{lbl}")
+PY
+EOF

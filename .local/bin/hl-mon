@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# hl-mon: compact Prometheus snapshot (targets up/down + firing alerts).
+# Runs on CT201 via hl-run. Replaces the long inline curl|jq one-liners.
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)
+"$DIR/hl-run" ct201 <<'PY'
+python3 - <<'EOF'
+import json, urllib.request as u
+def get(path):
+    with u.urlopen("http://127.0.0.1:9090"+path, timeout=10) as r:
+        return json.load(r)["data"]
+t = get("/api/v1/targets")["activeTargets"]
+up = sum(x["health"] == "up" for x in t)
+down = [x for x in t if x["health"] != "up"]
+print(f"targets: total={len(t)} up={up} down={len(down)}")
+for x in down:
+    print(f"  DOWN [{x['labels'].get('job')}] {x.get('scrapeUrl')}  {x.get('lastError','')}")
+a = get("/api/v1/alerts")["alerts"]
+firing = [x for x in a if x["state"] == "firing"]
+pending = sum(x["state"] == "pending" for x in a)
+print(f"alerts: firing={len(firing)} pending={pending}")
+for x in sorted(firing, key=lambda z: z["labels"].get("severity","")):
+    l = x["labels"]
+    print(f"  FIRING {l.get('alertname')} sev={l.get('severity','?')} {l.get('instance','')}")
+EOF
+PY

@@ -1,0 +1,32 @@
+# 白名單模式:home 目錄預設全忽略,僅逐項納管指定路徑(待辦36)
+/*
+
+# --- 納管:ForAI 文件(含 grafana-overview-gen.py 等) ---
+!/workspace
+/workspace/*
+!/workspace/ForAI
+
+# --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
+!/.local
+/.local/*
+!/.local/bin
+
+# --- 納管:life-ops MCP(server.py 等) ---
+!/life-ops-mcp
+
+# --- 納管:本檔 ---
+!/.gitignore
+
+# --- 全域排除:秘鑰/憑證/暫存(即使位於納管目錄內) ---
+__pycache__/
+*.pyc
+.env
+*.env
+*token*
+!get_gcal_token.py
+*secret*
+*credential*
+*.pem
+*.key
+id_ed25519*
+id_rsa*
