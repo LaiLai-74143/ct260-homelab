@@ -324,8 +324,18 @@
     可選擴充（未做）：LuCI 80/443（若未使用）比照；非白名單來源敲 52438 另立規則計數。
 
 -------------------------------------------------------------------------------
-17. IPv6 出站控管 ✔（2026-07-06 以「移除 v6」收斂，非「加 v6 防火牆」）
-    【結案 / 2026-07-06 二次修訂】原裁決「全網移除 v6」，晚間使用者測試後兩段回退：
+17. IPv6 控管 ✔（2026-07-06 結：多數 VLAN 移除 v6 達出站控管；DMZ 反向加「受控 v6」供 phone↔CT203 tailscale 直連）
+    ★ 最終落地 vs 原案（差異摘要，2026-07-06——本項與原始設想差很多，特記錄演變）：
+      原案本意＝純「v6 出站控管」（收緊 v6 對外），手段擇一 (a) 關掉不需 v6 的 CT、或 (b) fw4 加 family=ipv6 forward REJECT 逐項放行。
+      實際演變：① 先「全網移除 v6」一刀收斂（最省力、達控管）→ ② 使用者測試發現該手機只做 v6 直連、被打回 DERP → 復原 OpenWrt WAN GUA
+        （換回 phone↔OpenWrt 直連）→ ③ 再裁定「分發 v6 給 DMZ」以換 phone↔CT203 v6 直連（訪問內網須經 CT203 轉發）。
+      最終＝混合、且部分與原意相反：
+        · 多數下游 VLAN（VLAN20 servers 等）：無 v6 → 以「根本沒有 v6」達成原「出站控管」目標（而非「限制既有 v6」）。
+        · DMZ(VLAN60/CT203)：★反向「主動加 v6」——CT203 得公網 SLAAC GUA，目的非控管而是「直連」；inbound 嚴控
+          （established-only、CT203 主機守衛 ct203v6guard、無 wan→dmz 轉發、無 v6 DNAT），egress 放行。
+      ∴ 原標題「非加 v6 防火牆」已不精確：DMZ 這段其實採了原 (b) 的精神（加 family=ipv6 規則：Allow-DMZ-ICMPv6 + 主機守衛 ct203v6guard），
+        只是方向由「REJECT 收緊」翻成「精準放行 ND/established + 擋冷 inbound」。完整血淚細節見缺改「DMZ v6 GUA 上線」、拓樸 §4.7。
+    【落地細節 / 2026-07-06】原裁決「全網移除 v6」，晚間使用者測試後兩段回退：
       · 下游 VLAN 除 DMZ(VLAN60) 外仍無 v6（VLAN20 servers GUA/DHCPv6 已撤、無 ip6assign）——v6 出站控管目標於這些段維持達成。
       · OpenWrt WAN GUA 復原（重加 wan6 dhcpv6、僅 router 自身）換回 phone↔OpenWrt v6 直連（33ms）。見缺改「OpenWrt v6 GUA 復原」。
       · ★ 再裁定「分發 v6 給 DMZ」：使用者要 phone↔CT203 v6 直連（訪問內網須經 DMZ 轉發）。DMZ(VLAN60/CT203) 得 SLAAC GUA，
