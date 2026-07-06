@@ -356,14 +356,35 @@
     c. 注意：PD 前綴隨 PPPoE 重撥漂移，任何規則不得寫死 GUA，用介面/zone 匹配。
 
 -------------------------------------------------------------------------------
-18. 音樂串流 Navidrome
-    流程：
-    a. 音樂庫放 NAS 共享；服務放 CT270 或新輕量 CT，SMB 唯讀掛載至 /music
-       （fstab _netdev,ro，NAS 離線不得卡開機）。
-    b. compose 跑 navidrome（pin 版本，:4533），ND_MUSICFOLDER=/music。
-    c. AGH rewrite music.home.arpa；OpenWrt 放行 trusted/ts→:4533（第 3 項落地後改走入口）。
-    d. 手機 app：Symfonium 或 Tempo（Subsonic 協議），建 API token 帳號。
-    e. Kuma 探活；納入 vzdump。
+◐18. 音樂串流 Navidrome — 服務全上線（2026-07-06：a✔ b✔ c✔ d◐ e◐），唯音樂庫尚空待使用者放歌
+    〔完成 2026-07-06〕使用者三裁決：NAS SMB(10G 唯讀 bind) → CT270 → A2(Navidrome 自身登入 + CT203 gate
+      對 20.70:4533 豁免)。落地驗證：navidrome 容器 Up、/ping=200；/mnt/music-nas 掛載 OK(帳號 Survice)；
+      CT203 gate 4533 豁免 live；openwrt DNS(三解析器 OK)+PC40 防火牆 fw4 live。詳見拓樸 §10.5 / 缺改記錄 2026-07-06。
+      ★ 已放歌：使用者放 30 首(FLAC)後手機 Symfonium 報「無法列出資料夾」＝Navidrome DB 尚空(cifs 無 inotify
+        watcher 未觸發)；restart→initial scan 30 首入庫後即可列出。自動掃描：0.62 ND_SCANSCHEDULE/ND_SCANINTERVAL
+        週期掃描實測失效→改 CT270 cron 跑 `navidrome scan`(navidrome-scan.cron，Agent 佈署被分類器擋，待使用者啟用)
+        或 UI「立即掃描」。d 手機 app＝Subsonic http://20.70:4533 帳號 Gong8504；e Kuma 探活待 UI(服務就緒)。
+      ★ 踩坑(見缺改)：①ghcr pull TLS timeout(重試即過) ②音樂庫空→Symfonium 報錯(放歌+掃描解) ③0.62 週期掃描鍵失效(改 cron)。
+      產出 ~/workspace/navidrome/{docker-compose.yml, ctdmz.nft, finish-18.sh(pve24 root),
+      finish-18-openwrt.sh(openwrt root), README.md}。
+    ★ 實作面偏離原文 a（記錄）：CT270=unprivileged LXC 不能自掛 cifs → 改「pve24 host cifs 掛載 //192.168.100.2/<share> ro
+      → LXC bind mp /music(ro,backup=0)」，走 10G fabric(VLAN100 無防火牆 L2 島)＝免動 servers→storage 放行。
+      fstab _netdev,nofail(NAS 離線不卡開機)。套 mp 需 pct reboot 270(短暫中斷 HA/NocoDB/Paperless，已 read 確認)。
+    ★ 影像＝ghcr.io/navidrome/navidrome:0.62.0（deluan/* 在 docker.io，squid 現關；ghcr 白名單已含，故用 ghcr）。
+    ★ 入口 A2（使用者裁；c/d 對應）：手機 Subsonic app 24/7＝CT203 /etc/nftables.d/ctdmz.nft 加「tailnet→20.70:4533
+      accept」豁免(比照 Jellyfin 30.3:8096，不經 Authelia，靠 Navidrome 自身帳密/token)；CT203→servers 由既有 TSGate
+      allowlist 放行。PC40 另加 openwrt Allow-PC40-To-CT270-Navidrome(trusted 192.168.40.4→20.70 tcp/4533)。
+    ★ DNS：music.home.arpa→192.168.20.70（dnsmasq addnhosts + homelab-dns-push-to-24pve，比照 paperless；非 AGH rewrite）。
+    ★ 監控/備份：CT270 promtail(docker_sd) 自動收容器日誌→Loki；vzdump 已含 CT270(待辦13)，/music mp=backup=0、
+      navidrome_data 在 rootfs→涵蓋；Kuma /ping 探活＝待使用者 UI 加。遙測 ND_ENABLEINSIGHTS=false。
+    流程（原文；掛載機制改如上 ★）：
+    a✔ 音樂庫放 NAS 共享；服務放 CT270 或新輕量 CT，SMB 唯讀掛載至 /music
+       （fstab _netdev,ro，NAS 離線不得卡開機）。（改：pve24 host cifs + LXC bind mp，見上 ★；共享現空待放歌）
+    b✔ compose 跑 navidrome（pin 版本，:4533），ND_MUSICFOLDER=/music。（0.62.0 ghcr，/ping 200 已驗）
+    c✔ AGH rewrite music.home.arpa；OpenWrt 放行 trusted/ts→:4533（第 3 項落地後改走入口）。
+       （實走 dnsmasq addnhosts（非 AGH rewrite）+ A2：PC40 openwrt 放行、手機走 CT203 gate 豁免（非 Caddy 反代））
+    d◐ 手機 app：Symfonium 或 Tempo（Subsonic 協議），建 API token 帳號。（服務就緒；待使用者建 admin＋設 app）
+    e◐ Kuma 探活；納入 vzdump。（vzdump 已含 CT270＝待辦13；Kuma /ping 探活待 UI）
     （AudioBookshelf 有聲書之後同模式可加掛，官方 app。）
 
 -------------------------------------------------------------------------------
@@ -436,11 +457,7 @@
     執行時機：待辦 P0/P1 大建設收尾後，與使用者確認選型再動。
 
 -------------------------------------------------------------------------------
-23. Cloudflare Access
-    【說明】CF 免費功能：Tunnel 前加登入層。與第 3 項分工：Authelia 管內部、Access 管對外。
-    流程：Zero Trust dashboard → Access → Applications → 對 vault 域名建 self-hosted app。
-    重要：Vaultwarden 手機 app 無法互動過 Access 登入——policy 只保護 /admin 路徑
-    （或全站保護 + app 路徑 bypass 規則），先在測試域驗證 app 可同步再上正式。
+23. 用戶評估後刪除
 
 -------------------------------------------------------------------------------
 24. WireGuard break-glass

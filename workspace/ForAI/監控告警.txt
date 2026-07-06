@@ -89,12 +89,26 @@ CT202 squid 指標（待辦⑩b 極簡方案，2026-07-05）：
 Kuma：monitor id 17「CT202 fwdproxy」type=port 10.80.80.10:3128（通知綁 TG）
 ```
 
+CT203 動態閘門健康指標（fail-open 守護，2026-07-06）：
+
+```text
+來源：CT203 /usr/local/bin/ctdmz-gate-metrics（systemd ctdmz-gate-metrics.timer 每 30s）
+      唯讀探 nft table inet ctdmz -> /var/lib/node_exporter/textfile_collector/ctdmz_gate.prom
+      （textfile collector，隨既有 ct-dmz-proxy-node :9100 出；node_exporter drop-in 開啟 textfile 目錄）
+背景：OpenWrt 對 10.60.60.10 靜態 proto-all 常開，tailnet→內網唯一把關在 CT203 那張 nft；
+      表未載入/deny 兜底被移除 = fail-open 且 OpenWrt 無後手（見拓樸 §4.8）。此指標把「閘門是否在把關」變可告警。
+指標：ctdmz_gate_up（table 在、tailscale0 deny 兜底≥2、且引用 @ts_authed_v4 才=1）、
+      ctdmz_jellyfin_exemption_pinned（唯一免驗證豁免仍綁死 192.168.30.3:8096）、
+      ctdmz_nft_service_active / ctdmz_tsgate_service_active、ctdmz_authed_v4_entries（informational，可為 0）
+告警：見 §3 ctdmz-gate.yml。源檔 CT260 ~/workspace/ct-dmz-proxy/gate-monitoring/
+```
+
 三個 OpenWrt job 共用同一個 9105 endpoint：腳本掛了但 web server 還在時 up==1 仍回舊資料
 -> stale 告警必須用 *_generated_timestamp_seconds，不可只看 up（見 §6）。
 
 ---
 
-## 3. 告警規則現況（CT201 /opt/monitoring/rules/，共 30 條）
+## 3. 告警規則現況（CT201 /opt/monitoring/rules/，共 34 條）
 
 ```text
 alerts.yml   （核心）Watchdog（vector(1) 心跳）、PrometheusConfigReloadFailed、
@@ -124,6 +138,13 @@ security.yml （防火牆/蜜罐）
                openwrt_honeypot_ratelimit_dropped_packets_total{scope=per_src|aggregate} counter，
                WAN→蜜罐 SYN 削峰丟棄量，見拓樸 §4.5.2；刻意無告警——hardening 非 tripwire，
                drop>0 屬正常削峰、靜默失效=回到加固前現狀）
+
+ctdmz-gate.yml（CT203 tailnet 動態閘門 fail-open 守護，2026-07-06；指標來源見 §2）
+             CtdmzGateDown(ctdmz_gate_up==0 for 2m，critical，ai_analyze=true
+               ——閘門未把關=未驗證 tailnet 直穿內網，OpenWrt proto-all 無後手；查 ctdmz-nft.service/nft list table inet ctdmz)、
+             CtdmzGateMetricMissing(absent(ctdmz_gate_up) for 5m，warning，ai_analyze=true——metric 消失=collector/timer/CT 故障盲區)、
+             CtdmzGateMetricStale(time()-node_textfile_mtime_seconds{file=~".*ctdmz_gate.prom"}>300 for 5m，warning——textfile 未刷新)、
+             CtdmzJellyfinExemptionDrift(ctdmz_jellyfin_exemption_pinned==0 for 5m，warning，ai_analyze=true——唯一免驗證豁免綁定異動)
 
 pve.yml      （PVE API 指標，待辦11e，2026-07-05；pve-exporter 啟用前無指標=不觸發）
              PveGuestHighMemory(單 CT/VM mem>90% for 10m，warning；LXC 內 node_exporter 做不到的 cgroup 準確值)、

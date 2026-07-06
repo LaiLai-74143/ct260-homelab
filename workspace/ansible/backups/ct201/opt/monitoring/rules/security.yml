@@ -28,3 +28,25 @@ groups:
         annotations:
           summary: "cowrie quarantine spike"
           description: "Net +{{ $value | printf \"%.0f\" }} quarantined IPs in 10m (honeypot login burst)."
+
+      # todo 16: internal tcp/22 toward any VLAN gateway IP is a dead port (real SSH elsewhere);
+      # aggregate counter (not per-src series) so the very first hit still trips increase()
+      - alert: SSH22TripwireHit
+        expr: increase(openwrt_ssh22_tripwire_packets_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          ai_analyze: "true"
+        annotations:
+          summary: "internal SSH22 tripwire hit"
+          description: "{{ $value | printf \"%.0f\" }} packet(s) hit dead port 22 on a gateway IP in 5m (misconfig or lateral scan from a compromised node). Source: openwrt_ssh22_tripwire_total{src=...} / Loki SSH22-TRIPWIRE lines. No whitelist by design; amtool silence before authorized scans."
+
+      # tripwire integrity: chain gone (boot race / manual stop) = silent disarm, nobody notices
+      - alert: SSH22TripwireInactive
+        expr: openwrt_ssh22_tripwire_active != 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ssh22 tripwire disarmed"
+          description: "openwrt_ssh22_tripwire_active != 1 for 10m (nft drop rule missing: init failed at boot or table deleted; tripwire silently off). /etc/init.d/ssh22-tripwire start to re-arm."

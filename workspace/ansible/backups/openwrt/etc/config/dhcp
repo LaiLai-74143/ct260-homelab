@@ -80,10 +80,6 @@ config host
 config dhcp 'servers'
 	option interface 'servers'
 	option dhcpv4 'disabled'
-	option ra 'server'
-	option dhcpv6 'server'
-	option ndp 'disabled'
-	option ra_mtu '1492'
 
 config dhcp 'trusted_clients'
 	option interface 'trusted_clients'
@@ -99,7 +95,10 @@ config dhcp 'trusted_clients'
 
 config dhcp 'dmz'
 	option interface 'dmz'
-	option ignore '1'
+	option ra 'server'
+	option ra_slaac '1'
+	option ra_flags 'none'
+	option ra_default '1'
 
 config dhcp 'game_services'
 	option interface 'game_services'

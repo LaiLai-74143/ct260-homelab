@@ -1,0 +1,10 @@
+# Tailscale CT203 (10.60.60.10) egress source-port preservation — 2026-07-06 (待辦 解DERP)
+# Pairs with WAN DNAT 41642->10.60.60.10:41642 to form a static 1:1 / EIM mapping so
+# tailscaled STUN-advertised endpoint = <wan-ip>:41642 (matches the DNAT), letting the
+# CGNAT phone (006-s24ultra) direct-connect instead of DERP "hkg" relay.
+# Appended into fw4 srcnat_wan; lands BEFORE blanket masquerade (verified handle order).
+# masquerade (not snat) => auto-tracks PPPoE public-IP drift; only pins the source PORT.
+# Rollback: rm /etc/nftables.d/30-ct203-tsport.nft && fw4 reload
+chain srcnat_wan {
+    ip saddr 10.60.60.10 udp sport 41642 counter masquerade to :41642 comment "ts-ct203-portpreserve"
+}

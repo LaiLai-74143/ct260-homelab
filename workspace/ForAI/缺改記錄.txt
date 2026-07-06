@@ -1571,3 +1571,68 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 已停（實測 tailscaled inactive+disabled）：101-ct260-codex-ops、005-24bay-pve；003-nas(DXP) tailnet offline 16h（docker 容器停）。
 - client：004-pc、006-s24ultra、007-laptap。建議：Tailscale console 刪 003/005/101 死節點防 IP 回收（CT203 ctdmz
   owned set 已 8→5 排除，無安全曝險）。
+
+### 待辦18 Navidrome 音樂串流上線（CT270；host cifs+bind mp、A2 gate 豁免；2026-07-06）
+- 目標：Subsonic 相容音樂串流。使用者三裁決：NAS SMB(10G 唯讀 bind) → CT270 → A2(Navidrome 自身登入 +
+  CT203 gate 對 20.70:4533 豁免，手機 Subsonic app 免每日重驗)。
+- ★ 偏離原文 a（實作面）：原文「SMB fstab 掛在 CT270」不可行——CT270=unprivileged LXC 無法自行 mount cifs。
+  改：pve24 host cifs //192.168.100.2/Music(帳號 Survice 唯讀) → /mnt/music-nas(fstab ro,_netdev,nofail,
+  uid=100000,gid=100000,file_mode=0444,dir_mode=0555,vers=3.1.1；憑證 /root/.smb-navidrome.cred 600)
+  → CT270 LXC bind mp0 /music(ro,backup=0) → 容器 ro bind。走 VLAN100 無防火牆 L2 島＝免開 servers→storage 放行。
+  uid=100000＝CT270(unprivileged) root；file/dir_mode 世界可讀＝容器內任何 uid 皆可讀。套 mp 需一次性 pct reboot 270。
+- 服務：/opt/navidrome compose = ghcr.io/navidrome/navidrome:0.62.0(單容器內嵌 SQLite)。★ 影像走 ghcr 非
+  deluan/*(docker.io)——CT202 squid 白名單現只開 ghcr(docker.io 於待辦15 拉 redis 後復關)。env 全設(無密入庫)：
+  ND_MUSICFOLDER=/music、ND_DATAFOLDER=/data、ND_ENABLEINSIGHTS=false、ND_SCANSCHEDULE="0 3 * * *"、TZ=Asia/Taipei。
+- 存取 A2(不經 Authelia，靠 Navidrome 自身帳密/token)：
+  · PC40：openwrt Allow-PC40-To-CT270-Navidrome(trusted 192.168.40.4→20.70 tcp/4533，@rule[142]，fw4 live)。
+  · 手機 Tailscale：CT203 /etc/nftables.d/ctdmz.nft forward 加「iifname tailscale0 ip daddr 192.168.20.70
+    tcp dport 4533 accept」豁免(比照 Jellyfin 30.3:8096；destination-based，不受 ts_authed_v4 當日失效影響)。
+    CT203→servers 由既有 TSGate allowlist 放行、masq 源 10.60.60.10。套用=整檔 pct push + systemctl restart
+    ctdmz-nft.service(清 ts_authed_v4，需重驗其餘)。SoT=CT260 ~/.config/homelab/authelia/ctdmz.nft(已同步 59 行)。
+- DNS：music.home.arpa→192.168.20.70(openwrt hosts.home.arpa dnsmasq addnhosts + homelab-dns-push-to-24pve；
+  三解析器 openwrt-5353/-53/24bay-53 皆 OK，46 名 0 失敗)。
+- 監控/備份：CT270 promtail(docker_sd) 自動收 navidrome 容器日誌→Loki；vzdump 已含 CT270(待辦13)，
+  /music mp=backup=0(不備 NAS)、navidrome_data named volume 在 rootfs→涵蓋。Kuma /ping 探活待 UI。
+- 執行分工(codex-admin pve24 sudo 僅 pct/qm/pvesh/pvesm，無 host mount 權)：openwrt 端(DNS+防火牆)Agent 以
+  openwrt root 代跑；pve24 端(host cifs 掛載+fstab)使用者以 root 跑 finish-18.sh；gate 豁免(因 pull 失敗中止後)
+  Agent 以 pct push/exec 補套(drift guard 57 行基準 + nft -c 驗證 + before-todo18 備份)。
+- ★ 踩坑：首次 docker compose pull 撞 ghcr TLS handshake timeout(19s)——暫時性，重試即過(診斷 ct202→ghcr
+  直連 405/0.27s、ct270→squid→ghcr 405/0.30s 皆正常，故非白名單/路徑問題)。
+- 落地驗證(2026-07-06)：navidrome 容器 Up、curl /ping=200；/mnt/music-nas mountpoint OK；nft forward 鏈
+  8096+4533 兩豁免 live；DNS 三解析器 OK；PC40 規則 fw4 live。
+- ★ 上線後排錯(2026-07-06 晚，使用者手機連不上)：連續兩坑——
+  (1) 手機 Symfonium 報「無法列出此資料夾的內容」＝**音樂庫空**。gate 4533 計數器 2455→2601 證流量有到、
+      /rest/ping.view(匿名探測)回 error 10 屬正常；根因是 Navidrome DB 無歌(使用者放歌前已建 admin Gong8504)。
+      使用者放 30 首(宇多田/EOE OST FLAC)後，watcher 因 **cifs 無 inotify** 未觸發→需手動掃。docker restart→
+      initial scan tracksImported=30 入庫，Symfonium 即可列出。
+  (2) 週期掃描設定坑：ND_SCANSCHEDULE="0 3 * * *" 被 0.62 靜默忽略(印 Periodic scan DISABLED)——該 cron 鍵已移除；
+      改 ND_SCANINTERVAL(--help 唯一掃描旗標)亦仍 DISABLED(watcher 取代/quirk)。結論：cifs 上自動掃描只能靠外部
+      cron 跑 `docker exec navidrome navidrome scan`(no-auth 一次性，實測 OK)。cron 佈署被分類器擋(未授權持久化)→
+      交使用者啟用(navidrome-scan.cron)；否則 UI「立即掃描」或重啟容器。
+  另註：ND_SCANSCHEDULE(每日03:00)承諾作廢，改上述機制。fstab 改動後 pve24 待 systemctl daemon-reload
+  (掛載已 active、重啟自讀 fstab，屬清潔)。d 手機 app(Subsonic http://20.70:4533，帳號 Gong8504) / e Kuma 待 UI。
+- 源檔/回滾：CT260 ~/workspace/navidrome/{docker-compose.yml, ctdmz.nft, finish-18.sh, finish-18-openwrt.sh,
+  README.md}(git-ignored 不入庫；pull 後已把腳本 SMB_PASS 清回 CHANGE_ME)。回滾備份：pve24
+  /etc/fstab.before-todo18-*、CT203 ctdmz.nft.before-todo18、openwrt firewall/hosts.home.arpa .before-todo18-*。
+
+### DMZ 閘門 fail-open 守護監控（ctdmz_gate_up，2026-07-06）
+- 觸發分析：使用者質疑「是否只有過 Authelia，OpenWrt 才為 DMZ 放行轉發」。實機唯讀查證結論＝否：OpenWrt 對 10.60.60.10
+  是「靜態 proto-all 常開」（fw4 forward_dmz 8 條 TSGate 只匹配 ip saddr 10.60.60.10 即 jump accept、無驗證條件、計數已跑 1763+），
+  tailnet→內網唯一把關全在 CT203 nft table inet ctdmz 的 forward 鏈。此設計必然性：Tailscale snat-subnet-routes 於 CT203
+  即把來源 masq 成 10.60.60.10，OpenWrt 看不到原始 tailnet peer，無法按 peer 驗證放行→閘門只能設在 masq 前的 CT203。
+- 兩殘餘弱點：(W1 fail-open) forward policy=accept 且 deny 綁 iifname tailscale0；ctdmz-nft.service 未載成功=整表消失→
+  內核預設 forward + ip_forward=1 全放行、OpenWrt proto-all 無後手→未驗證直穿內網（通行證集重載清空是 fail-closed，整表載入失敗才 fail-open）。
+  (W2) ctdmz 只有 forward/prenat/input、無 output 鏈，CT203 主機自身 outbound（Caddy/cloudflared/authelia/ts-gate）不受閘門管制、
+  OpenWrt 又 proto-all→CT203 被打穿即有 proto-all 橫移 8 內段能力（安全模型＝完全信任 CT203）。
+- 變更（純新增，對現役零影響；補 W1 監控守護）：
+  · CT203：node_exporter drop-in /etc/systemd/system/node_exporter.service.d/textfile.conf 開 textfile collector
+    （/var/lib/node_exporter/textfile_collector）；/usr/local/bin/ctdmz-gate-metrics + ctdmz-gate-metrics.{service,timer}（每 30s）
+    唯讀探 ctdmz nft 產 ctdmz_gate_up / ctdmz_jellyfin_exemption_pinned / ctdmz_{nft,tsgate}_service_active / ctdmz_authed_v4_entries，隨 :9100 出。
+  · CT201：/opt/monitoring/rules/ctdmz-gate.yml 4 條（CtdmzGateDown crit+ai_analyze、CtdmzGateMetricMissing warn+ai、
+    CtdmzGateMetricStale warn、CtdmzJellyfinExemptionDrift warn+ai）；promtool 通過、reload ok、健康態全靜默。
+- 對抗驗證：合成 nft dump 餵偵測邏輯——table 消失／deny 兜底被刪／只剩1條／authed 引用消失 皆正確翻 gate_up=0；豁免改址翻 jelly=0。
+  Prometheus 實測 scrape 到 ctdmz_gate_up=1；node_textfile_mtime 選擇器（原誤用 basename，已修為 file=~".*ctdmz_gate.prom"）選到序列；absent 現空。
+- 源檔/回滾：SoT CT260 ~/workspace/ct-dmz-proxy/gate-monitoring/。快照 pct snapshot 203 pre-gate-metrics。
+  回滾＝CT203 rm drop-in+units+script + daemon-reload + restart node_exporter；CT201 rm ctdmz-gate.yml + hl-reload prometheus。
+- ★ 順帶記錄（非本次改，session 中並發觀察）：待辦18 已把 ctdmz 媒體豁免由「Jellyfin 30.3:8096 唯一」擴為「＋Navidrome 20.70:4533」
+  （實機 live，Jellyfin 註解同步改「媒體豁免」）；拓樸 §4.8 line「唯一免驗證豁免」措辭待待辦18 收尾同步。gate 監控不受影響（deny 兜底仍在、gate_up=1）。

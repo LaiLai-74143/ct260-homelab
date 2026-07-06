@@ -30,6 +30,13 @@ limits_config:
   retention_period: 720h
   reject_old_samples: true
   reject_old_samples_max_age: 168h
+  # 2026-07-05 蜜罐加固④:攻擊爆量=cowrie log 爆量,rootfs 僅 21G(與 Prometheus 同盤)
+  # per-stream 512KB/s:合法尖峰數十KB/s,但 promtail 長斷線後追送需要餘裕(實測 256KB 會丟追送);
+  # 無損限流靠各 promtail readline_rate(block 不丟);tenant 2MB/s 為總 backstop
+  per_stream_rate_limit: 512KB
+  per_stream_rate_limit_burst: 2MB
+  ingestion_rate_mb: 2
+  ingestion_burst_size_mb: 4
 
 compactor:
   working_directory: /loki/compactor
