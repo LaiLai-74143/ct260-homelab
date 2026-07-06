@@ -1381,3 +1381,193 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 回滾：還原 docker-compose.yml.before-20260705-todo15c＋ocr/app.py.before-20260705-todo15c＋
   scripts/pre-consume-ocr.sh.before-20260705-todo15c、刪 scripts/post-consume-ocr.sh、
   docker compose build ocr && up -d ocr webserver。
+
+### 待辦⑯ OpenWrt 內網 22 埠絆線（2026-07-05 全鏈完成）
+實作（比照 portscan-autoban 自建 nft table 模式，零 uci/fw4 變更）：
+  OpenWrt 新檔 /usr/bin/ssh22-tripwire + /etc/init.d/ssh22-tripwire（S99 oneshot，enable）；
+  table inet ssh22tripwire，chain input（hook input priority -100，先於 fw4 zone 規則），
+  daddr = 11 個 VLAN gateway IP（路由器 ip -4 addr 實測），tcp/22 ct state new →
+  規則1 log "SSH22-TRIPWIRE "（limit 60/min burst 20）＋ 規則2 update @hits_v4 + counter + drop。
+  前置實測：dropbear 三實例只聽 52438（.10.1/.40.1/.31.1），22 埠內部零 listener＝零誤殺面。
+  metrics＝擴充既有 /usr/bin/portscan-autoban-metrics（9105 metrics.txt 同 job 免新 target）：
+  openwrt_ssh22_tripwire_total{src} / _packets_total / _active 三指標。
+  告警＝security.yml：SSH22TripwireHit（critical + ai_analyze）＋ SSH22TripwireInactive（warning，守護）。
+★ 偏離原文四處（均記拓樸 §4.5.1）：
+  1) per-src 計數用 nft 動態集（flags dynamic; counter）取代 logread 解析——ring buffer 輪轉會讓
+     計數回退、increase() 誤判；nft 計數單調到重開機。log prefix 保留（Loki/取證）。
+  2) log 拆獨立規則加限速（防 log 洪水灌 logd/Loki）；drop 規則無限速。
+  3) 告警 expr 用聚合 _packets_total 非 per-src series——新 series 首現只有單一樣本，
+     increase() 永遠算不出 >0，首敲會漏告警（經典坑）。
+  4) 測試來源用 CT260/ct201/ct100/ct270（原文 PC40——agent 無法在 PC40 執行）。
+驗證：全鏈實測 nc→drop（exit 124）→ nft per-src 計數 → 9105（60s 週期）→ Prometheus FIRING
+  → TG 實收（🔴+⚡Tier1）；Loki {job="syslog"} SSH22-TRIPWIRE 行 host=openwrt SRC 完整可查。
+  插曲1：Tier2 deep-immediate 首發撞 Telegram API Connection reset（暫時性）——notifier fail-safe
+  記 log 不中斷，持續 firing 過 5m 門檻自動補送 🔬（實收）＝順帶驗證重試路徑。
+  插曲2：DeepSeek Tier2 根因誤讀——推測「dropbear 跑在 22、CT260 監控 SSH 連線被計數、建議加白名單」；
+  實際 dropbear 只聽 52438、觸發源是刻意測試敲擊、無白名單是設計。AI 分流當線索勿當結論。
+對抗驗證（獨立子代理）：8 項全 PASS 零功能缺陷；另外從 ct201/ct100/ct270 三節點三 VLAN 實敲全
+  drop、per-src 對齊（17 packets 總帳吻合）、誤殺回歸過（52438/DNS/9105/portscanban/cowriequarantine 均正常）。
+  缺口清單：IPv6 盲區（中，v6 橫掃不觸發→併待辦17）；無 disarm 告警（中→已當場補 SSH22TripwireInactive）；
+  WAN IP/tailscale IP 不在 daddr（低，接受）；restart flush chain 計數不清 hits_v4（極低，increase 免疫）；
+  hits_v4 無 timeout 偽造源可洗 65535 條目（極低，內網接受）；udp/22 不在範圍（極低，接受）。
+可選擴充未做（原文標可選）：LuCI 80/443 絆線、非白名單來源敲 52438 計數。
+回滾：/etc/init.d/ssh22-tripwire disable && /usr/bin/ssh22-tripwire stop（刪 table）→ 刪兩檔；
+  /usr/bin/portscan-autoban-metrics.before-20260705-todo16 還原 + init.d restart；
+  CT201 /opt/monitoring/rules/security.yml.before-20260705-todo16 還原 + hl-reload prometheus。
+
+### 蜜罐資源耗盡加固（2026-07-05 深夜完成；使用者提問「大量攻擊會耗盡資源嗎」＋外部 AI 建議清單逐條落地）
+
+背景：07-05 早 VM300 userland 卡死（CPU 1%→100%、exporter/agent 全死）示範了 VM 內耗盡真會發生；
+  使用者晚間 qm stop 後重開（未回滾 snapshot，屬使用者裁決）。外部 AI（Fable5 另席）提五條建議，
+  逐條評審：①VM 硬上限=前提不成立（cores=1/mem=4096/balloon=512 本就設好，KVM guest OOM 出不了 VM）；
+  ②③④⑤ 有效採納。實作即本條。
+
+② cowrie LimitNOFILE=4096（VM300 systemd override /etc/systemd/system/cowrie.service.d/override.conf）：
+  原 soft 1024/hard 524288 → 4096/4096。fd 耗盡=拒新連線而非拖垮 VM（方向與 cowrie 官方「調高」相反，刻意）。
+③ OpenWrt honeypot-ratelimit（新檔 /usr/bin/honeypot-ratelimit + init.d S99；詳拓樸 §4.5.2）：
+  WAN→蜜罐 tcp/22,23 SYN 削峰。table inet honeypotratelimit，chain preraw hook prerouting priority -295
+  （conntrack -200 之前→超量 SYN 不建 conntrack entry，順帶護 conntrack 表 max 262144）。
+  per-src 30/min burst 10（dynamic set timeout 2m，集滿 fail-open）＋ aggregate 600/min burst 200 backstop。
+  ★ 技術點：conntrack 前 ct state 不可用→改 tcp flags & (syn|ack) == syn；
+  ★ 語法先驗：scratch table + ping 127.0.0.9 實測 update @set { ip saddr limit rate over } 語意（過 burst 即 drop）再上正式。
+  背景：cowrie-quarantine 刻意放行被隔離 IP 的 22/23（保持互動）→ 蜜罐承受量原只受 cowrie 自身限制。
+  metrics 隨 9105（腳本擴充，備份 .before-20260705-hpratelimit）：_active + _dropped_packets_total{scope}。
+  刻意無告警：hardening 非 tripwire，drop>0=正常削峰。
+④a Loki 攝取限流（CT201 loki-config.yml limits_config）：per_stream_rate_limit 512KB/burst 2MB +
+  ingestion_rate_mb 2/burst 4。★ 插曲（教訓）：初設 256KB 上線即撞 VM300 開機追送——16h 積壓瞬間超率，
+  7464 samples 429 丟棄=Loki 永久缺洞（promtail 重試 10 次後棄送、positions 前進；本地檔案仍在）。
+  修正：Loki 放寬 512KB 當後盾＋無損限流移到 promtail 端——VM300 /etc/promtail/config.yml 加
+  limits_config readline_rate 1000/s burst 2000 drop=false（純背壓慢讀不丟行）。改後零 discard 實測。
+  順帶發現 line_too_long×1（單行 >256KB 預設上限，蜜罐 payload 特性，接受）。
+④b cowrie 下載/日誌封頂（VM300）：cowrie.cfg download_limit_size 取消註解=10MB（原=無上限，
+  攻擊者可反覆 wget 灌盤）；/etc/logrotate.d/cowrie（既有 daily rotate30）補 maxsize 200M；
+  新 cowrie-prune.timer 每日清 downloads/tty >14d（json 遠端 Loki 留 30d，本地舊檔冗餘）。
+⑤ cowrie var 獨立小卷：qm set 300 --scsi1 HDD-0:8（8G，熱插拔）→ mkfs.ext4 LABEL=cowrie-var →
+  停 cowrie 搬 var（cp -a 權限保留）→ fstab LABEL 掛載（nofail+device-timeout=10，掛不上也能開機）。
+  log/樣本寫爆只爆 8G 小卷不碰根盤。舊 var 留 var.pre-volume-20260705 供回滾。
+  註：scsi1 不在既有 snapshot a2026_0627_2308 內，回滾該快照會退掛載設定（碟檔仍在）。
+
+驗證：nofile 4096 生效（/proc/PID/limits）；cowrie banner 實測（127.0.0.1:2222 回 SSH-2.0-OpenSSH_9.2p1）
+  且 session 記進新卷 cowrie.json；ratelimit 上線數分鐘即收錄真實來源（220.162.123.26）且 drop=0
+  =零誤殺（該源無 cowrie session=SYN 半開掃描，正常）；Prometheus 三新指標入庫（active=1）；
+  Loki ready、零 per-stream discard、{job="cowrie"} 積壓無損追送中；targets 21/22 up
+  （唯 dxp4800-node 既有事件）。VM300 重開後 PveGuestUnexpectedStop/TargetDown 均自動 resolve。
+評估數字（提問的直接答案，2026-07-05 實測）：conntrack 262144 用 2399（<1%）；HDD-0 池 2%（餘 445G，
+  qcow2 上限 64G 填爆波及不到鄰居）；CT201 rootfs 21G 餘 11.7G=觀測面最薄一環（本次 ④a 主因）；
+  cowrie_quarantine per-IP series 816×2（萬 IP 分散式攻擊≈+2 萬 series 可承受，Spike 告警先響）。
+回滾：③ init.d disable+stop 刪兩檔+metrics 腳本還原；④a loki-config.yml.before-20260705-hplimits
+  + docker restart loki；VM300 promtail config .before-20260705-hplimits + restart；
+  ②④b 刪 override/prune 單元＋cowrie.cfg 註解回去＋logrotate 刪 maxsize 行；
+  ⑤ 停 cowrie → umount var → mv var.pre-volume-20260705 回 var → 刪 fstab 行 → qm set 300 --delete scsi1。
+
+## 2026-07-06
+
+### Tailscale CT203 直連補完（解 DERP 的出站半，待辦 41642）
+- 現況入口：先前 session 已加 WAN DNAT 41642→10.60.60.10:41642（redirect cfgd63837，src=wan/dest=dmz/
+  reflection=0）並設 CT203 /etc/default/tailscaled PORT="41642"，但 CT203↔手機(006-s24ultra) 仍走 relay "hkg"。
+- 根因（netcheck+conntrack 抓到）：DNAT 只是入站半。CT203 從 :41642 出站時，OpenWrt 通用 masquerade 把來源埠
+  改成隨機（實測 STUN 宣告 125.228.123.224:52036，非 :41642）→ 對端永遠不會打我們 forward 的 :41642
+  （DNAT 命中 0）→ 卡 DERP。NAT 本身是 EIM（MappingVariesByDestIP=false），缺的是「出站保留來源埠」。
+- 修法：/etc/nftables.d/30-ct203-tsport.nft 追加進 fw4 srcnat_wan：
+  `ip saddr 10.60.60.10 udp sport 41642 masquerade to :41642`（用 masquerade 而非 snat→自動吃 PPPoE 公網 IP
+  漂移，只釘來源埠）。fw4 include 於通用 masq 之前生效（實測 handle 46724 < 47088，仿 99-skip-masq-lan.nft）。
+  套用前 `fw4 print | nft -c -f -` 全集驗證 OK 才 fw4 reload。
+- 驗證（伺服端齊備）：conntrack 實測 CT203:41642→STUN(:3478) 回程 dport=41642（保留成功）；rule counter 持續跳；
+  forward_wan `ct status dnat accept` 放行入站。★ 手機仍 relay＝Android 背景 doze 不主動探測（DNAT 命中仍 0＝
+  手機未主動打 :41642，只被動回 CT203 出站）；手機前台活躍後才會轉直連——非設定問題，屬手機端行為。
+- 回滾：rm /etc/nftables.d/30-ct203-tsport.nft && fw4 reload（DNAT 與固定埠可留）。
+- 複驗（2026-07-06 使用者回報手機 ping 三節點全 DERP）：tailscale debug netmap 抓到手機(006-s24ultra)
+  Endpoints=None——手機在 control plane 一個端點都沒上報（v4/v6 皆無），對照 OpenWrt/RouterPVE（皆 online）
+  都正常上報一長串 v4/v6 端點。★ 定案根因＝手機 tailscaled 沒在做端點探測（Samsung One UI 深度睡眠/省電停背景），
+  沒端點＝任何節點都無法對它打洞→對全部 peer 強制 DERP（連端點最理想、自帶公網 IP 的 OpenWrt 亦然）。故與
+  CT203 埠轉發、與 v6 移除皆無關（CT203 端 EIM+DNAT+出站埠保留已滿分、srcnat counter 持續跳）。
+  解法純手機端：Tailscale app 開前台 + 該 app 電池設「無限制(Unrestricted)」+ 從「深度睡眠/睡眠 App」移除；
+  之後 tailscale ping --until-direct 100.100.1.6 應翻 via 125.228.123.224:41642，OpenWrt 41642 DNAT counter 開始跳。
+- 潛在張力（唯有手機開始上報端點後才判定）：若屆時手機端點為 IPv6-only 行動網（464XLAT），v4 直連仍不成；
+  但 v6 已按政策移除，CT203 無 v6 端點＝phone↔CT203 只能 relay，phone↔OpenWrt（仍有 v6 端點）反而可能直連。
+  若確認手機端點確為 v6-only 且要 phone↔CT203 直連，才需重議是否給 CT203 v6（會與待辦17 v6 收斂衝突，屬取捨）。
+
+### IPv6 全收斂移除（待辦17，以「移除」代「加 v6 防火牆」）
+- VLAN20 servers：裝置端 uci 已無 ip6assign / dhcp.servers ra/dhcpv6（實況早於本次即已撤，文件 §4.7/§2.3/§1.1
+  過時，本次一併同步）；eth1.20 僅剩 fe80。
+- OpenWrt wan6（dhcpv6 IA_NA+PD）：`ifdown wan6` 釋放 GUA(2001:b011:5c11:6fd7:…)+PD → `uci delete network.wan6`
+  → commit → `/etc/init.d/network reload`。pppoe-wan 事後僅剩 link-local，PD 不再委派，公網 v4 IP 未變
+  （125.228.123.224，無重撥）。
+- ★ 刻意不設 network.wan.ipv6='0'：使用者原批准 '0'，但 '0' 會重談 IPv6CP→PPPoE 重撥→公網 IP 漂移→打斷剛補的
+  Tailscale 41642 端點 + §4.3 hairpin（硬寫公網 IP）。保留 '1' 只剩閒置 IPv6CP（無位址/GUA/PD），安全與收斂
+  效果等同，故不重撥（已向使用者說明此偏離）。
+- 效益：消除 router WAN GUA → 從根補上 ssh22-tripwire 的 v6 偵測盲區（§4.5.1/待辦17 追加）；v6 出站控管問題消解。
+- 回滾：/etc/config/network.before-v6-full-removal-20260706。
+
+### OpenWrt v6 GUA 復原（換回 phone↔OpenWrt v6 直連；部分回退上條，2026-07-06 晚，使用者測試後裁定）
+- 觸發：使用者複測手機 ping 三節點仍全 DERP。逐層抓死：①手機雙棧＝公網 v4 42.73.226.230 + v6 2001:b400:e356:7a50:…
+  ②手機 v4 不在 banned_ipv4/quarantined_ipv4（autoban 排除；drop 掛 chain preraw、在 DNAT 之前，故若被 ban 會使
+  DNAT counter＝0——但兩 set 當下皆空）③CT203 端 EIM＋DNAT 41642＋出站埠保留全滿分、srcnat counter 持續跳，
+  但 DNAT 入站 counter 恆 0（手機從不對 :41642 送 v4 探測）。
+- ★ 定案根因：此手機只做 v6 直連、不做 v4 直連（行動網 v4 為硬 NAT，打洞不成；magicsock 可用端點是 v6）。
+  先前從 CT203 看 netmap 手機 Endpoints＝None，是「CT203 無 v6、從未學到手機 v6 端點」的視角假象，非手機真的沒上報。
+  → CT203 從頭到尾 relay 正因它無 v6（原始待辦「DMZ 走中繼」即此）；待辦17 移除 OpenWrt v6 時，一併打斷了
+  phone↔OpenWrt 本就存在的 v6 直連（使用者「OpenWrt 有 v6 時能直連」的觀察正確）。41642 v4 補洞對此手機無效。
+- 修法（僅復原 OpenWrt 自身 GUA、不對任何 VLAN 分發，使用者裁定「只 OpenWrt」）：
+  `uci set network.wan6=interface；device='@wan'；proto='dhcpv6'` → commit → `/etc/init.d/network reload`。
+  無任何介面設 ip6assign → PD 收下但無消費者、原地擱置；`ip -6 addr` 證實 global v6 只在 pppoe-wan
+  （GUA 2001:b011:5c11:6fd7:5ac:…/64），br-lan/eth1.x 全無 → 零 VLAN 分發。公網 v4 仍 125.228.123.224（reload 非重撥）。
+- 驗證：OpenWrt netcheck IPv6:yes [2001:b011:…]:44133、EIM；netmap 宣告活 v6 端點 [..]:41641；
+  OpenWrt `tailscale ping --until-direct 100.100.1.6` → `via [2001:b400:e356:7a50:3d63:5f33:1021:f16]:57476 33ms`；
+  status 持有 `active; direct [2001:b400:…]:57476`。phone↔OpenWrt v6 直連成立（33ms vs DERP ~90–150ms）。
+- 現況：phone↔OpenWrt＝direct(v6)；phone↔CT203 / phone↔RouterPVE 仍 relay（兩者無 v6，依「只 OpenWrt」範圍未動）。
+- 安全：wan zone input 仍預設 DROP v6、只放行標準 ICMPv6（echo/ND/MLD）→ router GUA 僅可被 ping，22/SSH 與一切 TCP
+  的 v6 inbound 均不可達（無 allow 規則）；tailscale 41641 僅靠 established 打洞、無冷啟暴露 → ssh22-tripwire
+  「v6 敲 22」盲區實際仍關閉。與「全移除」差異僅：router 回 v6 ping + tailscale 走 v6。
+- 回滾：`ifdown wan6; uci delete network.wan6; uci commit network; /etc/init.d/network reload`（回無 v6）。
+  備份：/etc/config/network.before-v6-readd-20260706（復原前）、.before-v6-full-removal-20260706（移除前原始）。
+
+### DMZ v6 GUA 上線（phone↔CT203 v6 直連；ND 防火牆 + vmbr0 snooping + CT203 主機守衛，2026-07-06 晚，使用者裁定「分發 v6 給 DMZ」）
+- 觸發/決策：承上「OpenWrt v6 GUA 復原」；使用者續判「分發 IPv6 給 DMZ，我需要這個直連（訪問內網要經 DMZ 轉發）」。
+  先討論速度/安全取捨後拍板：(1a) established-only、零冷 inbound v6；(2) 補 CT203 主機 v6 防火牆；(3) v6 ping 保留。
+- 設計核心＝v6 GUA 只當 tailscale 傳輸端點：CT203 是 L7 Caddy + v4 subnet-router，連內網目標全走 v4、動態閘門 v4-only；
+  故 v6 只當 tailscale 外層端點，隧道內/subnet-route/閘門維持 v4 不變 → dmz→internal 的 v6 可全 drop、對內網存取零影響。
+  加速面：phone↔CT203 這一跳由 DERP relay 換成 v6 direct，因所有內網存取都經 CT203，是全面性降延遲。
+- 變更（5 項，皆持久化）：
+  1) OpenWrt network.dmz：delegate='1' + ip6assign='64' → DMZ（VLAN60，eth1.60）消費單一 HiNet /64 PD
+     2001:b011:5c10:9fbc::/64（router 端 eth1.60 得 ::1/64）。單一 /64 → 只此一 VLAN 能有 GUA（符合「只 DMZ」）。
+  2) OpenWrt dhcp.dmz：ra='server' ra_slaac='1' ra_flags='none' ra_default='1'（SLAAC-only RA server；發 default v6 gw 供 CT203 egress）。
+  3) OpenWrt firewall 加 rule 'Allow-DMZ-ICMPv6'（src='dmz' family='ipv6' proto='icmp'，ND+echo+PMTU 型，ACCEPT）
+     ——★ 本次最大坑：此硬化設定把標準 fw4 的 ICMPv6 放行只留在 wan 區，dmz 區 input 全是 v4 規則後直接 reject_from_dmz
+     → CT203 的 RS/NS 被擋 → OpenWrt 不回 solicited RA、閘道 NDP 恆 FAILED → v6 完全不通、連 SLAAC 都觸發不了。
+     補此規則後 SLAAC 自動成址 + 閘道 REACHABLE + egress 通。★戒律：此 OpenWrt 任何「內部 zone」要用 v6，都須配 Allow-<zone>-ICMPv6。
+  4) pve24 vmbr0：multicast_snooping=0（/sys live + /etc/network/interfaces 'bridge-mcsnoop 0' 持久化，使用者以 root 執行）
+     ——★ 次大坑：vmbr0 snoop=1/querier=0 把 RA multicast（ff02::1）剪掉送不到 CT203；v4 靠 broadcast 不受影響故一直沒發現。
+  5) CT203：net.ipv6.conf.{default,eth0}.accept_ra=2（/etc/sysctl.d/60-dmz-v6-slaac.conf）——★第三坑：CT203 forwarding=1（subnet-router），
+     accept_ra 須=2 才吃 RA。→ SLAAC GUA 2001:b011:5c10:9fbc:be24:11ff:fe4c:db63/64（proto kernel_ra，dynamic，抗漂移）。
+     主機 v6 守衛：nft table inet ct203v6guard（/etc/nftables.d/ct203-v6guard.nft + ct203-v6guard-nft.service，開機載入）：
+     eth0 inbound v6 除 established/related + ICMPv6 外全 drop（v4/tailscale0/lo/docker0 不動）。
+- ★ 不動 wan 防火牆＝established-only 成立的關鍵：fw4 chain forward 開頭 `ct state {established,related} accept` 不分 family
+  → CT203 由自身 outbound 打洞產生的 established v6 回程，edge 全域放行，零改 wan；wan input/forward 對 v6 仍 DROP、
+  無 wan→dmz 轉發、無 v6 DNAT（含 tailscale 41642 那條 redirect family='ipv4'）→ 冷 inbound v6 進不來。
+- 驗證（獨立子代理對抗式，3 視角全 holds）：
+  · 暴露面：OpenWrt on-link 打 CT203 GUA 的 22/80/443/8082/9100/9959/41642 全 timeout，ct203v6guard drop counter 同步跳（10→25→39）；
+    UDP 41642 冷 inbound 被守衛 drop(+3)、而 tailscale ts-input 的 udp/41642 accept counter 不動(+0)＝守衛 terminal drop 勝出。
+  · 回歸：公網 v4 仍 125.228.123.224（session up 6.2d、無重撥）、subnet-router 廣播全在、ctdmz 閘門獨立且活（ts_authed_v4 有效）、
+    Caddy/Authelia SSO 200、內網 v4 可達、node_exporter 200；ct203v6guard 證實 input+eth0+ipv6-only，不碰 v4/forward。
+  · 持久化/漂移：5 項全落 durable config、無任何規則寫死前綴、GUA 為 kernel_ra dynamic → 重開機/PPPoE 重撥皆自動重建同姿態。
+  · tailscale netcheck IPv6:yes [2001:b011:5c10:9fbc:be24:11ff:fe4c:db63]:xxxxx。手機在家 Wi-Fi 時走本地直連（192.168.50.x）；
+    人在外面用蜂巢 v6 才驗得到 phone↔CT203 v6 direct（伺服端必要條件已足；等使用者外出實測）。
+- 殘留（非缺陷）：
+  · CT203 GUA 現可被網際網路 ICMPv6 echo ping（依決策#3 保留 v6 ping；echo 非 PMTUD 必需，若要隱身可從 wan→dmz forward 移除
+    echo-request、保留 packet-too-big/dest-unreachable）。
+  · RA 路徑跨兩台實體主機：OpenWrt＝VM101 在 RouterPVE（net1 trunk 含 VID60 在 RouterPVE vmbr0）→ trunk → pve24 vmbr0 → CT203。
+    RouterPVE 各橋亦 snoop=1/querier=0，但其 port mcast_flood=on + uplink mcast_router=1 → RA flood 到 trunk 穩健，毋須改 RouterPVE（已驗）。
+- 回滾：
+  · OpenWrt：`uci del network.dmz.ip6assign; uci set network.dmz.delegate='0'`；dhcp.dmz 還原 ignore='1'（移除 ra*）；
+    刪 Allow-DMZ-ICMPv6 rule；commit；`/etc/init.d/network reload && /etc/init.d/firewall reload`。
+    備份 network.before-20260706-dmzv6、dhcp.before-20260706-dmzv6、firewall.before-20260706-dmzv6。
+  · pve24：`echo 1 > /sys/class/net/vmbr0/bridge/multicast_snooping` + 移除 interfaces 的 'bridge-mcsnoop 0'。
+  · CT203：`systemctl disable --now ct203-v6guard-nft.service; rm /etc/nftables.d/ct203-v6guard.nft /etc/sysctl.d/60-dmz-v6-slaac.conf`。
+
+### Tailscale 服務端節點收斂（確認態）
+- 保留服務端三節點且 online：001-openwrt(100.100.1.1，DNS+救援)、002-ct203-dmz-proxy(100.100.1.2，唯一
+  subnet-router)、002-router-pve(100.100.1.0，break-glass)。
+- 已停（實測 tailscaled inactive+disabled）：101-ct260-codex-ops、005-24bay-pve；003-nas(DXP) tailnet offline 16h（docker 容器停）。
+- client：004-pc、006-s24ultra、007-laptap。建議：Tailscale console 刪 003/005/101 死節點防 IP 回收（CT203 ctdmz
+  owned set 已 8→5 排除，無安全曝險）。

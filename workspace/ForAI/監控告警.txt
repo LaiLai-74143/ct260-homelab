@@ -94,7 +94,7 @@ Kuma：monitor id 17「CT202 fwdproxy」type=port 10.80.80.10:3128（通知綁 T
 
 ---
 
-## 3. 告警規則現況（CT201 /opt/monitoring/rules/，共 ~21 條）
+## 3. 告警規則現況（CT201 /opt/monitoring/rules/，共 30 條）
 
 ```text
 alerts.yml   （核心）Watchdog（vector(1) 心跳）、PrometheusConfigReloadFailed、
@@ -114,7 +114,16 @@ services.yml （service_up + staleness）
 
 security.yml （防火牆/蜜罐）
              PortscanBanListEmpty(banned_ips==0，絕對值避開每日 reset 誤報)、
-             PortscanBanSpike(delta>80/10m)、CowrieQuarantineSpike(delta>30/10m)
+             PortscanBanSpike(delta>80/10m)、CowrieQuarantineSpike(delta>30/10m)、
+             SSH22TripwireHit(increase(openwrt_ssh22_tripwire_packets_total[5m])>0，critical，
+               ai_analyze=true 首發即 Tier2——內網 22 死埠絆線，見拓樸 §4.5.1；
+               告警用聚合 counter 非 per-src series（新 series 首現 increase() 不觸發的坑）；
+               無白名單，內網掃描稽核前先 amtool silence)、
+             SSH22TripwireInactive(openwrt_ssh22_tripwire_active!=1 for 10m，warning——絆線靜默失效守護)
+             （蜜罐加固③ 2026-07-05 新指標隨 9105 同 endpoint：openwrt_honeypot_ratelimit_active gauge +
+               openwrt_honeypot_ratelimit_dropped_packets_total{scope=per_src|aggregate} counter，
+               WAN→蜜罐 SYN 削峰丟棄量，見拓樸 §4.5.2；刻意無告警——hardening 非 tripwire，
+               drop>0 屬正常削峰、靜默失效=回到加固前現狀）
 
 pve.yml      （PVE API 指標，待辦11e，2026-07-05；pve-exporter 啟用前無指標=不觸發）
              PveGuestHighMemory(單 CT/VM mem>90% for 10m，warning；LXC 內 node_exporter 做不到的 cgroup 準確值)、
@@ -243,6 +252,12 @@ deep_analysis 組 prompt 時另附告警主機近 15 分鐘 Loki 日誌（最新
 Loki 3.7.3（CT201 docker compose，:3100，retention 30d=720h，tsdb v13/filesystem，loki_data 卷=SSD rootfs）
   ——2026-07-05 使用者執行 finish-11-12.sh 啟用完成；冒煙測試(12f)通過：ssh 錯登入×3 → Loki 查得
   {host="ct260"} |= "smoketest"（Invalid user × 3 全中，且由 CT260 直連 3100 查得=notifier 路徑同驗）。
+  攝取限流（蜜罐加固④，2026-07-05）：limits_config 加 per_stream_rate_limit 512KB/burst 2MB +
+    ingestion_rate_mb 2/burst 4——蜜罐 log 爆量防灌爆 rootfs（21G，與 Prometheus 同盤）。
+    ★ 教訓：初設 256KB 即撞 VM300 開機追送（16h 積壓瞬間超率，7464 samples 被 429 丟棄=Loki 永久缺洞，
+    本地檔案仍在）→ 放寬 512KB + 無損限流改放 promtail 端（VM300 limits_config readline_rate 1000/s
+    burst 2000、drop=false 純背壓：慢讀不丟行，positions 不前進）。改後零 discard 實測。
+    備份：loki-config.yml.before-20260705-hplimits、VM300 /etc/promtail/config.yml.before-20260705-hplimits。
 promtail 3.6.11（官方二進位含 journal 支援 tags=promtail_journal_enabled；全節點 journald-only 故免裝 rsyslog）：
   CT201  docker 容器（journal + docker_sd 自身容器日誌 + syslog listener :1514/udp 收 OpenWrt）
   CT260/270/202/100  原生 systemd active（/usr/local/bin/promtail + /etc/promtail/config.yml + /var/lib/promtail）

@@ -301,25 +301,44 @@
        根因 paperless VALID_TEXT_LENGTH=50）。見缺改記錄「待辦⑮追加b/踩坑5」。
 
 -------------------------------------------------------------------------------
-16. OpenWrt 內網 22 埠絆線告警（tripwire，使用者澄清後定案）
+✔16. OpenWrt 內網 22 埠絆線告警 — 完成（2026-07-05：a✔ b✔ c✔ d✔ e✔ 全鏈實測+對抗驗證 8 項全 PASS）
     設計意圖：OpenWrt 真實 SSH 在 52438，內網對 router 任一 gateway IP 的 tcp/22 是「死埠」，
     正常零流量；任何敲擊 = 誤操作或內網節點被入侵在橫向掃描。
-    WAN:22 已 DNAT 進 Cowrie（不進 input），與本絆線互不干擾。
+    WAN:22 已 DNAT 進 Cowrie（不進 input），與本絆線互不干擾。（實測 dropbear 只聽 52438，22 零 listener）
     流程：
-    a. 比照 portscan-autoban 的自建 nft table 模式，新 chain hook input、priority 高於 zone 規則：
+    a✔ 比照 portscan-autoban 的自建 nft table 模式，新 chain hook input、priority 高於 zone 規則：
        ip daddr {各 VLAN gateway IP} tcp dport 22 ct state new
-       → counter → log prefix "SSH22-TRIPWIRE " → drop。
-    b. 9105 metrics 腳本擴充：解析 nft 計數器 + logread 抓來源 IP，
+       → counter → log prefix "SSH22-TRIPWIRE " → drop。（table inet ssh22tripwire，priority -100，
+       11 gateway 實測值；log 拆規則加限速 60/min 防洪水；init.d S99 開機自建。見拓樸 §4.5.1）
+    b✔ 9105 metrics 腳本擴充：解析 nft 計數器 + logread 抓來源 IP，
        輸出 openwrt_ssh22_tripwire_total{src="..."}（內網來源有限，cardinality 安全）。
-    c. Prometheus 告警：increase(...[5m]) > 0 → severity=critical + ai_analyze=true
-       （首次觸發即走 DeepSeek Tier2，附來源節點近期指標）。
-    d. 無白名單（此埠不該有任何合法流量）；自跑內網掃描稽核前先 amtool silence。
-    e. 測試：從 PC40 nc <gateway> 22 一次，驗證計數、告警、TG 全鏈。
-    可選擴充：LuCI 80/443（若未使用）比照；非白名單來源敲 52438 另立規則計數。
+       （★偏離：per-src 改用 nft 動態集 counter 免 logread——ring buffer 輪轉計數會回退；
+       另出 _packets_total 聚合 + _active 守護 gauge；擴充進 portscan-autoban-metrics 同 9105 job）
+    c✔ Prometheus 告警：increase(...[5m]) > 0 → severity=critical + ai_analyze=true
+       （首次觸發即走 DeepSeek Tier2，附來源節點近期指標）。（expr 用聚合 _packets_total——
+       per-src 新 series 首現 increase() 不觸發；追加 SSH22TripwireInactive warning 守護告警）
+    d✔ 無白名單（此埠不該有任何合法流量）；自跑內網掃描稽核前先 amtool silence。（照做，零白名單）
+    e✔ 測試：從 PC40 nc <gateway> 22 一次，驗證計數、告警、TG 全鏈。（來源改 CT260+ct201/ct100/ct270
+       四節點——PC40 agent 不可執行；全鏈 nft→9105→FIRING→TG 實收🔴⚡；Tier2 首發撞 TG 連線重置，
+       5m 門檻自動補送🔬=順驗重試路徑。對抗驗證 8 項全 PASS；已知缺口 IPv6 盲區併待辦17）
+    可選擴充（未做）：LuCI 80/443（若未使用）比照；非白名單來源敲 52438 另立規則計數。
 
 -------------------------------------------------------------------------------
-17. IPv6 出站控管
+17. IPv6 出站控管 ✔（2026-07-06 以「移除 v6」收斂，非「加 v6 防火牆」）
+    【結案 / 2026-07-06 二次修訂】原裁決「全網移除 v6」，晚間使用者測試後兩段回退：
+      · 下游 VLAN 除 DMZ(VLAN60) 外仍無 v6（VLAN20 servers GUA/DHCPv6 已撤、無 ip6assign）——v6 出站控管目標於這些段維持達成。
+      · OpenWrt WAN GUA 復原（重加 wan6 dhcpv6、僅 router 自身）換回 phone↔OpenWrt v6 直連（33ms）。見缺改「OpenWrt v6 GUA 復原」。
+      · ★ 再裁定「分發 v6 給 DMZ」：使用者要 phone↔CT203 v6 直連（訪問內網須經 DMZ 轉發）。DMZ(VLAN60/CT203) 得 SLAAC GUA，
+        取捨拍板 (1a) established-only 零冷 inbound、(2) 補 CT203 主機 v6 守衛、(3) 保留 v6 ping。v6 只當 tailscale 傳輸端點，
+        內網存取隧道內維持 v4、dmz→internal v6 不放行。詳見缺改「DMZ v6 GUA 上線」（含 ND 防火牆/vmbr0 snooping/accept_ra=2 三坑）。
+      · 安全：wan input 仍 DROP v6（僅 ICMPv6），無 wan→dmz 轉發、無 v6 DNAT → 冷 inbound v6 不可達 → ssh22-tripwire「v6 敲 22」盲區仍關閉。
+        autoban/cowrie/ssh22-tripwire 仍 v4-only（對 v6 全盲），但因無 inbound v6 放行故屬潛伏無害；若日後開任何 inbound v6 服務須先補 v6 分身。
+      · 現況：phone↔OpenWrt=direct(v6)、phone↔CT203=direct(v6，伺服端就緒)；phone↔RouterPVE 仍 relay（無 v6）。
+      下方原 (a)/(b)/(c) 方案保留作歷史（未採「加 v6 規則」路線）。
     【說明】v6 可控管，先做 (a) 再視需要 (b)：
+    ★ 追加（2026-07-05 待辦⑯對抗驗證發現）：ssh22-tripwire 只匹配 ip daddr（v4）——
+      內網以 v6 敲 router GUA/ULA :22 不觸絆線不留痕（dropbear 僅聽 v4 無實際暴露，屬偵測面缺口）；
+      本項執行時順補 ip6 daddr 規則 + hits_v6 集，或藉 (a) 關掉不需 v6 的 CT 縮小面。
     a. 盤點 VLAN20 內不需要 v6 的 CT：sysctl net.ipv6.conf.all.disable_ipv6=1
        （照 CT270 現成做法，寫入 /etc/sysctl.d/ 持久化）；CT260 若保留 v6，記入拓樸。
     b. 需要更細者：OpenWrt fw4 加 family=ipv6 的 forward 規則對 servers zone
@@ -349,6 +368,27 @@
        動作與請求全量落 log 並回發 TG「已執行 X」。
     e. OpenWrt：servers(CT201 ntfy 用)與手機來源→CT260:5001 放行；token 存兩端 .env chmod600。
     安全邊界：webhook 只做「白名單內既定動作」，不接受任意命令——維持觀測/操作分離原則。
+
+   告警處置類（最高頻）
+      1. 服務 down 告警 → 附〔靜音 10min〕〔靜音 1h〕〔靜音 24h〕〔開 Grafana〕四鍵。
+      半夜 Gotify 掛了,你在被窩裡按一下就修完,不用摸電腦 SSH——這是 ntfy 對你體感最強的一項。
+   安全事件類
+      2. SSH22 絆線觸發 → 〔封鎖該來源 IP〕〔拉該主機近 15 分鐘日誌〕〔靜音10min〕。第三鍵對應你自己掃描稽核忘了先 silence 的情況。
+      3. autoban/Cowrie 攻擊突增 → 〔叫 DeepSeek 出即時攻擊摘要〕——把你週報那套變成隨叫隨到。
+      4. Tailscale 解鎖機制上線後 → 每次有 IP 解鎖轉發,推通知附〔立即撤銷〕。解鎖走 TOTP、撤銷一鍵完成,不對稱設計正好:進來難、踢出去容易。
+   Agent 協作類（跟你的工作流最搭）
+   7. 遠端審批閘:Claude Code 在 tmux 跑長任務,碰到高風險步驟(要動 OpenWrt、要 rm、要重啟生產服務)時暫停並發 ntfy →〔批准〕〔中止〕〔改用保守方案〕。這等於把 human-in-the-loop 從「你得守在 Termius 前」解放成「人在外面照樣放行」——你的移動辦公模式直接升一級。
+   8. 長任務完成/失敗通知 → 〔看完整輸出〕〔重跑〕。
+   9. diun 發現新版本 → 〔看 changelog〕〔寫入升級待辦〕(後者 webhook 往 NocoDB 塞一條)。
+   電力與備份類
+   10. UPS OnBattery → 〔立即提前關機〕〔本次抑制自動關機〕。前者用於你知道這波停電會很久,後者用於你正在做不能中斷的事且確定馬上復電。
+   11. 夜間備份失敗 → 〔重跑一次〕〔明早再說〕。
+   生活/HA 類
+   12. HA 事件橋接:離家但窗戶開著 →〔布防忽略該感測器〕;Frigate 偵測到人 →〔看快照〕(view 按鈕直接開圖)〔開庭院燈〕。
+   13. 每日晨報置頂一顆〔開入口大廳〕,等 49 項落地後串起來。
+   冷門但很妙的一個
+   14. 窮人遙控器:給自己定時推一則常駐訊息,掛幾顆常用鍵——最典型是〔啟動 CT250〕:你那台 onboot=0 的沙盒平常關機,想用 Claude Code 實驗環境時按一下,pct start 完推回「已就緒」。零介面成本的隨身開關面板。
+   實作上記得一條紀律:每顆按鈕 = 白名單字典裡一個具名動作,動作執行後必回發「已執行 X,結果 Y」——按了沒下文的按鈕比沒有按鈕更危險,因為你會按第二次。
 
 ===============================================================================
 ## P2 中
