@@ -802,6 +802,103 @@ def daily_report(cfg):
         log(f"daily report send failed (counters NOT reset): {type(e).__name__}: {str(e)[:150]}")
 
 
+BRIEF_FILE = HOME / ".local/state/homelab-notify/brief.json"
+BRIEF_STATE_FILE = HOME / ".local/state/homelab-notify/brief-state.json"
+BRIEF_SYSTEM_PROMPT = """你是這個家用 homelab 的維運 SRE, 為入口大廳寫「今日快報」總評。
+根據提供的 targets/告警/安全數據, 輸出繁體中文 2-3 句(不超過 120 字):
+第一句講整體穩不穩; 若有異常, 點名最需要注意的一項並給一句建議。不要條列、不要 markdown。"""
+
+
+def write_brief(cfg):
+    """--write-brief:產出入口大廳晨報 JSON 並投遞 CT201 /opt/portal/data/(待辦49 M1)。
+    與 --daily-report 完全解耦:不發 TG、不清 daily_counts、可隨時手動重跑;
+    --dry-run 時只寫本地不投遞。個別數據源失敗以誠實註記帶過,不整期失敗。"""
+    now = datetime.now(TZ)
+    date = now.strftime("%Y-%m-%d")
+
+    # 期號:跨日 +1;同日重跑沿用(手動刷新不灌水)
+    try:
+        st = json.loads(BRIEF_STATE_FILE.read_text())
+    except Exception:
+        st = {}
+    if st.get("date") == date and st.get("issue_no"):
+        issue_no = int(st["issue_no"])
+    else:
+        issue_no = int(st.get("issue_no", 0)) + 1
+
+    firing = None
+    try:
+        firing = []
+        for a in fetch_alerts():
+            stt = a.get("status", {})
+            if stt.get("state") != "active" or stt.get("silencedBy") or stt.get("inhibitedBy"):
+                continue
+            labels = a.get("labels", {})
+            firing.append((labels.get("severity") or "?", labels.get("alertname") or "?",
+                           labels.get("instance") or ""))
+    except Exception as e:
+        log(f"brief: alertmanager 讀取失敗 {type(e).__name__}")
+    up_total = prom_query("count(up)")
+    up_ok = prom_query("count(up == 1)")
+    banned = prom_query("portscan_autoban_banned_ips")
+    counts = load_counts()
+    hits_total = sum(v.get("count", 0) for v in counts.values())
+
+    sections = []
+    if up_total:
+        t = f"Prometheus {int(up_total)} targets 中 {int(up_ok or 0)} up"
+        if firing is None:
+            t += ";Alertmanager 讀取失敗,告警視角缺席本期"
+        elif not firing:
+            t += ";目前無 firing 告警"
+        else:
+            crit = sum(1 for s, _, _ in firing if s == "critical")
+            t += f";firing {len(firing)} 條(critical {crit})"
+        sections.append({"h": "全站概況", "body": t + "。"})
+    else:
+        sections.append({"h": "全站概況", "body": "Prometheus 讀取失敗,本期缺 targets 視角。"})
+    if firing:
+        rows = ";".join(f"{n}[{s}]" + (f"@{i}" if i else "") for s, n, i in firing[:4])
+        more = f" 等共 {len(firing)} 條" if len(firing) > 4 else ""
+        sections.append({"h": "告警動態", "body": rows + more + f"。今日達閾值累計 {hits_total} 次。"})
+    if banned is not None:
+        sections.append({"h": "安全", "body": f"portscan-autoban 目前封鎖 {int(banned)} 個來源;Cowrie/絆線詳見安全面板。"})
+
+    ai_input = json.dumps({"targets": [up_ok, up_total], "firing": firing, "banned": banned,
+                           "today_hits": hits_total}, ensure_ascii=False, default=str)
+    verdict = deepseek_call(cfg, model_fast(cfg), BRIEF_SYSTEM_PROMPT, ai_input,
+                            max_tokens=600, timeout=40)
+    model_tag = model_fast(cfg) if verdict else "template"
+    if not verdict:
+        verdict = ("有告警在燒,進告警中心逐條確認;其餘指標詳見各模塊。" if firing
+                   else "全站平靜,無需介入。")
+    sections.append({"h": "總評", "body": verdict})
+
+    brief = {"issue_no": issue_no, "date": date, "title": "今日快報", "sections": sections,
+             "generated_at": f"generated {now.strftime('%H:%M')} by CT260 notifier · {model_tag}"}
+    BRIEF_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BRIEF_FILE.write_text(json.dumps(brief, ensure_ascii=False, indent=1))
+    BRIEF_STATE_FILE.write_text(json.dumps({"date": date, "issue_no": issue_no}))
+    log(f"brief written: 第{issue_no}期 {date} sections={len(sections)}")
+
+    if "--dry-run" in sys.argv:
+        log("brief dry-run: 不投遞 CT201")
+        return
+    # 投遞:hl-push(scp→pve24→pct push→cp-over)+ 日期副本 + 30 期保留
+    push = subprocess.run([str(HOME / ".local/bin/hl-push"), "ct201",
+                           str(BRIEF_FILE), "/opt/portal/data/brief.json"],
+                          capture_output=True, text=True, timeout=90)
+    if push.returncode != 0:
+        log(f"brief push failed rc={push.returncode}: {push.stderr.strip()[:200]}")
+        sys.exit(1)
+    housekeeping = ("cp /opt/portal/data/brief.json /opt/portal/data/brief-"
+                    + now.strftime("%Y%m%d") + ".json && "
+                    "find /opt/portal/data -name 'brief-2*.json' -mtime +30 -delete")
+    subprocess.run(["ssh", "pve24", "sudo pct exec 201 -- bash -c " + shlex.quote(housekeeping)],
+                   capture_output=True, text=True, timeout=30)
+    log("brief pushed -> CT201 /opt/portal/data/ (含日期副本+30期清理)")
+
+
 def selftest(cfg):
     """--selftest [--critical]：走正式路由驗證分流。warning=只 TG；critical=ntfy(urgent)先發+TG(含註記)。"""
     if "--dry-run" in sys.argv:
@@ -830,6 +927,10 @@ def main():
 
     if "--selftest" in sys.argv:
         selftest(cfg)
+        return
+
+    if "--write-brief" in sys.argv:
+        write_brief(cfg)
         return
 
     if "--daily-report" in sys.argv:
