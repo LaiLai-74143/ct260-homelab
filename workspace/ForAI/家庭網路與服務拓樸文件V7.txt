@@ -1,0 +1,1257 @@
+# 家庭網路與服務拓樸文件 V7(現況唯一真實來源)
+
+現況基準:2026-07-07(全站唯讀稽核:16 分域並行、693 項逐條對照現實,出入已按現實修正)
+上一版:V6(基準 2026-06-30)。本版做兩件事:①以現實為準修正 V6 的出入;②精簡文字、原意不變。
+時區:Asia/Taipei (CST-8)
+
+本文是「現況事實」的唯一真實來源(single source of truth):
+節點清單、VLAN/位址表、DNS 紀錄、防火牆 zone/policy/DNAT、各節點服務埠、監控目標清單。
+其他文件需要這些數字一律引用本文,不重抄(見 00_索引.txt)。
+
+本文只描述「現在是什麼」:
+  - 為什麼這樣設計 → 《網段指導原則.txt》
+  - 操作要小心什麼 → 《注意事項.txt》
+  - 歷史變更與已修正項 → 《缺改記錄.txt》
+
+不收錄密碼、token、API key、PPPoE 帳密、Cloudflare/Duplicati 機密參數。
+
+---
+
+## V6 → V7 修正摘要(2026-07-07 稽核,以現實為準)
+
+```text
+狀態類(稽核時點事實):
+- CT250、VM300 stopped(V6 running 清單過時;VM300 onboot=1 卻停機,原因未查,重啟需人工裁決)。
+- pve24 已無 tailscale0/100.100.1.5(節點已裁;殘留孤兒 tailscaled 程序待清理)。
+- DXP node_exporter(30.3:9100)connection refused(NAS 本體活著)→ Prometheus 19/22 up
+  (另兩個 down=cowrie/vm300,因 VM300 停機屬預期)。待 DXP SSH 開窗檢查 user systemd linger。
+- PC40 稽核時關機;DXP SSH 45123 常態關閉(3h 開窗政策)。
+
+設定類(V6 寫錯或未同步,現實如此):
+- trusted zone input=REJECT(V6 表誤寫 ACCEPT)。
+- OpenWrt 25.12.4 r32933 / kernel 6.12.87(V6 主敘述停在 25.12.2 / 6.12.74)。
+- RouterPVE tailnet IP=100.100.1.0(非 1.21);CT203 owned_v4 仍含殭屍 1.21、未含 1.0
+  → break-glass 節點會被 CT203 input 鏈當外人擋,待修(§4.8)。
+- CT203/CT204「無 SSH」不成立:CT203 sshd active 於 *:22、CT204 ssh.socket active 於 *:22
+  (皆無 authorized_keys、root 密碼鎖,實際無登入途徑,但 listener 存在;§10.7/§10.8)。
+- DMZ DHCPv4 未真正停用:dnsmasq 仍生成 pool 10.60.60.100–249,現僅靠 dmz input REJECT 擋住(§2.7)。
+- DNS:mc-server 與裸別名 dxp4800 / dxp4800-fast / caddy 經主 DNS(AGH)NXDOMAIN,僅備援或直查
+  dnsmasq:5353 可解(§3)。
+- VM300 RAM=4G(V6 §8 誤植 1G);pve24 介面名 vmbr0.20(V6 誤植 gvmbr0.20);
+  §0 v6 敘述改「下游僅 DMZ 保留受控 v6」;192.168.31.1 掛在裸 eth1(非 br-lan)。
+- ctdmz 免驗證豁免共兩條:Jellyfin 30.3:8096 + Navidrome 20.70:4533(V6 §4.8 漏列後者)。
+- authelia Prometheus job order=18(非 17);Caddy 受保護站另有 homepage.hl→10.80.80.11:3000。
+- CT260 tailscaled disabled+inactive(V6 §10 與 §4.8 矛盾,現實=已裁);Codex reasoning=xhigh;
+  ansible 14.1.0(core 2.21.1);ansible inventory 含 ct204(V6 漏)與 ct250。
+- Navidrome:音樂庫已有 33 檔;navidrome-scan.cron 源檔不存在=自動掃描機制目前不存在(§10.5)。
+- CT100 本機 nft 另放 Velocity→backend 的 icmp echo-request 一條(V6 漏列)。
+- 41642 v4 DNAT counter 非「恆 0」(有零星封包),主結論不變:手機走 v6 直連。
+- 相機 forward 規則的 uci 位置已漂移(非 idx 33),功能性排序(在 Block-IoT-To-Storage 前)仍成立。
+- pvesm 用量漂移:SSD-2 ~65%、Nas/DXP4800-Backup-SMB100 ~63%、local-lvm ~8%(§6)。
+
+待清理殘留(稽核附帶發現,未列 V6):
+- MC hairpin 重複兩組(Trusted-Hairpin-* 與具名 VLAN40-Hairpin-*,參數全同、皆 enabled)。
+- temp_allow_pc40_to_openwrt_ssh(PC40→192.168.40.1:52438)存在但不在 §4.4 清單。
+- firewall.@rule[77] 空匿名 section。
+```
+
+---
+
+## 0. 總體摘要
+
+架構:OpenWrt 主路由 + 多 VLAN 分區 + 24Bay PVE 虛擬化 + CT201 觀測面
++ DXP4800 10G SMB/NAS + Minecraft proxy/backend + Cowrie honeypot + CT260 Codex Ops 管理節點。
+
+```text
+Internet
+  ↓ 中華電信小烏龜 Bridge Mode
+Router PVE / N95 小主機
+  ↓ VM101 OpenWrt(唯一 WAN ingress / policy enforcement point)
+各 VLAN / LXC / VM / NAS / PC / AP
+```
+
+現況重點:
+
+```text
+- legacy 192.168.31.0/24 僅剩三核心帶外救援:.1 OpenWrt / .2 RouterPVE / .5 pve24。
+  零服務依賴、禁止新增依賴(§2.1)。
+- mc.home.arpa 指 Velocity 10.70.70.10(VLAN70)。
+- CT201 觀測面正式 IP 10.80.80.11。
+- OpenWrt 時區 Asia/Taipei;portscan 每日 reset 對齊台灣午夜。
+- IPv6:下游僅 DMZ/VLAN60 保留受控 v6(CT203 SLAAC GUA);OpenWrt 保留 WAN GUA 供 tailscale v6
+  直連;其餘下游 VLAN 無 v6;wan input 對 v6 DROP、僅放行 ICMPv6(§4.7)。
+- 手機經 CT203 subnet-router 進內網:Jellyfin 30.3:8096 與 Navidrome 20.70:4533 免驗證,
+  其餘須過 Authelia TOTP 動態閘門(通行證到當日 00:00);OpenWrt 降為 Tailscale DNS/救援節點。
+- 告警管線(Prometheus→Alertmanager→Gotify + CT260 Telegram notifier)已上線,細節見《監控告警.txt》。
+```
+
+---
+
+## 1. 實體與角色拓樸
+
+### 1.1 OpenWrt / VM101
+
+唯一主路由與大多數內網分區的 policy enforcement point。
+
+```text
+系統:OpenWrt 25.12.4 r32933(x86/64)   Kernel:6.12.87
+角色:PPPoE / NAT / DNS / DHCP / Firewall / DNAT / VLAN gateway / Tailscale 節點(DNS+救援;
+     subnet-router 已移交 CT203)/ portscan-autoban / cowrie-quarantine / ssh22-tripwire / honeypot-ratelimit
+時區:Asia/Taipei (CST-8)
+遠端 syslog:→ 10.80.80.11:1514(udp,rfc3164;uci system log_ip/log_port/log_proto;收端=CT201 promtail)
+```
+
+主要介面:
+
+```text
+pppoe-wan     125.228.123.224/32      WAN(PPPoE,公網 IP 隨重撥漂移)
+wan6          dhcpv6 @wan(router GUA 供 phone↔OpenWrt v6 直連;IA_NA→GUA;PD 2001:b011:5c10:9fbc::/64 分發給 DMZ,見 §4.7)
+lan  eth1     192.168.31.1/24          legacy / 帶外救援 LAN(掛裸 eth1;br-lan 與此無關)
+eth1.10       192.168.10.1/24          infra
+eth1.20       192.168.20.1/24          servers(無 v6)
+eth1.30       192.168.30.1/24          storage
+eth1.40       192.168.40.1/24          trusted_clients
+br-iot        192.168.50.1/24          iot
+eth1.60       10.60.60.1/24 +2001:b011:5c10:9fbc::1/64  dmz(v6 RA server→CT203 SLAAC;DMZ->WAN;§4.7)
+eth1.70       10.70.70.1/24            game_services(no DHCP;Game->WAN;Minecraft 正式網)
+eth1.80       10.80.80.1/24            service / 觀測面
+eth1.90       10.90.90.1/24            mgmt_oob(no DHCP;no broad forwarding)
+eth1.666      10.66.66.1/24            honeypot
+tailscale0    100.100.1.1/32
+```
+
+### 1.2 24Bay PVE(pve24)
+
+主要虛擬化與備援 DNS 節點。
+
+```text
+hostname:24bay-pve   Proxmox:pve-manager/9.1.1   Kernel:6.17.2-1-pve
+```
+
+主要位址:
+
+```text
+vmbr0      192.168.31.5/24      legacy 帶外救援
+vmbr0.20   192.168.20.5/24      正式 server 管理面 / 備援 DNS 正式同步目標
+vmbr1      192.168.100.3/24     10G storage fabric
+(tailscale 已裁撤:無 tailscale0 介面、tailscaled unit inactive;殘留孤兒 tailscaled 程序待清理)
+```
+
+LXC/VM 清單(狀態=2026-07-07 稽核時點):
+
+```text
+CT100  MC-server                 running
+CT102  mc-proxy                  running
+CT201  monitor                   running
+CT202  fwdproxy                  running   # VLAN80 正向代理 squid
+CT203  ct-dmz-proxy              running   # VLAN60 DMZ 反向代理 Caddy(§10.7)
+CT204  wazuh                     running   # VLAN80 Wazuh HIDS(§10.8)
+CT250  vaultwarden-restore-test  stopped   # Onboot 0,常態關機(§9)
+CT260  codex-ops                 running
+CT270  life-ops                  running
+VM300  honeypot                  stopped   # onboot=1 卻停機,原因未查;重啟需人工(§8)
+```
+
+電力保護(進行中):nut-client 2.8.1,NUT secondary 監看 ups0@192.168.100.2(VLAN100 帶外、匿名輪詢);
+斷電 180s → 優雅收 CT/VM → 關宿主(/etc/nut + /usr/local/sbin/nut-graceful-shutdown.sh;沿革見缺改記錄 2026-07-04)。
+BIOS 復電自動開機:待設。全鏈拔線實測:待做。
+
+### 1.3 Router PVE / N95 小主機
+
+OpenWrt VM101 的宿主;root-of-trust(OpenWrt 壞掉時可經此 L2 直連救機)。
+
+```text
+管理面(主):  192.168.10.2(/etc/hosts 主名、預設路由 via 192.168.10.1、resolv→192.168.10.1(AGH)、pve-ssl 已重簽)
+legacy 救援:  192.168.31.2(三核心之一;純救援,vmbr0 無 gateway、無服務角色)
+管理面信任:   PC40(.40.4)+ CT260(經 OpenWrt SNAT 成 .10.1 單一來源)
+storage.cfg:  cifs 儲存 "Nas" server=192.168.30.3,經 /32 路由走 VLAN10(源 .10.2)
+node_exporter:router-pve.home.arpa:9100 = 192.168.10.2(OpenWrt 已放行 CT201)
+回滾:         /etc/{hosts,resolv.conf,network/interfaces}.before-20260705-mig8
+```
+
+### 1.4 DXP4800 Pro / NAS
+
+NAS / Docker service host / PT/BT / Vaultwarden production / 10G SMB backup endpoint。
+
+```text
+Storage service(正式可路由):192.168.30.3
+10G storage fabric:          192.168.100.2(純 data/SMB/backup,不是管理面)
+legacy(已退役死址):         192.168.31.3(不再使用;nas-legacy 已 NXDOMAIN)
+SSH:                         192.168.30.3:45123(CT260 專屬 key;常態關閉、3h 開窗政策)
+node_exporter:               192.168.30.3:9100(user systemd,My-Big-Nas,linger 已啟用)
+  ★ 2026-07-07 稽核:9100 connection refused(NAS 活著,Jellyfin 8096 正常)→ exporter 行程未跑,
+    疑 NAS 重開後 linger 未生效;待 SSH 開窗以 systemctl --user status 檢查。
+```
+
+承載服務:qBittorrent、Jellyfin、Vaultwarden production、Duplicati、Cloudflare Tunnel、
+Tailscale(Docker host network,RouteAll/accept-routes=false,--accept-dns=false;已裁撤但 tailnet
+console 顯示 last seen 晚於裁撤日,待開窗核對)、Nginx Proxy Manager。
+
+### 1.5 PC(主力工作站)
+
+```text
+VLAN40 trusted(正式):192.168.40.4
+10G storage fabric:    192.168.100.1
+legacy:                已退出 .31.4
+PC health endpoint:    http://192.168.40.4:18080/(keyword "OK",供 Kuma 監控)
+(2026-07-07 稽核時關機;以上為結構事實,非在線狀態)
+```
+
+### 1.6 AP / Switch
+
+```text
+AP Main   192.168.50.41(VLAN50;小米路由無法設 VLAN,AP 本體維持 IoT 段)
+AP Node   192.168.50.42(VLAN50)
+Switch3F  192.168.10.21(VLAN10 infra)
+```
+
+---
+
+## 2. VLAN 與網段現況
+
+各段「設計用途 / 安全策略」見《網段指導原則.txt》;本節只列現況部署位址。
+
+### 2.1 Legacy LAN / VLAN1(192.168.31.0/24)
+
+```text
+Subnet:192.168.31.0/24   Gateway:192.168.31.1   Zone:lan   用途:帶外救援 L2(untagged 扁平)
+
+純化完成(2026-07-05 待辦⑦⑧):僅三台救援位址,零服務/零路由依賴,禁止新增依賴。
+  - RouterPVE 取 DXP SMB 備份源走 VLAN10(/32 路由 + Allow-RouterPVE-Infra-To-DXP4800-Storage-SMB)。
+  - CT260→OpenWrt 管理路徑=192.168.10.1:52438(dropbear infra_core 實例,僅金鑰)。
+```
+
+現況活躍位址(三核心):
+
+```text
+192.168.31.1    OpenWrt legacy LAN gateway(掛裸 eth1)
+192.168.31.2    Router PVE 救援
+192.168.31.5    24Bay PVE 救援
+```
+
+已遷移/移除(2026-07-07 稽核:ARP 殘影已清,無任何 .31.3/.31.4/.31.10/.31.11/.31.21 記錄):
+
+```text
+192.168.31.3    DXP4800 死址(現役 .30.3)      192.168.31.10   CT100(現役 10.70.70.20)
+192.168.31.11   CT201(現役 10.80.80.11)       192.168.31.4    PC(現役 .40.4)
+192.168.31.21   Switch3F(現役 .10.21)
+```
+
+### 2.2 VLAN10 / Infrastructure(192.168.10.0/24)
+
+```text
+Gateway:192.168.10.1   Zone:infra   DHCP:disabled
+192.168.10.1    OpenWrt infra gateway
+192.168.10.2    Router PVE infra
+192.168.10.21   Switch3F infra
+```
+
+### 2.3 VLAN20 / Servers(192.168.20.0/24)
+
+```text
+Gateway:192.168.20.1   Zone:servers   DHCP:disabled   IPv6:無
+192.168.20.1    OpenWrt servers gateway
+192.168.20.5    24Bay PVE 正式管理面
+192.168.20.50   CT250 Vaultwarden restore / Claude Code lab
+192.168.20.60   CT260 Codex Ops
+192.168.20.70   CT270 Life-Ops(NocoDB :8080 + HA :8123 + Paperless :8000 + Navidrome :4533;§10.5)
+```
+
+### 2.4 VLAN30 / Storage(192.168.30.0/24)
+
+```text
+Gateway:192.168.30.1   Zone:storage
+192.168.30.1    OpenWrt storage gateway
+192.168.30.3    DXP4800 Pro / NAS storage service
+```
+
+### 2.5 VLAN40 / Trusted Clients(192.168.40.0/24)
+
+```text
+Gateway:192.168.40.1   Zone:trusted   介面:trusted_clients / eth1.40   DHCP pool:僅 192.168.40.4
+192.168.40.1    OpenWrt trusted clients gateway
+192.168.40.4    主力 PC
+```
+
+### 2.6 VLAN50 / IoT / AP(192.168.50.0/24)
+
+```text
+Gateway:192.168.50.1   Zone:iot   DHCP pool:.50.50–.50.199(start=50 limit=150 leasetime=12h)
+192.168.50.1    OpenWrt IoT gateway
+192.168.50.41   AP Main(WiFiMain;dhcp host 綁 04:67:61:58:C5:0A)
+192.168.50.42   AP Node(WiFiSub;dhcp host 綁線上實機 04:67:61:59:8E:6D;設備端亦自設靜態)
+    註:HA 雲端 MAC 與線上實機不同(雲端 04:67:61:24:xx,實機 04:67:61:5x),綁定一律用線上實機 MAC。
+```
+
+HA 米家設備靜態租約(uci dhcp host,leasetime infinite;綁線上實機 MAC;2026-07-07 稽核 13 筆全符):
+
+```text
+.50.135  spk-yinhua      90:FB:5D:D8:E2:57  胤樺的音箱    xiaomi.wifispeaker.oh2p
+.50.181  spk-living      90:FB:5D:DD:DF:CD  客廳的音箱    xiaomi.wifispeaker.oh2p
+.50.186  derh-yinhua     1C:EA:AC:EE:59:E5  胤樺的除濕機  xiaomi.derh.13l
+.50.116  fan-yinhua      CC:DA:20:5C:02:BE  胤樺的電扇    dmaker.fan.p45
+.50.67   cam-door        18:50:73:0E:D2:52  監視器大門口  isa.camera.cw501d(HA 雲端 MAC 尾碼 -1)
+.50.56   lt-yinhua-1     EC:4D:3E:15:F9:23  胤樺房間吊燈-1 yeelink.light.colorb
+.50.87   lt-yinhua-2     EC:4D:3E:15:7C:BF  胤樺房間吊燈-2 yeelink.light.colorb
+.50.196  lt-yinhua-3     EC:4D:3E:15:9F:EB  胤樺房間吊燈-3 yeelink.light.colorb
+.50.184  lt-yinhua-side  EC:4D:3E:15:5F:3B  胤樺房間副燈   yeelink.light.colorb
+.50.99   lt-bathroom     EC:4D:3E:16:1C:02  浴室燈         yeelink.light.colorb(未在該 Mi 帳號/HA;
+         如需 HA 控制,先在 Mi Home 加入帳號再 reload xiaomi_miot)
+未 pin:cuco.plug.v3 插座、cddz.plug.pc01m 開機卡、njcuk 充電器、chuangmi 看魚攝影機(離線/實機 MAC 未證);
+       lumi 煙感×2 / isa 門磁=Zigbee/BLE 子設備(本就無 DHCP)。
+全設備便查:HA米家設備清單.txt(ha-device-inventory-gen.py 生成)。沿革見缺改記錄 2026-07-02。
+```
+
+### 2.7 VLAN60 / DMZ / Public Services(10.60.60.0/24)
+
+```text
+Gateway:10.60.60.1(+2001:b011:5c10:9fbc::1/64)   Zone:dmz
+DHCPv4:★未正式停用——dnsmasq 仍生成 pool 10.60.60.100–249(12h),現僅靠 dmz input REJECT+
+       無 DHCP 放行規則而發不出租約(單層防護);要與設計對齊應補 uci dhcp.dmz 停用(待辦)。
+IPv6:RA server(SLAAC),見 §4.7。
+
+10.60.60.1     OpenWrt DMZ gateway
+10.60.60.10    CT203 ct-dmz-proxy — 反向代理 Caddy + Authelia SSO(§10.7)
+               v6 GUA(SLAAC)2001:b011:5c10:9fbc:be24:11ff:fe4c:db63 — phone↔CT203 tailscale v6
+               直連傳輸端點(主機 v6 守衛擋冷 inbound,§4.7)
+
+現況:DMZ->WAN enabled;DMZ<->內網僅逐項 allowlist(monitor→dmz:80,9100,9959、
+  dmz→storage:50303/8096、dmz→service:9090、trusted/servers→10.60.60.10:443;§4.4)。
+L2:VM101 net1 trunk 現含 VID 10;20;30;40;50;60;70;80;666(60/70 已補,90 未 trunk、要用時再補)。
+```
+
+### 2.8 VLAN67 — 已拆除
+
+```text
+原 Minecraft proxy-backend 網(10.67.67.0/24),host 遷 VLAN70 後拆除。
+2026-07-07 稽核:eth1.67 / zone proxy / 相關規則 / trunk VID67 全數不存在,零殘留。
+禁止新增 10.67.67.x 依賴。沿革見缺改記錄 2026-07-05。
+```
+
+### 2.9 VLAN70 / Game Services(10.70.70.0/24)
+
+```text
+Gateway:10.70.70.1   Zone:game   DHCP:disabled   Game->WAN enabled
+10.70.70.1    OpenWrt game services gateway
+10.70.70.10   CT102 Velocity / Geyser proxy
+10.70.70.11   CT201 game observation 介面
+10.70.70.20   CT100 Minecraft backend
+(zone 基礎放行 Allow-Game-DNS/NTP/Ping-Router 已核實存在。)
+```
+
+### 2.10 VLAN80 / Service Edge / 觀測面(10.80.80.0/24)
+
+```text
+Gateway:10.80.80.1   Zone:service
+10.80.80.1     OpenWrt service gateway
+10.80.80.10    CT202 fwdproxy — 正向/出站代理(squid :3128,出站域名白名單;§10.6)
+10.80.80.11    CT201 Monitor 正式 IP(default route 經此)
+10.80.80.12    CT204 wazuh — Wazuh HIDS manager+indexer+dashboard(§10.8)
+```
+
+### 2.11 VLAN90 / Management / Out-of-Band(10.90.90.0/24)
+
+```text
+Gateway:10.90.90.1   Zone:mgmt   DHCP:disabled
+10.90.90.1    OpenWrt management/OOB gateway
+現況:介面/zone 已部署;尚無正式 host。No broad forwarding;只允許到 router DNS/NTP/ICMP。
+```
+
+### 2.12 VLAN100 / 10G Storage Fabric(192.168.100.0/24)
+
+```text
+Gateway:無   DHCP:無   Internet:無   用途:純 10G data/SMB/backup L2 fabric
+192.168.100.1   PC 10G
+192.168.100.2   DXP4800 Pro 10G
+192.168.100.3   24Bay PVE 10G
+192.168.100.10  CT100 Minecraft 10G/data 介面
+```
+
+職責補充:另承 NUT 帶外電力訊號——pve24(100.3,upsmon secondary)→ DXP(100.2,upsd:3493)。
+刻意繞過防火牆的 L2 孤島;斷電時路由已倒,此直連 L2 仍通,電力保護關機序賴此路徑。詳見缺改記錄 2026-07-04。
+
+### 2.13 VLAN666 / Honeypot(10.66.66.0/24)
+
+```text
+Gateway:10.66.66.1   Zone:honeypot
+10.66.66.1     OpenWrt honeypot gateway
+10.66.66.10    VM300 Cowrie honeypot(★2026-07-07 stopped,見 §8)
+
+VM300 資源圍堵(2026-07-05 蜜罐加固;host 側已核,VM 內部為停機前紀錄):
+  VM:1 vCPU / 4G RAM(balloon 512)/ scsi0 64G + scsi1 8G(LABEL=cowrie-var 獨立掛
+    /home/cowrie/cowrie-honeypot/var,fstab nofail——log/樣本寫爆只爆這 8G)
+  cowrie:LimitNOFILE=4096、download_limit_size=10MB、logrotate maxsize 200M、
+    cowrie-prune.timer 每日清 downloads/tty >14d(json 遠端 Loki 留 30d)
+  promtail:readline_rate 1000/s burst 2000、drop=false(純背壓;Loki 端另有 512KB/s per-stream 後盾)
+  入口削峰:§4.5.2 honeypot-ratelimit
+  回滾留存:var.pre-volume-20260705、/etc/promtail/config.yml.before-20260705-hplimits
+```
+
+---
+
+## 3. DNS 與命名
+
+```text
+本地域名:home.arpa
+DNS source-of-truth:OpenWrt(AdGuard Home / dnsmasq backend)
+DNS backup:24Bay PVE(正式同步目標 192.168.20.5;同步機制健康,檔案 mtime 與源一致)
+readiness check 基準:openwrt.home.arpa -> 192.168.10.1
+```
+
+現況 records(2026-07-07 逐條 dig 核實;主=經 AGH 的客戶端路徑):
+
+```text
+openwrt.home.arpa / infra-gw.home.arpa           -> 192.168.10.1
+openwrt-legacy.home.arpa                         -> 192.168.31.1
+
+router-pve.home.arpa / router-pve-infra.home.arpa -> 192.168.10.2
+router-pve-legacy.home.arpa                      -> 192.168.31.2
+
+nas.home.arpa / nas-storage.home.arpa            -> 192.168.30.3
+nas-fast.home.arpa                               -> 192.168.100.2
+
+pc.home.arpa / pc40.home.arpa                    -> 192.168.40.4
+pc-fast.home.arpa                                -> 192.168.100.1
+
+pve24.home.arpa / pve24-server.home.arpa         -> 192.168.20.5
+pve24-legacy.home.arpa                           -> 192.168.31.5
+pve24-fast.home.arpa                             -> 192.168.100.3
+
+mc.home.arpa / mc-proxy.home.arpa                -> 10.70.70.10 (Velocity 玩家入口)
+mc-backend.home.arpa                             -> 10.70.70.20
+game-gw.home.arpa                                -> 10.70.70.1
+
+monitor.home.arpa / monitor-edge.home.arpa       -> 10.80.80.11
+
+dmz-gw.home.arpa                                 -> 10.60.60.1
+ct-dmz-proxy.home.arpa / dmz-proxy.home.arpa     -> 10.60.60.10
+
+ap-main.home.arpa                                -> 192.168.50.41
+ap-node.home.arpa                                -> 192.168.50.42
+switch3f.home.arpa / switch3f-infra.home.arpa    -> 192.168.10.21
+honeypot.home.arpa                               -> 10.66.66.10
+
+vaultwarden-restore-test.home.arpa / restore-lab.home.arpa / ct250.home.arpa -> 192.168.20.50
+codex-ops.home.arpa / ct260.home.arpa            -> 192.168.20.60
+life-ops.home.arpa / ct270.home.arpa             -> 192.168.20.70
+paperless.home.arpa                              -> 192.168.20.70(Paperless-ngx)
+music.home.arpa                                  -> 192.168.20.70(Navidrome)
+```
+
+★ 裸別名限制(2026-07-07 實測):hosts.home.arpa 內的裸別名(dxp4800、dxp4800-fast、caddy、
+mc-server 等)經主 DNS(AGH)一律 NXDOMAIN——AGH 只把 /home.arpa/ 轉給 dnsmasq:5353,單標籤名
+走公網 upstream;且 OpenWrt dnsmasq domain='lan' 不會把裸名展開成 home.arpa。僅直查 dnsmasq:5353
+或備援 20.5(expand-hosts)可解。一律使用上表 FQDN。
+
+已作廢 / NXDOMAIN(死別名,勿再使用):
+
+```text
+nas-legacy.home.arpa     (原 -> 192.168.31.3)
+monitor-legacy.home.arpa (原 -> 192.168.31.11)
+```
+
+備註:
+
+```text
+hl.lailai74143.com(SSO 內部子域)由 dnsmasq 回答:*.hl.lailai74143.com -> 100.100.1.2
+  (CT203 Tailscale IP,非其 subnet IP 10.60.60.10):auth.hl=Authelia 入口、gate.hl=動態閘門發證頁、
+  prometheus.hl / grafana.hl / kuma.hl / homepage.hl=受保護服務。
+  ★ 指 Tailscale IP 的原因:subnet-router 連不到自己廣播網段內的自身 IP(已知限制)→ 遠端手機
+    經 subnet route 到不了 10.60.60.10;改指 100.100.1.2 後所有 tailnet 節點可達。非 tailnet 純 LAN
+    客戶端解不到可達位址(可接受,SSO 本為遠端入口)。
+  ★ 用 dnsmasq 而非 AGH rewrite 的原因:AGH rewrite 屬 per-client filtering,手機 client 關
+    filtering 會跳過 rewrite(2026-07-04 實測)。現行=dnsmasq address=/hl.lailai74143.com/100.100.1.2
+    + AGH upstream domain-routing [/hl.lailai74143.com/]127.0.0.1:5353,對所有 client 一致生效。
+  備援 DNS 本地無 hl 條目(已核),但其 dnsmasq server=192.168.20.1 轉發 OpenWrt,故 OpenWrt 活著時
+    備援也答得出;OpenWrt 掛時 SSO 名稱解析失效——可接受(DMZ 路由本依賴 OpenWrt)。
+CT102 DNS=10.70.70.1(內部);VM300 用 10.66.66.1,避免其取得內部服務 DNS 資訊。
+AGH cache_optimistic=true + max_age 12h:改現役 DNS 後須 /etc/init.d/adguardhome restart 清快取。
+```
+
+---
+
+## 4. OpenWrt 防火牆與外部入口
+
+### 4.1 Zone default policy
+
+```text
+input REJECT   output ACCEPT   forward REJECT
+```
+
+主要 zones(2026-07-07 逐 zone 核實):
+
+```text
+lan        input ACCEPT  forward ACCEPT
+wan        input DROP    forward DROP    masq on
+infra      input ACCEPT  forward REJECT
+servers    input ACCEPT  forward REJECT
+trusted    input REJECT  forward REJECT   ★V6 誤載 input ACCEPT,實為 REJECT(更嚴)
+iot        input REJECT  forward REJECT
+dmz        input REJECT  forward REJECT
+game       input REJECT  forward REJECT
+service    input REJECT  forward REJECT
+mgmt       input REJECT  forward REJECT
+storage    input REJECT  forward REJECT
+honeypot   input REJECT  forward REJECT
+tailscale  input ACCEPT  forward REJECT
+```
+
+必要 broad forwarding(各段 -> wan):lan / infra / servers / trusted / iot / dmz / game / service。
+(iot->wan 另擋 udp/443 QUIC,見 §4.4。)
+
+### 4.2 WAN DNAT
+
+```text
+44444/tcp,udp -> 192.168.30.3:44444     qBittorrent / P2P
+49169/tcp     -> 10.70.70.10:25565      Minecraft Java(Velocity)
+43915/udp     -> 10.70.70.10:19132      Minecraft Bedrock(Geyser)
+22/tcp        -> 10.66.66.10:2222       Cowrie SSH
+23/tcp        -> 10.66.66.10:2223       Cowrie Telnet
+41642/udp     -> 10.60.60.10:41642      CT203 tailscaled 固定埠(family=ipv4;OpenWrt 自身
+                                        tailscaled 佔 41641 勿混用)
+  ★ DNAT 只是入站半;另一半=出站保留來源埠 masquerade to :41642
+    (/etc/nftables.d/30-ct203-tsport.nft,落在 srcnat_wan 通用 masq 之前)。兩者齊備才成
+    靜態 1:1/EIM 映射,STUN 才宣告 :41642 對上 DNAT。用途=未來可做 v4 直連的 peer;
+    現用手機(S24U)實走 v6 直連(§4.7/§4.8),此 v4 路徑對它非關鍵。
+```
+
+### 4.3 Trusted PC hairpin(PC40 內網連公網 MC 名稱)
+
+```text
+Trusted-Hairpin-Minecraft-Java-PC40-To-Velocity
+  src trusted/192.168.40.4 -> 125.228.123.224:49169/tcp  DNAT-> 10.70.70.10:25565
+Trusted-Hairpin-Minecraft-Bedrock-PC40-To-Geyser
+  src trusted/192.168.40.4 -> 125.228.123.224:43915/udp  DNAT-> 10.70.70.10:19132
+```
+
+hairpin 綁定目前公網 IP 125.228.123.224(稽核時仍相符);PPPoE IP 改變需同步更新或改 split DNS/SRV。
+★ 殘留:另有兩條具名 section(hairpin_mc_java_pc40 / hairpin_mc_bedrock_pc40,規則名 VLAN40-Hairpin-*)
+與上述兩條參數完全相同且皆 enabled——功能無害的重複條目,待清理。
+
+### 4.4 跨段 host/port allowlist(現況主要 rule,2026-07-07 逐條核實)
+
+設計原則:跨 VLAN 一律 host/port allowlist,不開整段 forward;管理流量多以 SNAT 收斂成單一來源。
+
+```text
+# PC40(trusted)管理面
+PC40 -> Router PVE 192.168.10.2  tcp/22,8006, icmp
+PC40 -> Switch3F   192.168.10.21 tcp/80,22, icmp
+PC40 -> 24Bay PVE  192.168.20.5  tcp/22,8006, icmp
+PC40 -> CT250      192.168.20.50 tcp/22
+PC40 -> CT260      192.168.20.60 tcp/22           (Allow-PC40-To-CT260-CodexOps-SSH)
+PC40 -> CT270      192.168.20.70 tcp/8080         (Allow-PC40-To-CT270-LifeOps-NocoDB)
+PC40 -> CT270      192.168.20.70 tcp/8123         (Allow-PC40-To-CT270-HomeAssistant)
+PC40 -> CT270      192.168.20.70 tcp/8000         (Allow-PC40-To-CT270-Paperless)
+PC40 -> CT270      192.168.20.70 tcp/4533         (Allow-PC40-To-CT270-Navidrome)
+PC40 -> AP Main/Node web/ping
+PC40 -> CT201      10.80.80.11   tcp/3000,3001,3002,9090,9100, ping
+PC40 -> DXP4800    192.168.30.3  tcp/5243,8243(SNAT 192.168.30.1)
+PC40 -> Minecraft public hairpin 49169/tcp、43915/udp
+★ 殘留:temp_allow_pc40_to_openwrt_ssh(PC40 -> 192.168.40.1:52438)temp 前綴仍在,待清理或轉正。
+
+# CT270 出站代理(HA/dockerd 經 fwdproxy 上網;CT270 直連 WAN 由 deny_ct270_wan 封死)
+CT270 -> CT202 fwdproxy  20.70 -> 10.80.80.10 tcp/3128(Allow-CT270-To-FwdProxy-Egress;
+  無 SNAT,源 IP 保留供 squid ACL)
+
+# CT270 → 小米雲 scoped-WAN(離網優先政策下唯一具名對外例外;2026-07-02 使用者批准)
+CT270 -> wan tcp/443 僅限 ipset xiaomi_cloud(Allow-CT270-To-XiaomiCloud-WAN,排在 deny_ct270_wan 前;
+  set 由 /etc/homelab/xiaomi-cloud-nftset.sh 每 3 分 cron 解析小米雲 FQDN 灌入。其餘直連 WAN 全 REJECT)
+
+# HA 本地控米家(servers→iot,miio;本地直控不經雲)
+HA -> 米家設備  20.70 -> iot(192.168.50.0/24) udp/54321(Allow-HA-To-Mijia-Miio-Local)
+  ★ 必須 SNAT 成 .50.1(SNAT-HA-To-Mijia-Miio-Local):miio 設備只回應同網段來源,無 SNAT 全 timeout
+    (2026-07-02 實測)。iot→servers 仍全 REJECT。
+
+# CT260(servers)管理外連
+CT260 -> DXP4800     192.168.30.3 tcp/45123(SSH)
+CT260 -> Router PVE  192.168.10.2 tcp/22(Allow-CT260-To-RouterPVE-Infra-SSH + SNAT 192.168.10.1)
+
+# Storage 出 WAN(host-scoped)
+Allow-DXP4800-Storage-To-WAN   192.168.30.3 -> wan, proto all
+
+# RouterPVE 取 DXP 備份(走 VLAN10)
+Allow-RouterPVE-Infra-To-DXP4800-Storage-SMB  192.168.10.2 -> 192.168.30.3 tcp/445(SNAT 192.168.30.1;
+  RouterPVE 側 /32 路由持久化於 interfaces post-up)
+
+# 門口監視器錄影到 NAS(iot→storage;2026-07-03 使用者批准)
+# 背景:相機 Mi Home 只能「掃描」找 NAS(NBNS 廣播不跨 VLAN)→ OpenWrt br-iot 跑 nmbd 代答,
+#       把相機導到 .50.1 再 DNAT 到真 NAS(.30.3);相機全程不需知道 .30.3。唯一 iot→storage 具名放行。
+Allow-Camera-DoorMon-NBNS-In          iot/192.168.50.67 -> router udp/137(input)
+DNAT-Camera-DoorMon-SMB445-To-NAS     iot/192.168.50.67 -> 192.168.50.1:445 DNAT-> 192.168.30.3:445
+DNAT-Camera-DoorMon-SMB139-To-NAS     iot/192.168.50.67 -> 192.168.50.1:139 DNAT-> 192.168.30.3:139(SMB1 後備)
+Allow-Camera-DoorMon-To-DXP4800-SMB   iot/192.168.50.67 -> 192.168.30.3 tcp/445,139(forward;排在
+  Block-IoT-To-Storage 之前——2026-07-07 核實 nft forward_iot 首條即此;uci 索引會漂移,勿寫死)
+SNAT-Camera-DoorMon-To-DXP4800-SMB    src=storage src_ip 192.168.50.67 -> 192.168.30.3 tcp
+                                      -> snat 192.168.30.1(nat dest_port 不可為 list,全 tcp 收斂)
+  服務:samba4-server 僅用 nmbd(bind lo+br-iot);smbd 被遮蔽(DNAT 轉走+iot input REJECT)。
+
+# iot 段 QUIC 迴避(WiFi 手機 YouTube 修復)
+Block-IoT-QUIC-udp443-To-WAN-YouTubeFix  iot -> wan udp/443 REJECT(排在 accept_to_wan 前)
+  背景:QUIC 大型 UDP 過小米 AP 會壞,擋掉逼回 TCP(已有 wan MSS clamp)。
+
+# 觀測面 CT201 -> 各 node_exporter 9100(含 RouterPVE/DXP/CT260/CT270/VM300)
+Allow-CT201-To-OpenWrt-Portscan-Metrics  10.80.80.11 -> 10.80.80.1:9105/tcp
+Allow/SNAT-Monitor-To-CT270-NodeExporter 10.80.80.11 -> 192.168.20.70 tcp/9100(SNAT 192.168.20.1)
+Allow-Monitor-To-CTDMZ-Proxy             10.80.80.11 -> 10.60.60.10 tcp/80,9100,9959(service→dmz)
+  ★ 對應 SNAT-Monitor-To-CTDMZ-Proxy 用 src='dmz'(egress zone)snat_ip 10.60.60.1(會 fire)。
+    其餘 Monitor-To-X 的 SNAT 皆 src=<源 zone> → 落錯 srcnat 鏈、實際 no-op(無害,回程經共用閘道;待清理)。
+(其餘各 9100 放行 + SNAT 見《監控告警.txt》目標清單)
+
+# Uptime Kuma 監控放行(使用者逐項同意)
+Allow-Monitor-To-OpenWrt-Infra-AGH-Web-8080            10.80.80.11 -> 192.168.10.1 tcp/8080(input)
+Allow/SNAT-Monitor-To-DXP4800-Storage-qBittorrent-8080 10.80.80.11 -> 192.168.30.3 tcp/8080(SNAT .30.1)
+Allow/SNAT-Monitor-To-DXP4800-Storage-Jellyfin-8096    10.80.80.11 -> 192.168.30.3 tcp/8096(SNAT .30.1)
+Allow/SNAT-Monitor-To-PC40-Health-18080                10.80.80.11 -> 192.168.40.4 tcp/18080(SNAT .40.1)
+(MCSManager 23333 與 backend 9100 不經 OpenWrt:CT201 由 game-obs 10.70.70.11 直連 10.70.70.20,
+ 放行在 CT100 本機 nft。)
+
+# Wazuh agent -> manager(各 zone 逐項點名)
+Allow-Servers-To-Wazuh-Agent   192.168.20.5/.60/.70 -> 10.80.80.12 tcp/1514-1515
+Allow-Infra-To-Wazuh-Agent     192.168.10.2 -> 10.80.80.12 tcp/1514-1515
+Allow-Game-To-Wazuh-Agent      10.70.70.20/.10 -> 10.80.80.12 tcp/1514-1515(CT201/202 同段免規則)
+Allow-DMZ-To-Wazuh-Agent       10.60.60.10 -> 10.80.80.12 tcp/1514-1515
+Allow-PC40-To-Wazuh-Dashboard  192.168.40.4 -> 10.80.80.12 tcp/443
+
+# DMZ 反代/入口 CT203 -> storage(逐一收編)
+Allow/SNAT-DMZProxy-To-Vaultwarden  10.60.60.10 -> 192.168.30.3 tcp/50303(SNAT 192.168.30.1)
+Allow/SNAT-DMZProxy-To-Jellyfin     10.60.60.10 -> 192.168.30.3 tcp/8096(SNAT 192.168.30.1)
+  ★ CT203 經 subnet-router 轉發到 30.3 時 tailscale 自動 masq 成 10.60.60.10 → 對上此 allow。
+
+# Authelia SSO(刻意無 SNAT——保留真實來源 IP 供 Authelia regulation / 動態閘門)
+Allow-Trusted-To-DMZProxy-443       trusted -> 10.60.60.10 tcp/443
+Allow-Servers-To-DMZProxy-443       servers -> 10.60.60.10 tcp/443
+Allow-DMZProxy-To-Prometheus-9090   dmz/10.60.60.10 -> 10.80.80.11 tcp/9090
+
+# Loki 日誌管線(push 單向、無 SNAT;CT202 同段、CT100 走 CT201 eth1 直連皆免規則)
+Allow-CT260-To-Monitor-Loki-3100           servers/192.168.20.60 -> 10.80.80.11 tcp/3100
+Allow-CT270-To-Monitor-Loki-3100           servers/192.168.20.70 -> 10.80.80.11 tcp/3100
+Allow-Honeypot-VM300-To-Monitor-Loki-3100  honeypot/10.66.66.10 -> 10.80.80.11 tcp/3100
+Allow-CT260-To-Monitor-Ntfy-8091           servers/192.168.20.60 -> 10.80.80.11 tcp/8091
+  (待辦19 notifier 發布 ntfy;2026-07-07 已上線,全鏈實測 200)
+  ★ 蜜罐唯一入內放行(使用者裁決);Loki 無認證,風險注記見《監控告警.txt》§5e。
+  ★ 排序:已 reorder 至 Block-Honeypot-To-10.80.80.0 之前(fw4 按 config 順序;REJECT-heavy zone
+    加 allow 必查既有 Block 順序,append 殿後會無效)。
+
+# pve-exporter PVE API
+Allow/SNAT-Monitor-To-PVE24-Server-API-8006     10.80.80.11 -> 192.168.20.5 tcp/8006(SNAT .20.1)
+Allow/SNAT-Monitor-To-RouterPVE-Infra-API-8006  10.80.80.11 -> 192.168.10.2 tcp/8006(SNAT .10.1)
+
+# CT203=唯一 subnet-router,tailnet 流量經 CT203 masq 後以 10.60.60.10 為源
+Allow-DMZProxy-TSGate-To-{infra,servers,storage,trusted,iot,service,game,mgmt}
+  dmz/10.60.60.10 -> 各 zone,proto all(8 條;「DMZ 不廣泛進內網」的刻意單主機例外——
+  安全把關移至 CT203 動態閘門,見 §4.8)
+Allow-DMZProxy-TSGate-To-Router-Web  dmz/10.60.60.10 -> router input tcp/80,443,8080
+★ 殘留:firewall.@rule[77] 為空匿名 section,待清理。
+```
+
+### 4.5 portscan-autoban
+
+```text
+WAN_IF:pppoe-wan   Threshold:5 次   Ban time:6h
+NFT:inet portscanban / banned_ipv4(raw prerouting 封鎖)
+Honeypot exempt:WAN tcp/22,23(被封來源仍只能進 VM300 Cowrie)
+Tripwire 排除:TCP 44444,49169 / UDP 43915,44444
+Metrics:http://10.80.80.1:9105/metrics.txt   每日 reset:台灣午夜(CST-8)
+```
+
+### 4.5.1 ssh22-tripwire(內網 22 埠絆線)
+
+```text
+設計:真實 SSH 在 52438(dropbear 三實例,22 埠零 listener),內網對任一 VLAN gateway 的 tcp/22
+  是死埠——任何敲擊=誤操作或橫向掃描。無白名單(刻意);自跑內網掃描前先
+  amtool silence alertname=SSH22TripwireHit。
+NFT:inet ssh22tripwire / input(priority -100,先於 fw4):
+  規則1:daddr {11 個 VLAN gateway} tcp/22 ct state new → limit 60/min burst 20 → log "SSH22-TRIPWIRE "
+  規則2:同匹配 → update @hits_v4(per-src counter)→ counter → drop(無限速,洪水時 drop 不失效)
+  11 gateway = 192.168.{10,20,30,31,40,50}.1 + 10.{60.60,66.66,70.70,80.80,90.90}.1
+檔案:/usr/bin/ssh22-tripwire + /etc/init.d/ssh22-tripwire(S99 oneshot)
+Metrics(隨 9105):openwrt_ssh22_tripwire_total{src} / _packets_total / _active
+告警(security.yml):SSH22TripwireHit(critical,ai_analyze 首發即 Tier2);
+  SSH22TripwireInactive(active!=1 for 10m,warning)
+已知缺口(接受):IPv6 不在範圍;daddr 不含 WAN IP/100.100.1.1;service restart flush 計數但
+  不清 hits_v4(increase 免疫)。
+回滾:disable+stop 後刪兩檔;備份 /usr/bin/portscan-autoban-metrics.before-20260705-todo16、
+  CT201 /opt/monitoring/rules/security.yml.before-20260705-todo16。
+```
+
+### 4.5.2 honeypot-ratelimit(WAN→蜜罐 SYN 洪水削峰)
+
+```text
+設計:WAN 22/23 DNAT 進蜜罐無白名單 → SYN 洪水會耗盡 VM300(1 vCPU)並吃 router conntrack。
+NFT:inet honeypotratelimit / preraw(priority -295:raw -300 與 cowriequarantine -290 之間、
+  conntrack -200 前 → 超量 SYN 在建 conntrack entry 前就丟)。以 tcp flags 判 SYN(conntrack 前
+  ct state 不可用)。
+  規則1 per-src:limit rate over 30/minute burst 10 → drop(dynamic set,timeout 2m;集滿 fail-open,規則2兜底)
+  規則2 aggregate:limit rate over 600/minute burst 200 → drop(分散式洪水 backstop)
+檔案:/usr/bin/honeypot-ratelimit + /etc/init.d/honeypot-ratelimit(S99 oneshot)
+Metrics(隨 9105):openwrt_honeypot_ratelimit_active / _dropped_packets_total{scope}。無專屬告警
+  (靜默失效=回到加固前現狀,接受)。IPv4 only(WAN 22/23 DNAT 本即 v4)。
+回滾:disable+stop 後刪兩檔;備份 /usr/bin/portscan-autoban-metrics.before-20260705-hpratelimit。
+```
+
+### 4.6 Cowrie quarantine
+
+```text
+Controller / Metrics:OpenWrt /usr/bin/cowrie-quarantine{,-metrics}
+State dir:/tmp/cowrie-quarantine-state
+Cowrie metrics source:http://10.66.66.10:9116/metrics(★VM300 停機中,端點暫不可達)
+Ban time:10d(新登入嘗試刷新 timeout)
+NFT:inet cowriequarantine / quarantined_ipv4(獨立 table,勿混入 portscanban)
+隔離中放行:WAN tcp/22,23;其餘 WAN drop
+Metrics:http://10.80.80.1:9105/cowrie-quarantine-metrics.txt
+控制邏輯在 OpenWrt;CT201 只 scrape + Grafana 可視化。
+```
+
+### 4.7 IPv6 現況(下游僅 DMZ 有 GUA + OpenWrt WAN GUA)
+
+```text
+現況:OpenWrt 自身有公網 v6 GUA;下游唯一有 v6 的段=DMZ(VLAN60/CT203);其餘下游 VLAN 皆無 v6。
+- wan6(dhcpv6 @wan):IA_NA 給 router GUA(2001:b011:5c11:6fd7::/64 段,落 pppoe-wan);
+  PD 2001:b011:5c10:9fbc::/64 由 DMZ 消費。network.wan.ipv6='1'(IPv6CP 常駐,reload 不重撥)。
+- DMZ:network.dmz delegate='1' + ip6assign='64' → eth1.60=2001:b011:5c10:9fbc::1/64;
+  dhcp.dmz ra='server' ra_slaac='1'。CT203 SLAAC 得 GUA(proto kernel_ra,前綴漂移自動跟隨、不寫死)。
+  ★ 三個必要前置(缺一 v6 全不通,血淚見缺改「DMZ v6 GUA 上線」):
+    ① firewall rule 'Allow-DMZ-ICMPv6'(src=dmz family=ipv6;ND+echo+PMTU)。
+       ★戒律:任何內部 zone 要 v6 都須配 Allow-<zone>-ICMPv6。
+    ② pve24 vmbr0 multicast_snooping=0('bridge-mcsnoop 0' 持久化)——否則剪掉 RA multicast。
+    ③ CT203 net.ipv6.conf.{default,eth0}.accept_ra=2——forwarding=1 時須=2 才吃 RA。
+- 其餘下游 VLAN:無 ip6assign → 零 v6(僅 fe80);lan/trusted 明確 ra/dhcpv6/ndp=disabled。
+  HiNet 只委派一個 /64 且已給 DMZ → 別段不可能再有真 GUA(relay/ND-proxy 為死路)。
+- 為何給 DMZ v6:手機(S24U)行動網 v4 硬 NAT 打洞不成,只能 tailscale v6 直連;訪問內網經
+  CT203(subnet-router),phone↔CT203 走 v6 直連才快(取代 DERP ~90–150ms)。v6 只當 tailscale
+  外層傳輸端點,隧道內/subnet-route/動態閘門維持 v4。
+- 安全:wan zone 對 v6 input/forward 仍 DROP、無 wan→dmz 轉發、無 v6 DNAT → 冷 inbound v6 進不來
+  (established/related 回程才通)。GUA 只被動可 ping(決策保留)。
+  CT203 另有主機 v6 守衛(nft inet ct203v6guard):eth0 inbound v6 除 established/related+ICMPv6
+  外全 drop(第二道防線)。dmz→internal v6 不放行(forward_dmz 放行皆 v4 saddr)→ CT203 無法以
+  v6 橫移內網。tripwire/autoban/cowrie 仍 v4-only=潛伏無害(無 inbound v6 放行);開任何 inbound
+  v6 服務前須先補 v6 分身。
+- 連線型態:phone↔OpenWrt=direct(v6)、phone↔CT203=direct(v6);phone↔RouterPVE 仍 relay(無 v6)。
+- L2 路徑:VM101(net1 trunk 含 VID60)→ 實體 trunk → pve24 vmbr0(snoop=0)→ CT203。
+  RouterPVE 各橋 snoop=1 但 mcast_flood=on + uplink mcast_router=1 → RA 穩健,毋須改。
+回滾(移除 DMZ v6):uci del network.dmz.ip6assign; set delegate='0';dhcp.dmz 還原 ignore='1';
+  刪 Allow-DMZ-ICMPv6;reload。pve24 snooping 還原。CT203 disable v6guard + 刪 nft/sysctl.d。
+  備份 /etc/config/{network,dhcp,firewall}.before-20260706-dmzv6。
+```
+
+### 4.8 Tailscale
+
+```text
+OpenWrt = Tailscale 節點(DNS 100.100.1.1 + 救援備援);subnet-router 職責已移交 CT203:
+  AdvertiseRoutes 已清空(2026-07-07 核實 null/RouteAll=false)。手機 DNS 仍指 100.100.1.1。
+  ts_phone_* 放行規則保留但已無流量路徑(留作回滾=console 重核准 OpenWrt 路由)。
+accept-routes=false:OpenWrt、24Bay PVE、DXP4800、CT260(內網節點不接受 advertised routes)。
+手機(100.100.1.6):accept-routes=true+使用子網路由;用節點 LAN IP 才走直連。
+
+節點裁撤現況(2026-07-07 核實):
+  CT260:tailscaled disabled+inactive ✔
+  24Bay:inactive+disabled ✔(但無 tailscale0 而殘留孤兒 tailscaled 程序,待清理)
+  DXP:tailnet offline,但 last seen 晚於裁撤日,待 SSH 開窗核對主機端狀態
+  RouterPVE:保留=break-glass 救援;★tailnet IP 現為 100.100.1.0(002-router-pve),非 V6 所載 1.21
+★ owned set 待修:ctdmz owned_v4 現={100.100.1.1,.4,.6,.7,.21}——仍含殭屍 1.21(正是「已裁 IP
+  防回收重分配」要防的對象),且未含 RouterPVE 現值 1.0 → break-glass 節點打 CT203 自身服務會被
+  input 鏈當外人擋。修法=改 CT260 ~/.config/homelab/authelia/ctdmz.nft 的 owned_v4(1.21→1.0)後
+  重載(會清空 ts_authed_v4 通行證=需重驗,屬安全預設)。
+★ ctdmz.nft 起手為 delete-recreate(flush table 不清 set elements 的 bug 已修,見缺改記錄)。
+
+CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct dev0):
+  advertise(console 全核准):192.168.10/20/30/40/50.0/24、10.60.60/70.70/80.80/90.90.0/24、
+  192.168.30.3/32。accept-routes=false、accept-dns=false、snat-subnet-routes 開
+  (轉發流量以 10.60.60.10 出現於內網)。
+  直連:tailscaled 固定埠 41642(/etc/default/tailscaled)+ OpenWrt 入站 DNAT + 出站保留來源埠
+    (§4.2)=靜態 1:1/EIM。手機端轉直連需前台/活躍(Android doze 背景只維持 DERP)。
+  ★ 此手機(S24U)實測只做 v6 直連、不做 v4 直連(行動網 v4 硬 NAT;41642 v4 DNAT 對它幾乎無流量,
+    僅零星封包)。真正生效路徑=CT203 DMZ v6 GUA,tailscaled 以 [GUA]:41642 為 v6 端點,
+    phone(蜂巢 v6)↔CT203 v6 direct。41642 v4 鏈路保留(對未來可 v4 直連的 peer 有用)。
+    在家 Wi-Fi 時 --until-direct 回 via 192.168.50.x(本地直連);外出蜂巢才驗得 v6 direct。
+
+  動態閘門(nft inet ctdmz v3;/etc/nftables.d/ctdmz.nft + ctdmz-nft.service):
+    - FORWARD:媒體豁免兩條(免驗證,靠服務自身帳密):tailnet→30.3:8096 Jellyfin(含 Share node
+      朋友)、tailnet→20.70:4533 Navidrome。其餘 tailnet→內網須來源 IP ∈ @ts_authed_v4
+      (timeout set)——Authelia 帳密+TOTP 過後由 ts-gate 寫入,效期到台北當日 00:00 嚴格失效;
+      不符者 tcp reject / 其他 drop。tailscale0 的 IPv6 轉發一律 drop(閘門僅 v4;路由皆 v4)。
+      ★ ctdmz-nft 重啟或 CT203 重開機=白名單清空(要重驗,安全預設)。
+    - PREROUTING(nat):未驗證「自有節點」打內網 http(80/8080)redirect→Caddy:8082→302 到
+      auth.hl 登入頁(HTTPS/非 web 埠快速 reject;登入後 Authelia 落 gate.hl 自動發通行證)。
+    - INPUT:非自有 tailnet 來源擋 {22,80,443,8082,9091,9100,9959}(朋友只剩 Jellyfin)。
+  流量路徑:phone(100.x)→CT203(閘門→masq 10.60.60.10)→OpenWrt dmz zone→各 VLAN
+  (OpenWrt 端 9 條 TSGate 放行見 §4.4)。在家開著 Tailscale 的手機同樣走閘門(使用者接受)。
+  ★ Tailscale console ACL(2026-07-04 設):grant autogroup:shared→192.168.30.3 tcp:8096
+    (朋友只能 Jellyfin);tailnet 之 * 不含 shared users(官方設計)→ 與 ctdmz nft 互為雙保險。
+
+  ★★ 安全模型尾註:OpenWrt 對 10.60.60.10 是「靜態 proto-all 常開」(8 條 TSGate 只匹配 saddr),
+    tailnet→內網的唯一把關全在 ctdmz forward 鏈。兩個已知弱點:
+    (W1 fail-open)forward policy=accept、deny 綁 iifname tailscale0;若 ctdmz-nft.service 開機
+      載入失敗=整表消失 → 未驗證直穿內網。已補 ctdmz_gate_up 指標 + CtdmzGateDown 告警守護
+      (§10.7 + 監控告警.txt)。
+    (W2 主機自身不受閘門管制)ctdmz 無 output 鏈;CT203 被打穿即有 proto-all 橫移 8 內段能力。
+      安全模型=「完全信任 CT203」,緩解靠 unprivileged LXC/Wazuh(★sshd 實況見 §10.7)。
+      進一步收斂選項:把 8 條 proto-all 收成實際用到的目的服務埠(least-privilege,未做)。
+```
+
+---
+
+## 5. CT201 Monitoring / 觀測面
+
+```text
+hostname:monitor   正式 IP:10.80.80.11   DNS:10.80.80.1 192.168.20.5
+介面:
+  eth1  10.70.70.11/24   game observation
+  eth2  10.80.80.11/24   正式監控 / default route
+```
+
+Docker services(/opt/monitoring):
+
+```text
+homepage      3000   Up/healthy
+grafana       3002   Up
+prometheus    9090   Up
+uptime-kuma   3001   Up/healthy
+gotify        8090   告警推播(內網;admin 密碼 /opt/monitoring/gotify.env)
+alertmanager  9093   設定 /opt/monitoring/alertmanager.yml
+alertmanager-gotify-bridge   無 host port(內網 docker network)
+loki          3100   grafana/loki:3.7.3(retention 30d,loki_data 卷=SSD)
+promtail      1514/udp   grafana/promtail:3.6.11(OpenWrt syslog listener + 本機 journal/docker)
+pve-exporter  compose 內網 :9221   prompve/prometheus-pve-exporter:3.9.0
+              ★ pve.yml 須 0600 且屬主 uid/gid=101(容器內 prometheus)
+ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07;auth deny-all,
+              user pub/phone,憑證在 CT260 ~/.config/homelab/ntfy.env;原文 :8090 因撞
+              Gotify 改 :8091;詳見監控告警 §5g;Kuma 探活 :8091/v1/health 待 UI 加)
+```
+
+Prometheus targets:22 個;2026-07-07 稽核 19 up / 3 down——
+  dxp4800-node(connection refused,非預期,見 §1.4)、cowrie-exporter 與 vm300-honeypot-node
+  (no route,VM300 停機屬預期)。
+Loki 管線細節(各節點 promtail、label 慣例、風險注記)見《監控告警.txt》§5e(單一來源,本文不重列)。
+
+node_exporter:原生 systemd(unit 名=prometheus-node-exporter.service,寫自動化時注意);
+  prometheus 經 host.docker.internal:9100 抓自身。
+cowrie-geoip-exporter:原生 systemd,bind 0.0.0.0:9117(target 10.80.80.11:9117)。
+portscan-geoip-exporter:原生,0.0.0.0:9115;target = host.docker.internal:9115。
+
+Prometheus 目標/規則/告警管線/Grafana dashboard/DeepSeek notifier 細節:見《監控告警.txt》。
+
+Homepage:config /opt/homepage/config/{services,settings}.yaml(compose 在 /opt/homepage,
+  非 /opt/monitoring;bind-mount → /app/config)。入口清單=正式 DNS/VLAN 入口 + 本站兩張 dashboard
+  (/d/homelab-overview、/d/openwrt-portscan-autoban);「監控與骨幹」父群組(header:false,
+  style:row,columns:4)。
+  ★ 改 config 後 Next.js 用 .next 快取沿用舊頁(docker restart 無效);
+    需 cd /opt/homepage && docker compose up -d --force-recreate homepage 才重繪。
+```
+
+---
+
+## 6. 24Bay PVE storage 與備份
+
+PVE storages(用量=2026-07-07 稽核時點,動態值):
+
+```text
+local                    dir       ~7%
+local-lvm                lvmthin   ~8%      (CT260 rootfs)
+SSD-2                    lvmthin   ~65%     (主要 LXC rootfs)
+HDD-0                    dir       ~1.5%    (VM300 disk/cloudinit;sda /mnt/hdd500a)
+hdd1                     lvmthin   低使用   (sdc 912G;CT270 rootfs)
+Nas                      cifs      ~63%     (指向 DXP 10G SMB,名稱偏舊,待整理)
+DXP4800-Backup-SMB100    cifs      ~63%     (正式 backup storage 名稱)
+```
+
+Vaultwarden production backup chain:
+
+```text
+DXP /volume1/docker/bitwarden
+  -> DXP root-only script(sqlite3 .backup + rsync staging)
+  -> Duplicati CLI 加密備份
+  -> 24Bay SMB over 10G //192.168.100.3/breakglass-backup/vaultwarden-duplicati
+  -> 24Bay local HDD /mnt/hdd500a/breakglass-backup/vaultwarden-duplicati
+```
+
+備份檔收納位置/命名/保留策略:見《備份位置及策略索引.txt》。
+
+---
+
+## 7. Minecraft(proxy/backend 分離)
+
+### CT102 mc-proxy
+
+```text
+CTID 102   hostname mc-proxy   IP 10.70.70.10/24   GW 10.70.70.1   RAM 1G   DNS 10.70.70.1
+用途:Velocity / Geyser proxy;velocity.toml 後端指 10.70.70.20:25565
+```
+
+### CT100 MC-server
+
+```text
+CTID 100   hostname MC-server
+Backend IP   10.70.70.20/24   GW 10.70.70.1   DNS 10.70.70.1
+10G data IP  192.168.100.10/24
+RAM 16G   CPU 4 cores(cpuset 2-5)
+用途:Minecraft backend;MCSManager web 10.70.70.20:23333 / daemon :24444
+  MCSManager 實例 Fabric-MC autoStart=true(配合 UPS 復電自動爬起;server.properties
+  server-ip=10.70.70.20,25565 綁定生效)
+本機 nft(/etc/nftables.conf mc_backend_guard):
+  放行 Velocity 10.70.70.10 -> 25565 + icmp echo-request;CT201 10.70.70.11 -> tcp/23333 +
+  tcp/9100(node_exporter)+ icmp(監控)。
+promtail 3.6.11(原生 systemd):journal + /root/minecraft/logs/latest.log +
+  /var/log/mcsmanager/*.log → push CT201 eth1 10.70.70.11:3100(同 VLAN70 L2 直達)。
+```
+
+外部入口:
+
+```text
+Java:    mc.lailai74143.com:49169 -> OpenWrt WAN DNAT -> 10.70.70.10:25565 -> 10.70.70.20:25565
+Bedrock: WAN udp 43915 -> 10.70.70.10:19132
+內部 PC: mc.lailai74143.com:49169 -> OpenWrt LAN hairpin -> 10.70.70.10:25565
+```
+
+---
+
+## 8. VM300 Honeypot
+
+```text
+VMID 300   name honeypot   OS Debian 13   IP 10.66.66.10/24   GW 10.66.66.1   VLAN 666
+RAM 4G(balloon 512)   CPU 1   Disk 64G + 8G(cowrie-var)   Agent enabled   Onboot 1
+★ 現況(2026-07-07):stopped——onboot=1 卻停機,原因未查(宿主重啟未自起或人為停機);
+  重啟需人工裁決。停機期間:WAN 22/23 DNAT 指向死主機(無害)、cowrie/vm300 兩個監控 target down。
+PVE net0 必須保留 tag=666, firewall=0(否則 Cowrie/exporter 與 honeypot VLAN 斷線)
+```
+
+Cowrie 服務(停機前紀錄;host 側可驗項已核,VM 內部待開機後複驗):
+
+```text
+cowrie.service active/enabled
+SSH honeypot    0.0.0.0:2222      Telnet honeypot 0.0.0.0:2223
+真 SSH 管理口   0.0.0.0:8294
+cowrie-exporter(只讀 cowrie.json)10.66.66.10:9116(OpenWrt 只開 CT201 -> :9116)
+log(原始證據源,留在 VM300):
+  /home/cowrie/cowrie-honeypot/var/log/cowrie/cowrie.{json,log}、var/lib/cowrie/tty/
+```
+
+隔離:honeypot -> 內網一律 block;例外=Allow-Honeypot-VM300-To-Monitor-Loki-3100 單向 push(§4.4)。
+出網:VM300 無 WAN 出網(2026-07-05 實測 DNS 失敗+直連 443 被拒);規則面正式確認仍待辦。
+日誌策略:原始 JSON/TTY 留 VM300 作證據;promtail push 10.80.80.11:3100(Loki 為串流副本)。
+
+---
+
+## 9. CT250 Restore Lab / Claude Code Lab
+
+```text
+CTID 250   hostname vaultwarden-restore-test   IP 192.168.20.50/24   GW 192.168.20.1
+DNS 192.168.20.1 192.168.20.5   RAM 4G   Swap 4G   Onboot 0
+★ 現況:stopped(Onboot 0,常態關機;需要時手動開)。
+```
+
+停機前紀錄(開機後如有變動以現場為準):
+
+```text
+Docker:無 running container(Vaultwarden restore 流程已驗證可重建,見缺改記錄)。
+cc-model:/usr/local/bin/cc-model   current profile glm   model_slot opus   effortLevel max
+  ANTHROPIC_BASE_URL https://open.bigmodel.cn/api/anthropic   ANTHROPIC_MODEL glm-5.2
+profiles:deepseek(日常穩定)/ glm(GLM-5.2)/ glm-fast(短任務)/ proxy-lab(實驗)
+```
+
+---
+
+## 10. CT260 Codex Ops
+
+```text
+CTID 260   hostname codex-ops   IP 192.168.20.60/24   GW 192.168.20.1
+DNS 192.168.20.1 192.168.20.5   Storage local-lvm   Rootfs 16G   RAM 4G   Swap 4G   CPU 2
+Onboot 1   Unprivileged 1
+user codex(uid/gid 1000)   password locked   sudo 無   SSH key-only
+Codex CLI 0.142.2   config /home/codex/.codex/config.toml   model gpt-5.5   reasoning xhigh
+  sandbox workspace-write   cli_auth_credentials_store file
+```
+
+```text
+角色:乾淨的 Codex 操作節點,不是全權管理節點。
+inbound key:pc-homelab(PC -> CT260 codex)
+outbound ops key:ct260_ops_ed25519(-> pve24 codex-admin / openwrt root / dxp4800 / routerpve)
+Tailscale:已裁撤(tailscaled disabled+inactive;binary 1.98.4 仍在)。
+管理路徑:CT260 root 一向走 pve24 pct exec 260,非 SSH(root authorized_keys 為空)。
+```
+
+DeepSeek key:~/.config/homelab/deepseek.env(codex 擁有,600)可長期存放(notifier 需要)。
+OpenAI / GLM key 維持「非必要不長期存放於 CT260」。
+
+站外看門狗:~/.local/bin/watchdog-ct201.sh cron */2——經 pve24 pct 查 CT201 四要件
+(ct/prometheus/kuma/gotify),連續 2 輪失敗直發 TG 不經 Alertmanager;狀態檔 /var/tmp/wd-ct201.state
+兼 daily_brief 心跳行。細節見《監控告警.txt》§5c。
+promtail 3.6.11(原生 systemd):journal + ~/.local/state/homelab-notify/*.log → 10.80.80.11:3100。
+ntfy-webhook(待辦19,2026-07-07):~/.local/bin/ntfy-webhook.py :5001——ntfy 按鈕動作執行器,
+Bearer+白名單 13 動作,經 ssh pve24→pct 既有路徑;token ~/.config/homelab/ntfy-webhook.env(600);
+cron @reboot+*/5 flock 自癒(待使用者跑 finish-19-ct260.sh);細節見《監控告警.txt》§5g。
+
+git 統一 repo:root=/home/codex(branch main),.gitignore 白名單納管 workspace/ForAI/ +
+~/.local/bin/ 自製腳本 + life-ops-mcp/;秘鑰全域排除,機密只在 ~/.config/homelab/*.env(不入庫)。
+cron 每日 23:30 Taipei hl-git-autocommit(無變更跳過;remote 未就緒僅 commit)。
+remote=GitHub private repo github.com:LaiLai-74143/ct260-homelab(deploy key ~/.ssh/github_ed25519;
+★帳號名含連字號,勿寫 lailai74143)。
+
+Ansible config-as-code:controller=本機(不建 VLAN90 host)。venv ~/.venvs/ansible
+(ansible 14.1.0 / core 2.21.1 + paramiko,不入庫);樹 ~/workspace/ansible(入庫)。
+inventory:pve24/routerpve/openwrt 走 SSH(openwrt dropbear 無 sftp → transfer=piped);
+ct100/102/201/202/203/204/250/270 走 community.proxmox.proxmox_pct_remote(ssh pve24 + pct exec);
+ct250/dxp4800 另入 manual 群(常態關機/SSH 關窗);vm300 刻意排除(污染區)。
+playbooks/config-backup.yml 唯讀撈全站現役設定入 backups/(檔數隨每日 cron 漂移,稽核時 70),
+scan-secrets.sh gate(明文秘鑰擋);hl-ansible-backup 包裝(gate 失敗回滾+直發 TG),
+cron 23:15 Taipei(排在 23:30 autocommit 前)。
+
+---
+
+## 10.5 CT270 Life-Ops(NocoDB 個人系統)
+
+```text
+CTID 270   hostname life-ops   IP 192.168.20.70/24   GW 192.168.20.1
+DNS 192.168.20.1 192.168.20.5   Storage hdd1(sdc lvmthin)   Rootfs 32G
+RAM 4G   Swap 2G   CPU 2   Onboot 1   Unprivileged 1   features nesting=1,keyctl=1
+OS:Debian 13。Docker 29.6.1 + compose plugin v5.2.0。
+```
+
+用途:個人「行事曆 + 借貸 + 物品位置/瑣事 + 文件 + 音樂」系統,供與 Agent 互動。
+行事曆用 Google Calendar(雙向同步,NocoDB Events 表已刪);NocoDB 專責借貸/人物/瑣事。
+
+```text
+NocoDB:/opt/nocodb compose = nocodb + postgres16(volumes nc_data/pg_data)。
+  Web/API :8080(health /api/v1/health)。compose 600 內含 DB 密碼。NC_DISABLE_TELE=true。
+  資料模型(base Life-Ops id=ppralaha4e76q5o;3 表):People、Transactions、Notes;
+  Transactions.counterparty、Notes.people 皆 mm link -> People。admin=LaiLai74143@Gmail.com。
+  存取:PC40 tcp/8080;手機經 CT203 閘門;Agent(CT260 同段 L2)走 REST API
+  (token 存 CT260 ~/.config/homelab/nocodb.env,600)。
+
+出網政策:離網優先(個資節點)。Deny-CT270-LifeOps-To-WAN(uci 名 deny_ct270_wan,排在
+  servers→wan forwarding 前,只擋 CT270)封 WAN + 容器內 disable IPv6(v6 GUA 前綴隨 PD 漂移,故在端關);
+  唯二出口=CT202 fwdproxy(HA/dockerd,HTTP(S)_PROXY=10.80.80.10:3128)與小米雲 scoped-WAN
+  (ipset 具名放行,§4.4)。維護工具 ct270-net-on/off/status(OpenWrt /usr/local/bin;
+  現多數更新已走代理,少用;用完務必 net-off)。
+監控:node_exporter :9100(原生 systemd,離線裝);promtail(journal+docker_sd 容器日誌)
+  → 10.80.80.11:3100;已入 Grafana 設備總覽。
+
+Google Calendar(v2.0):OAuth2 installed-app refresh token;憑證存 CT260
+  ~/.config/homelab/gcal.env(600)。取 token 工具 /home/codex/life-ops-mcp/get_gcal_token.py。
+  API 由 CT260 發出(CT270 維持斷網)。OAuth 同意畫面在「測試」模式;refresh token 久置會失效,
+  屆時重跑取 token。
+
+Home Assistant(HA Container 形態;LXC 內不能 HAOS/Supervised,無官方 Add-on,HACS 可用):
+  /opt/homeassistant compose = home-assistant:stable,network_mode host,Web :8123,
+  TZ Asia/Taipei。recorder commit_interval:30 + purge_keep_days:7(HDD 調校,與 postgres 共
+  5400rpm 盤)。存取:PC40 tcp/8123。image 拉取經 fwdproxy。
+  米家(xiaomi_miot 側載 v1.1.4;Mi Account 雲端匯入 server_country=cn,一次進 20 台;
+  conn_mode=auto=本地優先、雲端後備):
+    ① WiFi 設備:本地 miio(必須 SNAT 成 .50.1,§4.4)+ 雲後備。
+    ② BLE/BLE-Mesh:小愛音箱當閘道 → 雲 → HA(無本地路徑)。
+    ③ Zigbee(lumi 煙感):Zigbee 閘道 → 雲(無本地路徑)。
+  ★ 排錯:WiFi 設備「HA 啟動當下離線、之後才上線」會卡 unavailable——xiaomi_miot 雲端清單快取
+    (.storage/xiaomi_miot/devices-*-cn.json)存了 online=False 不自動重抓;修法=Reload 整合,
+    吃舊快取則刪 devices-*.json 再 reload/重啟 HA。
+  出站繞代理:容器 NO_PROXY 含 .mi.com/.xiaomi.com/.miot-spec.org/.miot-spec.com → 小米流量
+    直連、由 scoped-WAN 接住。Mi 帳密/service_token 只在 HA .storage,不經 Agent、不入本文件。
+  miio 規則收窄(pin dest_ip)暫緩:iot 多為動態 IP,pin 死易破控;現況已 src+單埠+單目的區。
+
+Paperless-ngx(文件管理+OCR):/opt/paperless compose = paperless-ngx:2.20.15(:8000)+
+  redis:8.6.4;DB 共用 nocodb postgres16(庫 paperless)。卷 data/media/redisdata(named volume
+  隨 rootfs 入 vzdump);./consume ./export 為 bind。compose 去密 ${VAR}+本地 .env(600);
+  副本+API token 在 CT260 ~/.config/homelab/paperless.env(600)。admin=admin。
+  OCR:RapidOCR sidecar 為主(本地 build paperless-ocr:rapidocr3.9.1;PP-OCRv5 det=mobile+
+  rec=server)、tesseract chi_tra+eng 為備。三條入件路:
+    ① PDF:PRE_CONSUME_SCRIPT POST http://ocr:8080/ocr → 內嵌隱形文字層雙層 PDF(paperless
+      OCR_MODE=skip 見文字層就不跑 tesseract);
+    ② 圖片:ocr 容器 watcher 掃 /consume 圖→雙層 PDF(原圖刪),paperless 只吃成品 PDF;
+    ③ 補救路 POST_CONSUME_SCRIPT:入庫後把原件 POST /text,以 RapidOCR 純文字覆寫
+      document.content+重建索引(吃 API 直傳圖片與自產短件;自產件帶 producer 標記,
+      pre-consume 對其 skip,絕不重 OCR 自己的產出)。
+  fail-open:sidecar 掛 → pre/post 皆 exit 0,tesseract 接手(已實測)。
+  OCR_SKIP_ARCHIVE_FILE=with_text:有文字層不產 PDF/A(ghostscript 會弄壞 ToUnicode →
+  -0x100 碼位錯字)。文字層字型必須 TTF(NotoSansTC+subset;內建 china-t/OTF 皆不可)。
+  模型/字型烘在映像內,執行期零外聯;rebuild 只需 pypi(白名單已涵蓋)。
+  入件:①手機 app(Paperless Mobile)指 http://paperless.home.arpa:8000(掃描 PDF=路①;
+  分享原始照片=API 直傳=路③)②consume 資料夾(inotify 即時)。存取:PC40 tcp/8000。
+  ★ 搜尋:whoosh 中文斷詞粗糙(「測試」搜不到「測試文件」);API title_content= 子字串比對可靠;
+    MCP paperless_search 已做零命中自動 fallback。
+  Kuma 探活 :8000(302 即活)=待使用者 UI 加。
+
+Navidrome 音樂串流:/opt/navidrome compose = navidrome:0.62.0(單容器,內嵌 SQLite)。
+  Web/Subsonic :4533(/ping 200 即活)。設定全 env(無密可入庫):ND_MUSICFOLDER=/music、
+  ND_ENABLEINSIGHTS=false、ND_SCANINTERVAL="6h"、TZ=Asia/Taipei。
+  音樂庫(唯讀 SMB,10G fabric):pve24 host cifs //192.168.100.2/Music → /mnt/music-nas
+  (fstab ro,_netdev,nofail,vers=3.1.1;憑證 pve24:/root/.smb-navidrome.cred)→ LXC bind
+  mp0 /music(ro,backup=0)→ 容器 ro bind。unprivileged LXC 不能自掛 cifs,故 host 掛+bind。
+  ★ 現況(2026-07-07):音樂庫已有內容(33 檔);但「自動掃描」機制目前不存在——
+    0.62 的 ND_SCANINTERVAL 實測無效(印 Periodic scan DISABLED)、cifs 無 inotify、
+    且 V6 所稱 cron 源檔 ~/workspace/navidrome/navidrome-scan.cron 並不存在(CT270 /etc/cron.d
+    亦無)→ 新歌入庫需 UI 手動「立即掃描」或重啟容器全掃;補 cron(docker exec navidrome
+    navidrome scan)仍為待辦(Agent 佈署曾被 auto-mode 分類器擋)。
+  存取(靠 Navidrome 自身帳密/Subsonic token,不經 Authelia):PC40 tcp/4533;
+  手機 tailnet→20.70:4533 閘門豁免(§4.8)。DNS music.home.arpa→20.70。
+  監控/備份:promtail docker_sd 收容器日誌;vzdump 含 CT270,mp /music backup=0;
+  navidrome_data named volume 在 rootfs=涵蓋。Kuma /ping 探活=待使用者 UI 加。
+  源檔/回滾:CT260 ~/workspace/navidrome/{docker-compose.yml,ctdmz.nft,finish-18.sh,
+  finish-18-openwrt.sh,README.md};備份 pve24 /etc/fstab.before-todo18-*、
+  CT203 ctdmz.nft.before-todo18、openwrt firewall/hosts .before-todo18-*。
+
+MCP server:CT260 /home/codex/life-ops-mcp/server.py(零依賴純 Python stdio JSON-RPC)。
+  讀 nocodb.env/gcal.env/paperless.env 直連各 API。已註冊 Claude Code(user scope,Connected)。
+  18 工具:行事曆(Google)calendar_agenda/add/update/delete/conflicts/prep_check;
+  人物 find_person/add_person;借貸 list_debts/balance_by_person/add_transaction/
+  settle_transaction/overdue_debts;瑣事 find_note/add_note/list_todos;
+  綜合 daily_brief;文件 paperless_search(全文+中文子字串 fallback)。
+  用法:在 CT260 開新 claude session 即載入。
+```
+
+## 10.6 CT202 fwdproxy(VLAN80 正向/出站代理)
+
+用途:讓 CT270(個資節點)在不開整段 WAN 前提下,只經一個出站域名白名單收斂點上網。
+刻意與 CT260(ops/AI 節點)解耦——CT260 故障不牽連無關的出口服務。
+
+```text
+CT202  hostname fwdproxy  VLAN80 10.80.80.10/24  GW 10.80.80.1  DNS 10.80.80.1
+  規格:Debian 13 unprivileged LXC,1 core / 512M / rootfs SSD-2:6G,onboot=1。
+  軟件:裸 squid 6.13(apt;單一用途、攻擊面小)。
+  路徑:CT270 --servers→service tcp/3128--> squid --service→wan--> WAN(CT270 永不碰 wan zone)。
+  設定:/etc/squid/squid.conf(原檔 squid.conf.orig)。http_port 3128。
+    client ACL:僅 192.168.20.70 + 本機;HTTPS 走 CONNECT 用 dstdomain 比對(不 SSL-bump)。
+    出站白名單 dstdomain:.github.com .githubusercontent.com codeload.github.com ghcr.io
+      pkg-containers.githubusercontent.com pypi.org files.pythonhosted.org .home-assistant.io
+      api.met.no deb.debian.org
+    (docker.io 等為註解,要更新 image 時暫開;Docker Hub blob CDN 現為
+      production.cloudfront.docker.com。★dstdomain 子域重複=parse FATAL,加窗前先 grep 既有清單。)
+    非白名單 → TCP_DENIED/403。cache deny all。日誌 /var/log/squid/access.log。
+  客戶端:CT270 dockerd http-proxy drop-in;HA 容器 env HTTP(S)_PROXY + NO_PROXY 內網段。
+  加白名單流程:編 dstdomain 行 → squid -k parse → systemctl reload squid。
+  快照:pct snapshot 202 baseline。
+  監控:apt prometheus-node-exporter :9100;squid-metrics.sh cron 每分鐘出 squid_up/denied/allowed
+    textfile 指標;告警 SquidProxyDown(critical)/SquidDeniedSpike(warning);Kuma port 3128。
+  日誌:promtail 3.6.11——journal + /var/log/squid/{access,cache}.log → 10.80.80.11:3100。
+  ★ 既有故障:systemd-journald(243/CREDENTIALS,自 2026-07-01)journal 空轉待修(監控告警 §5e)。
+```
+
+---
+
+## 10.7 CT203 ct-dmz-proxy(VLAN60 DMZ 反向代理入口)
+
+用途:對外/公開服務統一經 VLAN60 反代進出,把「對外面」從 DXP4800 剝離。第一個 DMZ host。
+反代選型=Caddy(原生 forward_auth 對接 Authelia;裸 apt)。
+
+```text
+CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60.1
+  v6:SLAAC GUA 2001:b011:5c10:9fbc:be24:11ff:fe4c:db63/64(accept_ra=2,proto kernel_ra 抗漂移)
+     =tailscale v6 傳輸端點。主機 v6 守衛 nft inet ct203v6guard(eth0 冷 inbound v6 全 drop,
+     除 established/related+ICMPv6)。見 §4.7。
+  規格:Debian 13.1 unprivileged LXC,2 core / 2G / rootfs SSD-2:16G,onboot=1。
+  管理:pve24 pct exec;root console pw locked。快照 pct snapshot 203 baseline。
+  ★ SSH 實況(2026-07-07 稽核,修正 V6「無 SSH」):openssh-server 已裝、ssh.service active、
+    sshd 監聽 *:22。緩解=無 authorized_keys、root pw locked、OpenWrt 未對 DMZ 放行 22,
+    實際無登入途徑;但 listener 存在,與「DMZ 最小面」不符 → 待辦:disable ssh.service+socket
+    或文件定案接受。
+  Caddy:Debian pkg 2.6.2(apt-mark hold 釘版)。auto_https disable_redirects(cloudflared→Caddy
+    內部 http,Cloudflare 邊緣終結 TLS;內部站 tls internal 自簽,根憑證
+    /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt)。
+    源檔 CT260 ~/workspace/ct-dmz-proxy/Caddyfile → pct push → caddy validate → restart
+    (★admin off 與 reload 不相容,一律 systemctl restart caddy,斷 ~1s)。
+    站點::80 /health→200(Kuma 探活)+ Vaultwarden 反代(→192.168.30.3:50303)+
+    auth.hl→127.0.0.1:9091 + 受保護站(forward_auth 前置):prometheus.hl→10.80.80.11:9090、
+    grafana.hl→:3002、kuma.hl→:3001、homepage.hl→:3000 + :8082 跳轉站(未驗證 http 被 nft
+    redirect 至此 → 302 auth.hl)。
+  cloudflared:active/enabled(Vaultwarden 對外=CF Tunnel → 本機 connector → Caddy → DXP:50303;
+    tunnel token 機密由使用者持有)。cutover 已完成;仍 OPEN:AGH vault.* rewrite→10.60.60.10、
+    Kuma 探活。runbook:CT260 ~/workspace/ct-dmz-proxy/CUTOVER-runbook.md。
+  Authelia SSO:features nesting=1,keyctl=1;Docker 26.1.5(daemon.json iptables:false/
+    ip6tables:false——不碰 nft、不干擾 tailscale/ctdmz;容器一律 host network)。
+    /opt/authelia compose = authelia:4.39.20 + redis:7.4.9-alpine;authelia 綁 127.0.0.1:9091
+    (僅本機 Caddy 用)+ metrics 0.0.0.0:9959(CT201 job authelia,order 18);redis 綁 127.0.0.1。
+    設定:configuration.yml / users_database.yml(帳號 lailai/admins,argon2id)/ .env 皆 600;
+    源檔+使用者密碼副本在 CT260 ~/.config/homelab/authelia/(600)。
+    ★ session cookie domain=hl.lailai74143.com(home.arpa 是 public suffix,Authelia 4.38+ 硬拒);
+      該子域僅內部解析(§3),無公網 record。TOTP 註冊+密碼重設已完成。
+    OPEN:Kuma 探活(UI)、續收編其他服務(app-token 類如 Vaultwarden 需對 app 路徑 bypass)。
+    快照 pre/post-authelia、pre/post-tsgate。
+  動態閘門:規則本體與流程見 §4.8。ts-gate.service=python3 stdlib(/opt/authelia/gate/gate.py,
+    127.0.0.1:9092,root 跑 nft):經 https://gate.hl(forward_auth;header_up X-Gate-Client 防偽造)
+    把來源 tailnet IP 寫入 ts_authed_v4(timeout=距台北當日 00:00)。
+    Authelia default_redirection_url → gate.hl(登入即發通行證)。
+    媒體豁免(destination-based,不經 Authelia):Jellyfin 30.3:8096、Navidrome 20.70:4533。
+    ntfy 豁免(待辦19,@owned_v4 限定,比媒體豁免緊):10.80.80.11:8091(訂閱)+
+      192.168.20.60:5001(按鈕 webhook);2026-07-07 已套用(備份 ctdmz.nft.before-todo19-20260707-062444)。
+    套用=pct push ctdmz.nft + restart ctdmz-nft.service(會清通行證,需重驗)。
+    source-of-truth:CT260 ~/.config/homelab/authelia/{gate.py,ts-gate.service,ctdmz.nft,
+    configuration.yml}+workspace/ct-dmz-proxy/Caddyfile。
+  node_exporter:原生 systemd 1.9.0(:9100);drop-in 開 textfile collector
+    (/var/lib/node_exporter/textfile_collector);ctdmz-gate-metrics.timer(每 30s)唯讀探 ctdmz
+    nft 產 ctdmz_gate_up 等指標=閘門 fail-open 守護(§4.8 W1;源檔 CT260
+    ~/workspace/ct-dmz-proxy/gate-monitoring/)。
+  監控:Prometheus job ct-dmz-proxy-node(10.60.60.10:9100,order 05),已入 Grafana 設備總覽。
+    Kuma 對 http://ct-dmz-proxy.home.arpa/health 探活=待使用者 UI 加。
+```
+
+## 10.8 CT204 wazuh(VLAN80 Wazuh HIDS)
+
+主機入侵偵測:FIM(authorized_keys/sudoers/compose 變動告警)、rootkit、SCA 基線,
+把手動 SSH key 稽核自動化。放 VLAN80 觀測面。
+
+```text
+CT204  hostname wazuh  VLAN80 10.80.80.12/24  GW 10.80.80.1  DNS 10.80.80.1
+  規格:Debian 13.1 unprivileged LXC,4 core / 6G / rootfs SSD-2:80G,nesting=1,keyctl=1,onboot=1。
+  root console 鎖(pct 管理)。
+  ★ SSH 實況(修正 V6「無 SSH」):openssh-server 已裝,ssh.socket enabled/active 於 *:22
+    (socket activation;ssh.service 本體 disabled)。緩解=無 authorized_keys、root pw locked、
+    OpenWrt 只放行 1514-1515/443——但同段 VLAN80 內(CT201/202)L2 可觸及 22。待辦:併 CT203 一起裁決。
+  軟件:docker-ce 29.x + wazuh-docker v4.14.6 single-node(/opt/wazuh-docker,
+    manager+indexer+dashboard 三容器,pin 版)。
+  LXC 相容改動(compose,原檔 .orig):刪 ulimits memlock;nofile 655360→524288。
+    pve24 vm.max_map_count 原生達標,host 免動。
+  密碼:admin/kibanaserver/wazuh-wui 三組預設全換;實值在 CT204 .env(600),
+    副本+Gotify app token 在 CT260 ~/.config/homelab/wazuh.env(600)。dashboard 登入=admin。
+  Agents(9 台 Active,2026-07-07 核實):routerpve / 24bay-pve / ct100 / ct102 / ct201 /
+    ct202 / ct203 / ct260 / ct270。OpenWrt 無官方 agent 跳過(tripwire+metrics 已覆蓋)。
+  FIM(shared/default/agent.conf,manager 集中派發):realtime 盯 /root/.ssh、/home/*/.ssh、
+    /etc/sudoers{,.d}、/opt 深度2 的 docker-compose.yml/.env。
+  告警:local_rules 100100——.ssh|sudoers 變動升 level 10;integration custom-gotify(level>=10)
+    → Gotify 10.80.80.11:8090(同段 L2 免開牆)。TG 維持 egress 集中 CT260 原則。
+  持久化:named volumes;改 manager 設定=編 config 後 docker compose up -d --force-recreate
+    wazuh.manager(★docker restart 不重跑 init 複製)。
+  備份:ansible 只收 docker-compose.yml(.env/config 憑證不入庫)。
+  回滾:pct snapshot 204 baseline;防火牆 firewall.before-20260705-todo14{,b2}。
+  OPEN:14e 跑一週調噪音(2026-07-05 起算,順帶觀察記憶體);DXP 視 UGOS docker 權限另議;
+    AGH rewrite wazuh.home.arpa 另議。
+```
+
+---
+
+## 11. 安全狀態摘要
+
+較好的點:
+
+```text
+OpenWrt 是唯一 WAN ingress;PVE/NAS/CT201 管理面不直接暴露 WAN。
+Vaultwarden 對外=Cloudflare Tunnel → CT203 connector → Caddy 反代 DXP:50303。
+Jellyfin 遠端=Tailscale 經 CT203 subnet-router(僅 30.3:8096;朋友 Share node);
+  CT203 INPUT 擋朋友碰自身服務。
+Minecraft / Honeypot / P2P 是明確 DNAT;VLAN666 隔離;VLAN80 觀測面限制操作能力。
+IoT -> 其他內網段明確 REJECT;trusted zone input 亦為 REJECT(比 V6 記載更嚴)。
+portscan-autoban + cowrie-quarantine 在 raw prerouting 封鎖,已接 Prometheus/Grafana/GeoIP。
+內部服務 SSO(Authelia TOTP)上線於 CT203;受保護服務 prometheus/grafana/kuma/homepage.hl。
+Tailnet→內網全流量經 CT203 動態閘門:驗證後才轉發、通行證當日 00:00 失效;
+  媒體豁免 Jellyfin+Navidrome(靠服務自身帳密);OpenWrt 不再作 subnet-router。
+CT260 codex 無 sudo,降低管理節點 blast radius。
+codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
+```
+
+仍待處理(詳見《注意事項.txt》/《待辦清單.txt》):
+
+```text
+既有:
+- CT202 systemd-journald 故障(243/CREDENTIALS 自 2026-07-01)journal 空轉待修。
+- CT102 promtail 未鋪(要收再比照 CT100 模式)。
+- Nas(24Bay cifs storage)命名偏舊,待整理。
+- DXP4800 NAS 備份盤點待 SSH 開窗後補(見備份索引)。
+2026-07-07 稽核新增:
+- VM300 stopped(onboot=1)——查明原因並決定是否重啟。
+- DXP node_exporter down(connection refused)——開窗檢查 user systemd linger。
+- ctdmz owned_v4:殭屍 100.100.1.21 移除、補 RouterPVE 現值 100.100.1.0(break-glass 修復)。
+- CT203 sshd / CT204 ssh.socket 監聽 *:22——裁決關閉或文件定案接受。
+- pve24 孤兒 tailscaled 程序清理。
+- DMZ DHCPv4 正式停用(uci dhcp.dmz),消除單層防護。
+- Navidrome 自動掃描 cron 補建(源檔 navidrome-scan.cron 缺失)。
+- OpenWrt 殘留清理:MC hairpin 重複兩組、temp_allow_pc40_to_openwrt_ssh、firewall.@rule[77] 空 section、
+  Monitor-To-X no-op SNAT 數條。
+- DNS:裸別名(dxp4800/dxp4800-fast/caddy/mc-server)經 AGH 不可解——補 FQDN 條目或接受並以本文為準。
+```

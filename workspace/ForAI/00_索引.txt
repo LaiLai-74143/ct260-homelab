@@ -26,7 +26,8 @@
                              套用前後驗證、回滾標準步驟。
 
 監控告警.txt                  【監控單一來源】Prometheus 目標、告警規則現況、Alertmanager+Gotify、
-                             CT260 Telegram notifier + DeepSeek 分層 AI、Grafana 總覽 dashboard、必守修正原則、告警藍圖。
+                             CT260 Telegram notifier + DeepSeek 分層 AI、ntfy 互動推播+動作 webhook（§5g）、
+                             Grafana 總覽 dashboard、必守修正原則、告警藍圖。
 
 常用脚本.txt                  【命令】可貼上即用的命令（登入/健康檢查/PVE/防火牆/監控/DNS/備份/測試）。只放命令，背景說明在對應文件。
 

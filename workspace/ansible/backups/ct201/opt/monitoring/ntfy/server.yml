@@ -1,0 +1,12 @@
+# ntfy server（待辦19 互動推播）— auth deny-all；使用者/token 存 CT260 ~/.config/homelab/ntfy.env
+# host port 8091（原文 8090 與 Gotify 衝突，偏離記錄見缺改記錄）
+base-url: "http://10.80.80.11:8091"
+listen-http: ":80"
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "24h"
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+attachment-total-size-limit: "300M"
+attachment-file-size-limit: "10M"
+attachment-expiry-duration: "6h"

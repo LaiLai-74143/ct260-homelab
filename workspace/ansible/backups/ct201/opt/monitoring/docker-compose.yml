@@ -107,6 +107,18 @@ services:
     depends_on:
       - loki
 
+  ntfy:
+    image: binwiederhier/ntfy:v2.25.0
+    container_name: ntfy
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "8091:80"
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy_cache:/var/cache/ntfy
+      - ntfy_auth:/var/lib/ntfy
+
 volumes:
   prometheus_data:
   grafana_data:
@@ -114,3 +126,5 @@ volumes:
   alertmanager_data:
   loki_data:
   promtail_positions:
+  ntfy_cache:
+  ntfy_auth:

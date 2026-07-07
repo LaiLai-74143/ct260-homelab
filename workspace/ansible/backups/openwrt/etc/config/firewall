@@ -1970,3 +1970,13 @@ config rule
 	option dest_port '4533'
 	option target 'ACCEPT'
 
+config rule
+	option name 'Allow-CT260-To-Monitor-Ntfy-8091'
+	option src 'servers'
+	option src_ip '192.168.20.60'
+	option dest 'service'
+	option dest_ip '10.80.80.11'
+	option proto 'tcp'
+	option dest_port '8091'
+	option target 'ACCEPT'
+

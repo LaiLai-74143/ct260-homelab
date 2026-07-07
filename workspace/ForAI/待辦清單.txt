@@ -388,17 +388,41 @@
     （AudioBookshelf 有聲書之後同模式可加掛，官方 app。）
 
 -------------------------------------------------------------------------------
-19. ntfy 互動推播
+✔19. ntfy 互動推播 —〔全案完成 2026-07-07〕a✔ b✔ c✔ d✔ e✔。
+    b 收尾實測：手機 app 訂閱成功（server subscribers 0→1），按〔靜音1h〕end-to-end 打通——
+    webhook 收 RUN src=10.60.60.10（=CT203，Tailscale→gate @owned_v4 豁免預期路徑）、
+    silence 建立 rc=0、TG 回發實收。
+    e 註：原擬 finish 腳本，實際使用者授權後由 Agent 直接執行成功（分類器未攔 pct/uci 路徑）；
+    全鏈實測 CT260→8091=200、selftest TG+ntfy 雙發實收。詳見監控告警 §5g / 缺改記錄 2026-07-07。
+    ★ 偏離記錄：a 埠 8090→8091（與 Gotify host 8090 衝突）；d flask→python3 stdlib
+      （CT260 無 sudo，比照 gate.py）；e 手機不開 OpenWrt 規則——走 Tailscale+CT203 gate
+      @owned_v4 限定豁免（網段指導原則 IoT 全 block＋待辦18 手機模式），OpenWrt 僅加
+      CT260→10.80.80.11:8091 發布通道（比照 Loki-3100）。
+    ★ 架構註記：ntfy server 在 CT201——CT201 全滅時僅 TG 無按鈕；按鈕服務「個別服務死」場景。
     流程：
-    a. CT201 compose 跑 ntfy（pin 版本，:8090），開 auth（default-access: deny-all，建使用者）。
-    b. 手機裝 ntfy app 訂閱（家內直連、外出走 Tailscale）。
-    c. notifier 改造：homelab-notify.py 發 TG 同時 POST ntfy，
+    a✔ CT201 compose 跑 ntfy（pin 版本，:8090）。開 auth（default-access: deny-all，建使用者）。
+       （v2.25.0 :8091；user pub=write-only/phone=read-only on homelab*；憑證 CT260 ntfy.env 600）
+    b✔ 手機裝 ntfy app 訂閱（家內直連、外出走 Tailscale）。（2026-07-07 訂閱＋按鈕實測通過）
+    c✔ notifier 改造：homelab-notify.py 發 TG 同時 POST ntfy，
        對「有預定義處置」的告警附 X-Actions 按鈕（http POST → CT260 webhook）。
-    d. CT260 起極簡 webhook 服務（flask，:5001，Bearer token 驗證）：
+       （FIRING 三鍵〔靜音1h〕〔靜音24h/處置鍵〕〔開Grafana〕；watchdog-ct201 亦掛
+       〔重啟監控棧〕〔重啟CT201〕；ntfy 失敗不擋 TG 主鏈）
+    d✔ CT260 起極簡 webhook 服務（flask，:5001，Bearer token 驗證）：
        只允許白名單動作字典（如 restart-gotify、restart-kuma、pct reboot <id>），
        動作與請求全量落 log 並回發 TG「已執行 X」。
-    e. OpenWrt：servers(CT201 ntfy 用)與手機來源→CT260:5001 放行；token 存兩端 .env chmod600。
+       （stdlib 實作；13 動作；silence-* regex 驗參；限速 6/分；log=webhook.log）
+    e✔ OpenWrt：servers(CT201 ntfy 用)與手機來源→CT260:5001 放行；token 存兩端 .env chmod600。
+       （2026-07-07 使用者授權後 Agent 直接執行完成：OpenWrt Allow-CT260-To-Monitor-Ntfy-8091、
+       CT203 gate 兩條 @owned_v4 豁免（備份 before-todo19-20260707-062444）、CT260 crontab
+       @reboot+*/5 自癒；全鏈驗證 8091=200＋selftest 雙發。finish 腳本留 ~/workspace/ntfy-19/ 備考）
     安全邊界：webhook 只做「白名單內既定動作」，不接受任意命令——維持觀測/操作分離原則。
+    ★ 修訂（2026-07-07 通知路由分流，同日晚於結案）：c 的「發 TG 同時 POST ntfy」改為角色分流——
+       TG=敘事頻道（warning 及以下、RESOLVED、AI 分析、日報只走 TG），ntfy=動作頻道（僅 critical
+       FIRING，唯一雙推例外，ntfy 先發、實際結果餵 TG📱註記）；按鈕僅 NTFY_ACTION_MAP 有預定義處置者
+       附加（無對應的 critical=純通知），priority critical→urgent、標題含 instance；watchdog ✅恢復
+       不再推 ntfy（🚨雙推維持且改為不依賴 TG 成敗）。消除同事件 TG/ntfy 重複通知。
+       路由=單一字典 ROUTES 收斂於 homelab-notify.py（ups/approval 已預留）。驗收 a-d 全 PASS。
+       詳《監控告警.txt》§5g／缺改記錄 2026-07-07；回滾 ~/_backups/*.before-route-split-20260707_*。
 
    告警處置類（最高頻）
       1. 服務 down 告警 → 附〔靜音 10min〕〔靜音 1h〕〔靜音 24h〕〔開 Grafana〕四鍵。

@@ -38,6 +38,8 @@ HOME = Path(os.path.expanduser("~"))
 CONFIG_FILES = [
     HOME / ".config/homelab/notify-telegram.env",
     HOME / ".config/homelab/deepseek.env",
+    HOME / ".config/homelab/ntfy.env",          # 待辦19c：ntfy 互動推播
+    HOME / ".config/homelab/ntfy-webhook.env",  # 待辦19c：按鈕要嵌 webhook Bearer
 ]
 STATE_FILE = HOME / ".local/state/homelab-notify/state.json"
 COUNTS_FILE = HOME / ".local/state/homelab-notify/daily_counts.json"
@@ -504,7 +506,134 @@ def telegram_send(cfg, text):
     return resp
 
 
-def build_firing_msg(cfg, alert, flash_line=None):
+# --- 通知路由（2026-07-07 分流改造）：TG=敘事頻道、ntfy=動作頻道 ---------------
+# 單一路由表：(事件類型, severity) -> 通道集合；查序 (kind,sev) -> (kind,None) -> {tg}。
+# 唯一雙推例外 = critical FIRING（通道互備：外網斷 ntfy 於 LAN 仍達、Tailscale 斷 TG 仍達）。
+# ups/approval 為預留項（UPS 電源事件=待辦1f、Claude Code 審批=待辦19構想#7），
+# 告警源落地後直接查表接線。管線異常/恢復直發 TG 屬 severity 體系外旁路，不套此表。
+CH_TG, CH_NTFY = "tg", "ntfy"
+ROUTES = {
+    ("firing",   "critical"): frozenset({CH_TG, CH_NTFY}),
+    ("firing",   None):       frozenset({CH_TG}),    # warning 及以下 = 閱讀型
+    ("resolved", None):       frozenset({CH_TG}),    # 閱讀型（critical 亦同）
+    ("analysis", None):       frozenset({CH_TG}),    # Tier1/Tier2/關聯分析
+    ("report",   None):       frozenset({CH_TG}),    # 日報/晨報/週報
+    ("ups",      None):       frozenset({CH_NTFY}),  # 預留
+    ("approval", None):       frozenset({CH_NTFY}),  # 預留
+}
+
+
+def route_channels(kind, severity=None):
+    sev = (severity or "").strip().lower() or None
+    return ROUTES.get((kind, sev)) or ROUTES.get((kind, None)) or frozenset({CH_TG})
+
+
+def ntfy_enabled(cfg):
+    return bool(cfg.get("NTFY_URL") and cfg.get("NTFY_PUB_TOKEN"))
+
+
+# --- ntfy 互動推播（待辦19c；2026-07-07 分流後=動作頻道）-----------------------
+# 只收 route_channels 含 ntfy 的事件（現行=critical FIRING）；
+# 按鈕僅附給 NTFY_ACTION_MAP 有預定義處置的告警，其餘 critical 推純通知。
+# 鐵則：ntfy 任何失敗只記 log 不 raise，絕不影響 TG 主鏈。
+GRAFANA_URL = "https://grafana.hl.lailai74143.com"
+NTFY_PARAM_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
+NTFY_PRIORITY = {"critical": 5, "warning": 4}  # ntfy 數字優先級：5=urgent
+# alertname -> 白名單具名處置動作（動作字典見 ntfy-webhook.py ACTIONS）
+NTFY_ACTION_MAP = {
+    "SquidProxyDown": ("restart-squid", "重啟squid"),
+    "CtdmzGateDown": ("restart-ctdmz-nft", "重啟閘門"),
+}
+
+
+def _ntfy_http_action(cfg, label, action, param=None):
+    body = {"action": action}
+    if param:
+        body["param"] = param
+    return {
+        "action": "http", "label": label,
+        "url": cfg.get("WEBHOOK_URL", "http://192.168.20.60:5001/run"),
+        "method": "POST",
+        "headers": {
+            "Authorization": "Bearer " + cfg.get("WEBHOOK_TOKEN", ""),
+            "Content-Type": "application/json",
+        },
+        "body": json.dumps(body, ensure_ascii=False),
+        "clear": False,
+    }
+
+
+def ntfy_publish(cfg, title, message, priority=3, actions=None, tags=None):
+    """回傳 True=送達 ntfy；False=未設定或失敗（失敗只記 log，鐵則）。"""
+    url = cfg.get("NTFY_URL")
+    token = cfg.get("NTFY_PUB_TOKEN")
+    if not url or not token:
+        return False
+    payload = {"topic": cfg.get("NTFY_TOPIC", "homelab"),
+               "title": title, "message": message, "priority": priority}
+    if tags:
+        payload["tags"] = tags
+    if actions:
+        payload["actions"] = actions
+    try:
+        req = urllib.request.Request(
+            url, data=json.dumps(payload, ensure_ascii=False).encode(),
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10).read()
+        return True
+    except Exception as e:
+        log(f"ntfy publish failed: {type(e).__name__}: {str(e)[:120]}")
+        return False
+
+
+def _ntfy_has_action(name):
+    """該 alertname 是否有預定義處置按鈕——TG 註記與 ntfy 附按鈕共用此判定（單一真實來源）。"""
+    return bool(name and name in NTFY_ACTION_MAP and NTFY_PARAM_RE.match(name))
+
+
+def ntfy_publish_firing(cfg, alert):
+    labels = alert.get("labels", {}) or {}
+    ann = alert.get("annotations", {}) or {}
+    name = labels.get("alertname") or "?"
+    sev = (labels.get("severity") or "").lower()
+    prio = NTFY_PRIORITY.get(sev, 3)
+    icon = "🔴" if sev == "critical" else "🟠"
+    inst = labels.get("instance")
+    title = f"{icon} FIRING [{sev.upper()}] {name}" + (f" @ {inst}" if inst else "")
+    lines = [ann.get("summary", "")]
+    if inst:
+        lines.append(f"instance: {inst}")
+    msg = "\n".join(x for x in lines if x)
+    # 按鈕僅附給有預定義處置的告警；無對應者推純通知（2026-07-07 分流）
+    actions = None
+    if _ntfy_has_action(name):
+        mapped = NTFY_ACTION_MAP[name]
+        actions = [
+            _ntfy_http_action(cfg, mapped[1], mapped[0]),
+            _ntfy_http_action(cfg, "靜音1h", "silence-1h", name),
+            {"action": "view", "label": "開Grafana", "url": GRAFANA_URL},
+        ]
+    return ntfy_publish(cfg, title, msg, priority=prio, actions=actions)  # ntfy 上限 3 顆
+
+
+def ntfy_try_publish_firing(cfg, alert):
+    """鐵則的結構性保證：任何例外都吞掉只記 log，絕不影響 TG 主鏈。回傳 True=已送達。"""
+    try:
+        return ntfy_publish_firing(cfg, alert)
+    except Exception as e:
+        log(f"ntfy publish (firing) failed: {type(e).__name__}: {str(e)[:120]}")
+        return False
+
+
+def ntfy_publish_resolved(cfg, prev_entry):
+    sev = (prev_entry.get("severity") or "").upper()
+    inst = prev_entry.get("instance") or ""
+    title = f"✅ RESOLVED [{sev}] {prev_entry.get('alertname')}"
+    ntfy_publish(cfg, title, inst, priority=3, tags=["white_check_mark"])
+
+
+def build_firing_msg(cfg, alert, flash_line=None, ntfy_ok=None):
     labels = alert.get("labels", {})
     ann = alert.get("annotations", {})
     sev = (labels.get("severity") or "").upper()
@@ -520,6 +649,13 @@ def build_firing_msg(cfg, alert, flash_line=None):
     if desc and desc != ann.get("summary"):
         lines.append(desc)
     lines.append(f"🕐 {fmt_time(alert.get('startsAt',''))}")
+    # ntfy_ok=實際發布結果（None=未路由到 ntfy，不加註記）——註記反映送達事實，不是路由意圖
+    if ntfy_ok is True:
+        lines.append("📱 已同步 ntfy，處置按鈕請至 ntfy 操作"
+                     if _ntfy_has_action(labels.get("alertname"))
+                     else "📱 已同步 ntfy（互備通道）")
+    elif ntfy_ok is False:
+        lines.append("⚠️ ntfy 同步失敗（按鈕不可用，詳 notify.log）")
     if flash_line:
         lines.append("")
         lines.append("⚡ " + flash_line)
@@ -637,10 +773,16 @@ def bump_counts(new_alerts):
 
 def daily_report(cfg):
     """Run at 20:00: if any threshold was hit today, send an AI digest then reset counters."""
+    if "--dry-run" in sys.argv:
+        log("daily report 必然真發並清空計數器，與 --dry-run 互斥；中止")
+        return
     counts = load_counts()
     total = sum(v.get("count", 0) for v in counts.values())
     if total == 0:
         log("daily report: no threshold hits today, skipping")
+        return
+    if CH_TG not in route_channels("report"):  # report=閱讀型，查路由表；現行僅 TG 發送器
+        log("daily report: TG not in route, skipping send")
         return
     rows = []
     for name, v in sorted(counts.items(), key=lambda kv: -kv[1].get("count", 0)):
@@ -661,15 +803,23 @@ def daily_report(cfg):
 
 
 def selftest(cfg):
+    """--selftest [--critical]：走正式路由驗證分流。warning=只 TG；critical=ntfy(urgent)先發+TG(含註記)。"""
+    if "--dry-run" in sys.argv:
+        log("selftest 必然真發，與 --dry-run 互斥；中止")
+        return
+    sev = "critical" if "--critical" in sys.argv else "warning"
     fake = {
-        "labels": {"alertname": "NotifySelfTest", "severity": "warning",
+        "labels": {"alertname": "NotifySelfTest", "severity": sev,
                    "instance": "ct260.home.arpa", "job": "selftest"},
         "annotations": {"summary": "Notifier self-test",
                         "description": "CT260 -> Telegram path end-to-end check."},
         "startsAt": datetime.now(timezone.utc).isoformat(),
     }
-    telegram_send(cfg, build_firing_msg(cfg, fake))
-    log("selftest message sent")
+    ch = route_channels("firing", sev)
+    ntfy_ok = ntfy_try_publish_firing(cfg, fake) if (CH_NTFY in ch and ntfy_enabled(cfg)) else None
+    telegram_send(cfg, build_firing_msg(cfg, fake, ntfy_ok=ntfy_ok))
+    log(f"selftest({sev}) sent -> {'+'.join(sorted(ch))}"
+        + (f" ntfy_ok={ntfy_ok}" if ntfy_ok is not None else ""))
 
 
 def main():
@@ -693,8 +843,8 @@ def main():
         alerts = fetch_alerts()
     except Exception as e:
         log(f"fetch error: {type(e).__name__}: {str(e)[:200]}")
-        n = bump_fetch_failures()
-        # 連續 3 次讀不到 Alertmanager -> 直發 TG（只在跨過門檻那一次發，避免每分鐘洗版）
+        # dry-run 不動計數器：避免把「恰好第 3 次」的觸發沿吃掉（管線異常告警用等號判定）
+        n = bump_fetch_failures() if not dry else read_fetch_failures()
         if n == FETCH_FAIL_ALERT_AFTER and not dry:
             try:
                 telegram_send(cfg, "🚨 告警管線異常：CT260 已連續 3 次無法讀取 CT201 Alertmanager"
@@ -713,7 +863,8 @@ def main():
                 log(f"pipeline recovered after {prev_fails} consecutive fetch errors")
             except Exception as e2:
                 log(f"pipeline-recovery send failed: {type(e2).__name__}: {str(e2)[:150]}")
-        reset_fetch_failures()
+        if not dry:  # dry-run 不清計數器，恢復通知留給下一輪真跑發
+            reset_fetch_failures()
 
     current = {}
     for a in alerts:
@@ -770,19 +921,25 @@ def main():
     for fp in new_fp:
         a = current[fp]
         sev = (a.get("labels", {}) or {}).get("severity")
+        ch = route_channels("firing", sev)
+        # 動作頻道最先發（趕在 Tier1 DeepSeek 之前，按鈕不等 AI）；實際結果餵進 TG 註記；
+        # 例外/失敗都不擋 TG（鐵則）。未設定 ntfy 時 ntfy_ok 維持 None=不加註記。
+        ntfy_ok = None
+        if not dry and CH_NTFY in ch and ntfy_enabled(cfg):
+            ntfy_ok = ntfy_try_publish_firing(cfg, a)
         flash = None
-        if has_key and sev in flash_sevs and not batch_ai:
+        if has_key and sev in flash_sevs and not batch_ai and not dry:
             flash = flash_oneliner(cfg, a)
-        msg = build_firing_msg(cfg, a, flash_line=flash)
+        msg = build_firing_msg(cfg, a, flash_line=flash, ntfy_ok=ntfy_ok)
         if dry:
-            log(f"[dry-run] FIRING: {msg!r}")
+            log(f"[dry-run] FIRING -> {'+'.join(sorted(ch))}: {msg!r}")
         else:
             try:
                 telegram_send(cfg, msg); sent += 1
             except Exception as e:
                 log(f"telegram send (firing) failed: {type(e).__name__}: {str(e)[:150]}")
-        # ai_analyze:"true" -> escalate immediately on first fire
-        if has_key and label_true(a, "ai_analyze") and not dry:
+        # ai_analyze:"true" -> escalate immediately on first fire（analysis=閱讀型，查路由表；現行僅 TG 發送器）
+        if has_key and label_true(a, "ai_analyze") and not dry and CH_TG in route_channels("analysis"):
             an = deep_analysis(cfg, a)
             if an:
                 try:
@@ -793,7 +950,7 @@ def main():
                     log(f"telegram send (deep-immediate) failed: {type(e).__name__}: {str(e)[:150]}")
 
     # --- batch correlation (deep model) when several fire at once ---
-    if batch_ai and not dry:
+    if batch_ai and not dry and CH_TG in route_channels("analysis"):
         analysis = deepseek_batch(cfg, [current[fp] for fp in new_fp])
         if analysis:
             try:
@@ -811,7 +968,7 @@ def main():
         if was_escalated:
             escalated[fp] = True
             continue
-        if has_key and firing_seconds(a) >= escalate_after:
+        if has_key and CH_TG in route_channels("analysis") and firing_seconds(a) >= escalate_after:
             mins = int(firing_seconds(a) // 60)
             sev = (a.get("labels", {}) or {}).get("severity", "")
             if dry:
@@ -831,13 +988,19 @@ def main():
     # --- resolved ---
     for fp in resolved_fp:
         msg = build_resolved_msg(prev[fp])
+        ch = route_channels("resolved", (prev[fp] or {}).get("severity"))
         if dry:
-            log(f"[dry-run] RESOLVED: {msg!r}")
+            log(f"[dry-run] RESOLVED -> {'+'.join(sorted(ch))}: {msg!r}")
         else:
             try:
                 telegram_send(cfg, msg); sent += 1
             except Exception as e:
                 log(f"telegram send (resolved) failed: {type(e).__name__}: {str(e)[:150]}")
+            if CH_NTFY in ch:
+                try:
+                    ntfy_publish_resolved(cfg, prev[fp])  # 路由表現行=不推（閱讀型）
+                except Exception as e:
+                    log(f"ntfy publish (resolved) failed: {type(e).__name__}: {str(e)[:120]}")
 
     # persist compact state (carry escalated + startsAt for continuity)
     new_state = {}

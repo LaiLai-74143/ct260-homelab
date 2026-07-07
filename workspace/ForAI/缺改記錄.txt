@@ -1636,3 +1636,86 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   回滾＝CT203 rm drop-in+units+script + daemon-reload + restart node_exporter；CT201 rm ctdmz-gate.yml + hl-reload prometheus。
 - ★ 順帶記錄（非本次改，session 中並發觀察）：待辦18 已把 ctdmz 媒體豁免由「Jellyfin 30.3:8096 唯一」擴為「＋Navidrome 20.70:4533」
   （實機 live，Jellyfin 註解同步改「媒體豁免」）；拓樸 §4.8 line「唯一免驗證豁免」措辭待待辦18 收尾同步。gate 監控不受影響（deny 兜底仍在、gate_up=1）。
+
+==================================================================
+
+## 2026-07-07
+
+### 待辦19 ntfy 互動推播主體落地（a✔ c✔ d✔;b/e 待使用者 finish 腳本）
+- 新增：CT201 /opt/monitoring compose 加 ntfy binwiederhier/ntfy:v2.25.0（pin），host :8091，
+  auth deny-all，user pub=write-only / phone=read-only（topic homelab*）；DoD 實測 匿名發布 403、
+  token 發布 200、錯密碼訂閱 401、phone 正確帳密可讀。憑證/token=CT260 ~/.config/homelab/ntfy.env(600)。
+  ★ 偏離原文：埠 8090→8091——待辦19 原文寫 :8090，但 Gotify 已占 host 8090（先核對文件抓到的衝突）。
+- 新增：CT260 ~/.local/bin/ntfy-webhook.py :5001（ntfy 按鈕動作執行器）＋ ntfy-webhook-run.sh
+  （flock 單實例 wrapper）。Bearer 驗證（hmac.compare_digest）、白名單 13 動作字典
+  （silence-1h/24h 唯二收參數 regex 驗 alertname；restart-{gotify,kuma,grafana,prometheus,
+  alertmanager,ntfy,squid,ctdmz-nft}、restart-monitoring-stack、pct-reboot-201、pct-start-250）、
+  限速 6/分、全量落 log webhook.log、執行後 TG 回發「已執行 X,結果 Y」。
+  DoD 實測：無 token 401/錯 token 401/非白名單 403/注入參數 400/health 200/真實 silence rc=0（已清）。
+  ★ 偏離原文：flask→python3 stdlib（CT260 無 sudo 裝不了包，比照 CT203 gate.py 先例）。
+- 修改：homelab-notify.py（備份 ~/_backups/homelab-notify.py.before-ntfy19-20260707_055451）——
+  CONFIG_FILES 併入 ntfy.env/ntfy-webhook.env；新增 ntfy_publish/_firing/_resolved；
+  FIRING 發 TG 同時 POST ntfy 附三鍵〔靜音1h〕〔靜音24h/處置鍵〕〔開Grafana〕（ntfy 上限 3 顆/則；
+  NTFY_ACTION_MAP：SquidProxyDown→restart-squid、CtdmzGateDown→restart-ctdmz-nft）；
+  RESOLVED 無鍵通知；selftest 改雙發。鐵則：ntfy 失敗只 log 不擋 TG 主鏈。dry-run rc=0 回歸過。
+- 修改：watchdog-ct201.sh（備份同前綴）——🚨 附〔重啟監控棧〕〔重啟CT201〕、✅ 無鍵。
+  ★ 架構註記：ntfy server 在 CT201——CT201 全滅時按鈕發不出去（僅 TG）；按鈕服務
+  「CT201 活著但個別服務死」場景（半夜 Gotify 掛按一鍵修）。
+- 網路設計（先核對網段指導原則）：手機不開 VLAN50→內網規則（IoT 全 block），走 Tailscale
+  subnet route 同一 URL＋CT203 gate 豁免（@owned_v4 限定，比 Jellyfin any-tailnet 緊）；
+  ctdmz.nft source-of-truth 已加兩條（8091/5001，todo19 註記），live 套用待 finish-19.sh。
+  CT260 發布通道=OpenWrt Allow-CT260-To-Monitor-Ntfy-8091（比照 Loki-3100 形狀）待 finish。
+  加豁免不觸發 CtdmzJellyfinExemptionDrift（該指標只 grep Jellyfin 行，Navidrome 先例同）。
+- 產出：~/workspace/ntfy-19/{README.md,ctdmz.nft,finish-19.sh(pve24,drift guard 59行基準),
+  finish-19-openwrt.sh,finish-19-ct260.sh(crontab 持久化+全鏈驗證+手機設定說明)}。
+  分類器攔截項（OpenWrt uci/crontab/CT203 防火牆現役檔）照慣例收斂 finish 腳本。
+- 文件：監控告警.txt 新增 §5g；拓樸 V7 §5 ntfy 行/§4.4 ◐規則/§10 CT260 webhook/§10.7 ◐豁免；
+  待辦清單 19 標 ◐（a✔c✔d✔/b◐e◐）。
+- 對抗驗證（同日獨立代理，24 項全 PASS）：webhook 拒絕面/ACL 四向/注入面/回歸全過，
+  測試 silence 零殘留。隨驗證加固：Handler.timeout=30s＋拒負 Content-Length
+  （原 min(int(CL),4096) 對 CL=-1 會 read(-1) 卡死執行緒——slowloris 面，實測修復後 400）。
+  已知風險（接受＋記 §5g）：Bearer token 內嵌 ntfy action header＝能讀 topic 即持有 token。
+- 補記（同日稍後）：原擬三支 finish 腳本由使用者跑，實際使用者授權「能幫我執行嗎」後
+  Agent 直接執行全數成功（分類器未攔 ssh pve24 sudo pct / ssh openwrt uci / 本機 crontab 路徑；
+  與 07-05 待辦48 crontab 被攔經驗不同，紀錄供後續參考）。落地：
+  CT203 gate 兩條豁免 live（nft list 實證 counter 規則在 reject 前；備份
+  ctdmz.nft.before-todo19-20260707-062444）、OpenWrt Allow-CT260-To-Monitor-Ntfy-8091
+  （備份 firewall.before-todo19-*）、CT260 crontab @reboot+*/5。
+  全鏈驗證：CT260→10.80.80.11:8091 HTTP 200、selftest TG+ntfy 雙發成功。
+  殘項：待辦19b 手機裝 ntfy app 訂閱（帳密 ~/.config/homelab/ntfy.env）。
+- 收案（同日 15:52）：待辦19b 手機端完成——ntfy app 訂閱成功（server 端 subscribers 0→1），
+  使用者按〔靜音1h〕end-to-end 實測通過：webhook 收 RUN src=10.60.60.10（=CT203 tailscale
+  SNAT，即「手機→Tailscale→CT203 gate @owned_v4 豁免→CT260:5001」預期路徑）、Alertmanager
+  silence 建立 rc=0、TG 回發實收。待辦19 全案標 ✔ DONE（a✔b✔c✔d✔e✔）。
+
+### 通知路由分流：TG=敘事頻道 / ntfy=動作頻道（修訂待辦19c，消除同事件雙推）
+- 動機：待辦19 落地後 FIRING/RESOLVED 一律 TG+ntfy 雙推，同一事件重複通知。
+- 路由（單一字典 ROUTES[(事件類型,severity)]→通道集合，homelab-notify.py，要調分流只改這裡）：
+  firing/critical={tg,ntfy}（唯一雙推例外，互備）；firing 其餘、resolved、analysis(Tier1/2/關聯)、
+  report(日報)＝{tg}；ups/approval={ntfy} 預留（待辦1f 告警源未建、待辦19構想#7 未實作）。
+- 修改：homelab-notify.py（備份 ~/_backups/homelab-notify.py.before-route-split-20260707_141216）
+  1) ROUTES+route_channels()+ntfy_enabled()；FIRING/RESOLVED/analysis×3/report 全部查表。
+  2) ntfy 最先發（趕在 Tier1 DeepSeek 前，按鈕不等 AI）；ntfy_publish 回傳 bool、
+     ntfy_try_publish_firing 結構性吞例外（鐵則保證從約定變結構）；實際結果餵 TG 註記三態
+     （📱已同步/⚠️同步失敗/未路由或未設定=無註記——反映送達事實非路由意圖）。
+  3) ntfy priority 映射 critical→5(urgent)；標題含 alertname+instance。
+  4) 按鈕僅 NTFY_ACTION_MAP 有預定義處置者（_ntfy_has_action 單一判定，TG 註記/按鈕共用；
+     SquidProxyDown/CtdmzGateDown 皆 critical 已核）；無對應的 critical=純通知零按鈕
+     （取消全告警預設靜音鍵——測試面注記見監控告警 §5g）。
+  5) selftest 走正式路由：--selftest=warning 只 TG；--selftest --critical=雙推；與 --dry-run 互斥。
+  6) 附帶修（審查代理發現的既有問題）：dry-run 不再外呼 DeepSeek Tier1、不再 bump/reset
+     fetch-fail 計數器（原會吃掉 n==3 觸發沿）；--daily-report 與 --dry-run 互斥。
+  7) telegram_send/_tg_post 簽名未動。
+- 修改：watchdog-ct201.sh（備份 watchdog-ct201.sh.before-route-split-20260707_141759）——
+  ✅恢復=閱讀型不再推 ntfy；🚨 ntfy 改「跨門檻輪獨立先發一次、不依賴 TG 成敗」（互備語意，
+  原在 tg_send 成功分支內＝TG 不通時 ntfy 也不發）；🚨 TG 文案補📱註記+CT201 全滅警語。
+- 驗收（全 PASS）：a --selftest → TG 1 則、ntfy poll 0 則；b --selftest --critical → TG+ntfy
+  各恰 1 則、priority=5、標題含 instance、ntfy_ok=True；c life-ops daily_brief 輸出與基線一致
+  （拉取式不經 notifier）+ daily_report AST 證零 ntfy 呼叫 + --dry-run rc=0；
+  d 近 3h ntfy topic 僅 1 則測試訊息、cron 兩輪 tick 正常無重複。
+- 品質流程：兩輪對抗審查（3 鏡頭 11 發現→逐條處理；2 檢查者 pass=true+7 發現全被反駁投票
+  否決或已修）。注意：審查代理動態測試曾寫入 notify.log 10 筆 ntfy publish failed（22:23，
+  含 'not a url'）＝測試痕跡非真實外送，勿誤判。
+- 已知侷限（接受）：watchdog 🚨 的📱註記為靜態文案（shell 無回傳值可依），以「CT201 全滅時
+  ntfy 不可達」警語對沖；critical RESOLVED 不通知 ntfy 側（規格：閱讀型不進 ntfy，路由表可調）。
+- 回滾：cp ~/_backups/<檔名>.before-route-split-20260707_* 蓋回，cron 下一分鐘生效。
