@@ -1,0 +1,35 @@
+{
+  "summary": {
+    "state": "warn",
+    "text": "2 個注意:VM300 已停機(onboot=1,待裁決)、DXP node_exporter 離線——其餘全站正常"
+  },
+  "targets": { "up": 19, "total": 22 },
+  "alerts_firing": 2,
+  "services_ok": null,
+  "hosts": [
+    { "name": "openwrt", "vlan": "路由", "up": "ok", "note": "25.12.4 · PPPoE 正常", "cpu": 12, "mem": 34, "disk": 41, "uptime": "41d" },
+    { "name": "router-pve", "vlan": "infra", "up": "ok", "note": "pve 9.1 · VM101 running", "cpu": 18, "mem": 52, "disk": 37, "uptime": "12d" },
+    { "name": "pve24", "vlan": "infra", "up": "ok", "note": "9 CT/VM · NUT secondary", "cpu": 23, "mem": 61, "disk": 65, "uptime": "3d 04h" },
+    { "name": "dxp4800", "vlan": "storage", "up": "warn", "note": "exporter 離線 · 服務正常", "cpu": null, "mem": null, "disk": 63, "uptime": "—" },
+    { "name": "switch3f", "vlan": "infra", "up": "ok", "note": "SNMP 待接", "cpu": null, "mem": null, "disk": null, "uptime": "—" },
+    { "name": "pc40", "vlan": "trusted", "up": "unk", "note": "關機(正常)", "cpu": null, "mem": null, "disk": null, "uptime": "off" },
+    { "name": "ct100 · mc", "vlan": "game", "up": "ok", "note": "Fabric 26.2 · TPS 20.0", "cpu": 31, "mem": 72, "disk": 38, "uptime": "3d" },
+    { "name": "ct102 · velocity", "vlan": "game", "up": "ok", "note": "proxy 正常", "cpu": 4, "mem": 29, "disk": 22, "uptime": "3d" },
+    { "name": "ct201 · monitor", "vlan": "svc", "up": "ok", "note": "22 targets · 19 up", "cpu": 27, "mem": 58, "disk": 52, "uptime": "3d" },
+    { "name": "ct202 · fwdproxy", "vlan": "svc", "up": "ok", "note": "squid · denied 0/h", "cpu": 2, "mem": 18, "disk": 12, "uptime": "3d" },
+    { "name": "ct203 · dmz", "vlan": "dmz", "up": "ok", "note": "Caddy+Authelia · 閘門 up", "cpu": 6, "mem": 41, "disk": 19, "uptime": "2d" },
+    { "name": "ct204 · wazuh", "vlan": "svc", "up": "ok", "note": "9 agents active", "cpu": 34, "mem": 68, "disk": 24, "uptime": "2d" },
+    { "name": "ct250 · lab", "vlan": "srv", "up": "unk", "note": "常態關機(onboot 0)", "cpu": null, "mem": null, "disk": null, "uptime": "off" },
+    { "name": "ct260 · codex", "vlan": "srv", "up": "ok", "note": "watchdog 心跳正常", "cpu": 9, "mem": 47, "disk": 44, "uptime": "3d" },
+    { "name": "ct270 · life", "vlan": "srv", "up": "ok", "note": "NocoDB/HA/Paperless", "cpu": 14, "mem": 66, "disk": 31, "uptime": "3d" },
+    { "name": "vm300 · honeypot", "vlan": "666", "up": "crit", "note": "stopped(onboot=1)· 待人工裁決", "cpu": null, "mem": null, "disk": null, "uptime": "down 18h" }
+  ],
+  "modules": [
+    { "key": "services", "big": "12", "bigUnit": "/13", "sub": "Vaultwarden 經 CF Tunnel 正常", "state": "ok" },
+    { "key": "security", "big": "37", "sub": "今日封鎖 · 絆線 0 事件(第 3 天)", "state": "ok" },
+    { "key": "power", "big": "市電", "sub": "CP1500 · 電池 100% · 負載 —%", "state": "ok" },
+    { "key": "game", "big": "2", "bigUnit": " 在線", "sub": "mc.lailai74143.com · TPS 20.0", "state": "ok" },
+    { "key": "life", "big": "1", "bigUnit": " 行程", "sub": "借貸未結 3 筆 · RSS 待接", "state": "ok" }
+  ],
+  "generated_at": "fixture"
+}

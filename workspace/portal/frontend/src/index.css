@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — 《入口大廳設計報告-3》§6,實體樣衣 portal-demo.html */
+:root {
+  --bg: #0E1116;
+  --panel: #161C24;
+  --line: #232B36;
+  --text: #DDE3EA;
+  --muted: #8A94A3;
+  --amber: #E8A33D;
+  --ok: #4CC38A;
+  --warn: #D9A03F;
+  --crit: #E5534B;
+  --unk: #57606C;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  @apply bg-bg text-text font-sans antialiased;
+  line-height: 1.45;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* crit 呼吸動畫:全站唯一常駐動畫(§6 狀態語義) */
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 83, 75, 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(229, 83, 75, 0); }
+}
+.dot-crit-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-crit-breathe { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* 晨報刊頭琥珀細線(簽名元素) */
+.brief-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--amber), transparent 70%);
+  opacity: 0.85;
+}
+
+/* 路由切換 150ms 淡入(§6 唯二動效之一) */
+.route-fade {
+  animation: routefade 150ms ease-out;
+}
+@keyframes routefade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 鍵盤焦點可見(§7) */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}

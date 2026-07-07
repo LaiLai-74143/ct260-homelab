@@ -1,0 +1,24 @@
+{
+  "issue_no": 127,
+  "date": "2026-07-08",
+  "title": "今日快報",
+  "sections": [
+    {
+      "h": "全站概況",
+      "body": "夜間無新告警。Prometheus 22 targets 中 19 up:dxp4800 exporter 仍拒連(NAS 服務面正常,待 SSH 開窗查 linger);cowrie 兩項 down 屬 VM300 停機的預期連帶。"
+    },
+    {
+      "h": "安全",
+      "body": "portscan-autoban 過去 24h 封鎖 37 個來源(前日 41);SSH22 絆線連續第 3 天零事件;Cowrie 因 VM300 停機無新樣本。"
+    },
+    {
+      "h": "行程",
+      "body": "今日 1 項:19:30 家庭聚餐。借貸未結 3 筆,無逾期。"
+    },
+    {
+      "h": "建議",
+      "body": "VM300 停機已 18 小時,若非刻意保留,建議今晚裁決重啟並查 onboot 未生效原因。"
+    }
+  ],
+  "generated_at": "generated 06:00 by CT260 notifier · fixture"
+}

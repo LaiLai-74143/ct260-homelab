@@ -1,0 +1,27 @@
+{
+  "firing": [
+    {
+      "name": "VM300HoneypotDown",
+      "severity": "critical",
+      "description": "onboot=1 卻停機 · cowrie/vm300 兩 target no route · 原因未查",
+      "instance": "10.66.66.10",
+      "since": "18h"
+    },
+    {
+      "name": "DXPNodeExporterDown",
+      "severity": "warning",
+      "description": "192.168.30.3:9100 connection refused · NAS 本體正常(Jellyfin 200)· 疑 linger 未生效",
+      "instance": "192.168.30.3:9100",
+      "since": "1d 2h"
+    }
+  ],
+  "pending": [],
+  "silences": [
+    {
+      "comment": "待辦25:等交換機側開 SNMP",
+      "matchers": "alertname=TargetDown, job=snmp-switch3f",
+      "ends_at": "2026-07-14"
+    }
+  ],
+  "generated_at": "fixture"
+}

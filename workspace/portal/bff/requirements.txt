@@ -1,0 +1,4 @@
+# pin(2026-07-08,python 3.13):與 CT260 .venv 及 CT201 image 同步
+fastapi==0.139.0
+uvicorn[standard]==0.50.2
+httpx==0.28.1
