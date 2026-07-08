@@ -70,10 +70,11 @@ export default function Security() {
             )}
           </section>
 
-          {/* 攻擊地圖:連結卡(待辦49 決策3——不 iframe,免改現役 grafana.ini) */}
+          {/* 圖表入口:連結卡(待辦49 決策3——不 iframe,免改現役 grafana.ini)。
+              防火牆審計與攻擊地圖同屬 openwrt-portscan-autoban 一張 dashboard */}
           <a href={grafanaUrl(SEC_DASH)} target="_blank" rel="noreferrer"
              className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
-            攻擊地圖與完整安全視圖 → <span className="font-mono text-[12px] text-muted">Grafana openwrt-portscan-autoban ↗</span>
+            防火牆審計、攻擊地圖與完整安全視圖 → <span className="font-mono text-[12px] text-muted">Grafana OpenWrt 防火牆審計與 Cowrie 蜜罐 ↗</span>
           </a>
         </>
       )}

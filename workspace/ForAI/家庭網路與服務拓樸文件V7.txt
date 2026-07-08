@@ -836,7 +836,7 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.4.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.4.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -877,7 +877,11 @@ portal        8088   portal:0.4.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               內容層 pointer-events-none 防牆板誤觸跳路由)+鍵盤 ←/→/空白同義;
               reduced-motion=去淡入瞬切、輪播照轉;純前端零新 env 零防火牆,
               部署 finish-portal-040.sh(11 端點 200+/kiosk 200+M3 驗證鏈回歸);
-              牆板(待辦44)直接開 :8088/kiosk 或 portal.hl/kiosk
+              牆板(待辦44)直接開 :8088/kiosk 或 portal.hl/kiosk;
+              M4 DoD 達成(2026-07-08 使用者實機確認);Kuma portal monitor 已建
+              (kuma_ok=true,驗收 e 銷);0.4.1(2026-07-08):設備頁 Grafana 入口卡
+              (homelab-overview)+安全頁入口卡升「防火牆審計」文案+switch3f 卡
+              接 SNMP(sysUpTime+埠 up 數,up 後自動亮;待辦25 交換機側仍未應答)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);稽核 19 up / 4 down——

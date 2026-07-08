@@ -497,6 +497,19 @@
     流程：查兩台型號規格是否支援 SNMP → 支援則開 v2c（自訂 community，唯讀）→
     CT201 跑 snmp_exporter（if_mib 模組）→ Prometheus job + Grafana 埠流量/錯包面板。
     不支援則記入拓樸「無法觀測」收案。
+    【進度 2026-07-07 掛起】AP=小米 BE3600 Pro 硬不支援 SNMP→收案時記「無法觀測」。
+    Switch3F 監控鏈全就緒:CT201 snmp-exporter v0.30.1(auth=switch3f_v2,community 在
+    /opt/monitoring/snmp-auth.yml 600、同值 CT260 ~/.config/homelab/switch3f-snmp.env)、
+    Prometheus job snmp-switch3f(order 23)、rules/snmp-switch3f.yml、Grafana 面板
+    switch3f-snmp、OpenWrt Allow+SNAT-Monitor-To-Switch3F-Infra-SNMP-161;
+    TargetDown silence 至 07-14(ID 867811af)。只差交換機側 SNMP 生效。
+    【進度 2026-07-08】使用者已在交換機 UI 建 community(表列 sw3f-3671ed76d4566e7,
+    view=all/只讀)——但 161/udp 仍 ICMP connection refused(exporter 實測;OpenWrt
+    Allow 132 包/SNAT 33 包=路徑正常),即 agent 未在聽:疑「SNMP 全局開關/使能」
+    未開或未按應用+保存。portal 0.4.1 已備妥接入(switch3f 卡 up 後自動顯示
+    sysUpTime+N/M 埠 up)。▶ 待使用者:UI 找 SNMP 狀態/使能開關開啟並保存後回報,
+    agent 立即驗鏈(注意:表列 community 恰 20 字,若通了但 timeout=可能被截斷,
+    屆時用全長 29 字/截斷 20 字兩種測試分辨)。
 
 -------------------------------------------------------------------------------
 26. IoT 段 AGH per-client 過濾
@@ -694,12 +707,17 @@
     interval 生效/循環回頭/reduced-motion 兩態,e2e-m4-mock.mjs 留存 repo);
     部署 finish-portal-040.sh(0.4.0 Up、11 端點 200、/kiosk SPA fallback 200、
     M3 驗證鏈回歸 403 OK)。純前端+版本字串,零新 env 零防火牆。
-    ▶ M4 DoD 待使用者:平板實機開 http://10.80.80.11:8088/kiosk(或 portal.hl/kiosk)
-    看輪播;建議過夜 soak 觀察(EventSource/計時器洩漏)。
-    ▶ 待使用者:驗收 b/e 舊項(PC40 瀏覽走查、Kuma UI 加 /api/health 探活=退役前置0,
-    URL 用 http://monitor.home.arpa:8088/api/health、Friendly Name=portal)。
-    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6;
-    35 條 href 盤點副本=ansible/backups/ct201/opt/homepage/config/services.yaml)。
+    【收尾 2026-07-08】使用者回報「1正常 2完成」:M4 DoD 達成(kiosk 實機正常)、
+    驗收 b/e 銷案(PC40 走查+Kuma portal monitor 已建,BFF 實測 kuma_ok=true 綠燈);
+    Homepage 退役儀式=使用者定調低優先級(35 條 href 盤點副本
+    =ansible/backups/ct201/opt/homepage/config/services.yaml,點名後再開)。
+    【進度 2026-07-08(0.4.1)】使用者點名加值:設備總覽頁加 Grafana 圖表入口卡
+    (homelab-overview 設備總覽)、安全面板入口卡文案升「防火牆審計」為主
+    (openwrt-portscan-autoban 一張含防火牆審計+攻擊地圖,不另建重複入口);
+    switch3f 卡接 SNMP 數據(BFF overview 批次加 sysUpTime/ifOperStatus 三查詢,
+    up 後自動顯示 uptime+N/M 埠 up;現況 unk「SNMP 未應答(待辦25)」誠實態)。
+    部署 finish-portal-041.sh(11 端點 200+/kiosk 200+M3 回歸 403)。
+    ▶ 剩:Homepage 退役儀式(低優先級,使用者點名後開)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

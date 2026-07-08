@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
-import { useOverview } from '../api'
+import { grafanaUrl, useOverview } from '../api'
 import Bar from '../components/Bar'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+
+const DEV_DASH = 'http://10.80.80.11:3002/d/homelab-overview/homelab-overview'
 
 export default function Devices() {
   const ov = useOverview()
@@ -37,6 +39,12 @@ export default function Devices() {
           </Link>
         ))}
       </div>
+
+      {/* 圖表入口:Grafana 設備總覽(11 台 bargauge 比較+CPU/記憶體/網路/磁碟趨勢) */}
+      <a href={grafanaUrl(DEV_DASH)} target="_blank" rel="noreferrer"
+         className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+        設備圖表與趨勢(CPU/記憶體/磁碟/溫度)→ <span className="font-mono text-[12px] text-muted">Grafana 設備總覽 (Homelab) ↗</span>
+      </a>
     </>
   )
 }

@@ -103,7 +103,7 @@ async def _pc40_alive(client: httpx.AsyncClient) -> bool:
 
 async def overview() -> dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
-        up_vec, cpu, mem, disk, boot, pve, pc40 = await asyncio.gather(
+        up_vec, cpu, mem, disk, boot, pve, pc40, snmp_upt, ports_up, ports_all = await asyncio.gather(
             _promq(client, "up"),
             _promq(client, '100 * (1 - avg by (job)(rate(node_cpu_seconds_total{mode="idle"}[5m])))'),
             _promq(client, '100 * avg by (job)(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'),
@@ -111,10 +111,15 @@ async def overview() -> dict:
             _promq(client, "time() - max by (job)(node_boot_time_seconds)"),
             _promq(client, "pve_up"),
             _pc40_alive(client),
+            # SNMP 類 bare 主機(switch3f,待辦25):sysUpTime 為 timeticks(1/100 秒)
+            _promq(client, "max by (job)(sysUpTime) / 100"),
+            _promq(client, "count by (job)(ifOperStatus == 1)"),
+            _promq(client, "count by (job)(ifOperStatus)"),
         )
 
     up = _by_job(up_vec)
     cpu, mem, disk, boot = _by_job(cpu), _by_job(mem), _by_job(disk), _by_job(boot)
+    snmp_upt, ports_up, ports_all = _by_job(snmp_upt), _by_job(ports_up), _by_job(ports_all)
     pve_up = {r["metric"].get("id"): float(r["value"][1]) for r in pve}
 
     hosts = []
@@ -137,6 +142,11 @@ async def overview() -> dict:
                     m = round(mem[job]) if job in mem else None
                     dk = round(disk[job]) if job in disk else None
                     uptime = _human_secs(boot[job]) if job in boot else "—"
+                elif job in snmp_upt:
+                    # SNMP bare 主機(switch3f):sysUpTime + 埠 up 數(待辦25 接入)
+                    uptime = _human_secs(snmp_upt[job])
+                    if job in ports_all:
+                        note = f"{int(ports_up.get(job, 0))}/{int(ports_all[job])} 埠 up"
             else:
                 # exporter down:主機可能還活著;有 pve id 就用宿主視角判生死
                 g = pve_up.get(h.get("pve", ""))

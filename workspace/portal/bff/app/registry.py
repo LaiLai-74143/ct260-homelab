@@ -19,7 +19,7 @@ HOSTS: list[dict] = [
     {"slug": "pve24", "name": "pve24", "vlan": "infra", "job": "pve-node"},
     {"slug": "dxp4800", "name": "dxp4800", "vlan": "storage", "job": "dxp4800-node"},
     {"slug": "switch3f", "name": "switch3f", "vlan": "infra", "job": "snmp-switch3f", "bare": True,
-     "pending": "SNMP 待接(待辦25)", "off_ok": True},
+     "pending": "SNMP 未應答(待辦25)", "off_ok": True},
     {"slug": "pc40", "name": "pc40", "vlan": "trusted", "http": True, "off_ok": True},
     {"slug": "ct100", "name": "ct100 · mc", "vlan": "game", "job": "mc-server-node",
      "loki": "ct100", "pve": "lxc/100"},

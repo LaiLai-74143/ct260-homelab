@@ -1947,3 +1947,29 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   (0.3.0 image 仍在本機);源碼備份 /root/_backups/portal-src-before-040-*.tgz。
 - 待使用者(M4 DoD):平板實機開 http://10.80.80.11:8088/kiosk(或 portal.hl/kiosk)
   看輪播;建議過夜 soak(EventSource/計時器洩漏觀察)。
+
+### portal 0.4.1:Grafana 圖表入口×2 + Switch3F 接入準備(2026-07-08 晚)
+- 使用者回報:kiosk 實機正常(M4 DoD 達成)、驗收 b/e 完成(Kuma portal monitor
+  已建,BFF /api/services 實測 Portal 本站 kuma_ok=true)、Homepage 退役=低優先級。
+- 使用者點名三項:設備總覽加 Grafana 設備圖表入口、安全面板加防火牆圖表入口、
+  實作接入 Switch3F(截圖=交換機 UI SNMP Community 頁已建 sw3f-…,view all/只讀)。
+- Grafana 入口盤點(dashboard 只有四張 provisioned:homelab-overview/
+  openwrt-portscan-autoban/pve-overview/switch3f-snmp):
+  - 設備頁 → homelab-overview「設備總覽 (Homelab)」連結卡(grafanaUrl 場景切換,
+    比照攻擊地圖卡模式)。
+  - 防火牆圖表=openwrt-portscan-autoban 本身(title 即「OpenWrt 防火牆審計與
+    Cowrie 蜜罐」,安全頁既有攻擊地圖卡連的同一張)→ 不建重複入口,
+    改升該卡文案「防火牆審計、攻擊地圖與完整安全視圖」讓防火牆入口顯性。
+- Switch3F 接入:portal 側已備妥——BFF overview 批次加三查詢(max by(job)(sysUpTime)/100、
+  count by(job)(ifOperStatus==1)、count by(job)(ifOperStatus)),bare 主機 up 時
+  卡片顯示 uptime+「N/M 埠 up」;registry pending 文案改「SNMP 未應答(待辦25)」
+  (時態中性:接通前=待接,接通後再斷=離線,均不誤導)。
+- 交換機側驗鏈(仍不通):exporter 實測 161/udp ICMP connection refused=agent 沒在聽;
+  OpenWrt Allow(132 包)/SNAT(33 包)counter 走動=路徑正常,非防火牆問題。
+  疑 UI 只建了 community、SNMP 全局使能未開或未按應用+保存。
+  ★ 預警:UI 表列 community 顯示恰 20 字(存值 29 字),若開啟後變 timeout
+  =可能建立時被截斷,屆時兩種長度實測分辨(SNMP 錯 community=無回應非 refused)。
+- 部署:finish-portal-041.sh(040 同模式;錨點 0.4.0→0.4.1)。驗證:0.4.1 Up、
+  11 端點 200、/kiosk 200、M3 回歸 403、switch3f 卡=unk「SNMP 未應答」誠實態、
+  Portal 本站 kuma_ok=true。零新 env、零防火牆、無新憑證。
+- 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal041-<TS>+force-recreate。
