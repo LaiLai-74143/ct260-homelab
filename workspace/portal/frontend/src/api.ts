@@ -1,6 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { Alerts, Brief, Overview } from './types'
+import type { Alerts, Brief, Game, HostDetail, Life, Overview, Power, Security, Services } from './types'
+
+/** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
+export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
+
+/** Grafana 基底依場景切換(跳轉連結用) */
+export function grafanaUrl(lanUrl: string): string {
+  return IS_HL ? lanUrl.replace('http://10.80.80.11:3002', 'https://grafana.hl.lailai74143.com') : lanUrl
+}
 
 async function getJson<T>(path: string): Promise<T> {
   const r = await fetch(path)
@@ -39,6 +47,63 @@ export function useBrief() {
     queryFn: () => getJson('/api/brief?d=today'),
     refetchInterval: 5 * 60_000,
     staleTime: 60_000,
+  })
+}
+
+// ---- M2 hooks(刷新週期照 docs/M2-架構.md §2) ----
+
+export function useServices() {
+  return useQuery<Services>({
+    queryKey: ['services'],
+    queryFn: () => getJson('/api/services'),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  })
+}
+
+export function useSecurity() {
+  return useQuery<Security>({
+    queryKey: ['security'],
+    queryFn: () => getJson('/api/security'),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+}
+
+export function usePower() {
+  return useQuery<Power>({
+    queryKey: ['power'],
+    queryFn: () => getJson('/api/power'),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+}
+
+export function useGame() {
+  return useQuery<Game>({
+    queryKey: ['game'],
+    queryFn: () => getJson('/api/game'),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  })
+}
+
+/** 生活:進頁時拉(§2),不設輪詢——資料由 CT260 每 30 分推一次 */
+export function useLife() {
+  return useQuery<Life>({
+    queryKey: ['life'],
+    queryFn: () => getJson('/api/life'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useHostDetail(slug: string | undefined) {
+  return useQuery<HostDetail>({
+    queryKey: ['host', slug],
+    queryFn: () => getJson(`/api/host/${slug}`),
+    enabled: !!slug,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 }
 

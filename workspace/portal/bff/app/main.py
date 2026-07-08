@@ -1,7 +1,8 @@
-"""Portal BFF —— 《入口大廳設計報告-3》§8 API 契約。
+"""Portal BFF —— 《入口大廳設計報告-3》§8 API 契約(+M2 補充,見 docs/M2-架構.md §3)。
 
 M0:PORTAL_MODE=mock,端點回 fixtures(generated_at 即時蓋章)。
-M1:PORTAL_MODE=live,overview/alerts 改查 Prometheus/Alertmanager,brief 讀 data/brief.json。
+M1:PORTAL_MODE=live,overview/alerts 查 Prometheus/Alertmanager,brief 讀 data/brief.json。
+M2:services/security/game/host 接真數據;life 讀 CT260 推送檔;power 於 exporter 就緒前回 pending。
 唯讀原則:本服務不持有任何寫入能力;/api 之外一律回 SPA 靜態檔(history 路由 fallback)。
 """
 import asyncio
@@ -10,7 +11,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -20,7 +21,7 @@ BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.1.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.2.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -58,6 +59,60 @@ async def brief(d: str = "today"):
         return _err(502, "晨報讀取失敗", str(e))
 
 
+@app.get("/api/services")
+async def services():
+    # M2 §3:靜態表永遠可回;Kuma 失聯只反映在 kuma_ok=null + kuma_note
+    try:
+        return await providers.get_services()
+    except providers.UpstreamError as e:
+        return _err(502, "服務目錄組裝失敗", str(e))
+
+
+@app.get("/api/security")
+async def security():
+    try:
+        return await providers.get_security()
+    except providers.UpstreamError as e:
+        return _err(502, "上游查詢失敗", str(e))
+
+
+@app.get("/api/power")
+async def power():
+    try:
+        return await providers.get_power()
+    except providers.UpstreamError as e:
+        return _err(502, "上游查詢失敗", str(e))
+
+
+@app.get("/api/game")
+async def game():
+    try:
+        return await providers.get_game()
+    except providers.UpstreamError as e:
+        return _err(502, "上游查詢失敗", str(e))
+
+
+@app.get("/api/life")
+async def life(request: Request):
+    # 兩層詳略:portal.hl 經 Caddy forward_auth 會帶 Remote-User;直達 :8088 無此 header
+    # → 只回時間+件數。非認證鐵律(直達者可偽造 header),僅調內容詳略,portal 不做存取控管。
+    authed = bool(request.headers.get("Remote-User"))
+    try:
+        return await providers.get_life(authed)
+    except providers.UpstreamError as e:
+        return _err(502, "生活數據讀取失敗", str(e))
+
+
+@app.get("/api/host/{slug}")
+async def host(slug: str):
+    try:
+        return await providers.get_host(slug)
+    except KeyError:
+        return _err(404, f"無此主機:{slug}", "見 /api/overview hosts[].slug")
+    except providers.UpstreamError as e:
+        return _err(502, "上游查詢失敗", str(e))
+
+
 @app.get("/api/stream")
 async def stream():
     """SSE:每 SSE_INTERVAL 秒推 overview,alerts 變化即推(§4)。"""
@@ -79,13 +134,6 @@ async def stream():
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-# M2 之後的端點:先出誠實的 stub(§11「留好路由與 stub」)
-for _p in ("security", "power", "services", "game", "life"):
-    async def _stub(_p=_p):
-        return _err(501, f"/{_p} 屬 M2 範圍", "見入口大廳設計報告 §11")
-    app.get(f"/api/{_p}")(_stub)
-
-
 @app.get("/api/{rest:path}")
 async def api_404(rest: str):
     return _err(404, f"無此端點:/api/{rest}")
@@ -97,7 +145,9 @@ if STATIC_DIR.is_dir():
 
     @app.get("/{path:path}")
     async def spa(path: str):
-        f = STATIC_DIR / path
-        if path and f.is_file():
+        # 路徑穿越防護:resolve 後必須仍在 STATIC_DIR 下,否則一律回 SPA index
+        base = STATIC_DIR.resolve()
+        f = (STATIC_DIR / path).resolve()
+        if path and f.is_relative_to(base) and f.is_file():
             return FileResponse(f)
         return FileResponse(STATIC_DIR / "index.html")

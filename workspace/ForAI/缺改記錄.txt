@@ -1758,6 +1758,30 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   回滾：CT203:/root/_backups/gate.py.before-portal-redirect-20260708_023642 蓋回 /opt/authelia/gate/
   gate.py + systemctl restart ts-gate。
 
+### 待辦49 M2 上線：七模塊頁+L2+服務目錄（2026-07-08，portal 0.1.0→0.2.0）
+- 設計稿 repo docs/M2-架構.md（先經三方獨立審查修訂再動工）；決策依使用者「按建議項實作」：
+  電力 pending 誠實態（不部署 nut_exporter）、攻擊地圖連結卡（不 iframe）、TPS 不做、
+  PC40 五條未放行服務預設「僅手機/灰化」、Vaultwarden 不列 URL。
+- ★設計變更（優於原稿）：生活數據改「推不是拉」——行事曆實際在 Google Calendar 而非
+  NocoDB（NocoDB 只有借貸），GCal 憑證屬可寫、不得進 BFF；改 CT260 hl-write-life
+  （cron */30，flock .life.lock）讀 GCal+NocoDB → life.json → hl-push → CT201
+  /opt/portal/data/。原稿的 OpenWrt Allow-Monitor-To-CT270-NocoDB-8080 因此作廢未建，
+  M2 零防火牆變更、BFF 零新憑證。任一源失敗=整次不投遞，讓 stale 警示自然浮現。
+- BFF 0.2.0：/api/{services,security,game,life,power,host/<slug>}+alerts 24h 時間軸；
+  快取 3–10s 逐端點 TTL+失敗 negative cache 30s；401/403 note 明示憑證失效；
+  services 永不 502（Kuma 掛=全灰燈仍 200）；Kuma 經 extra_hosts host.docker.internal:3001。
+- 誠實態矩陣：電力 pending（nut_exporter 未部署）、Cowrie 源停機（VM300）、Kuma 綠燈灰
+  （KUMA_API_KEY 未填）、MC 玩家數待接（MCSM_API_KEY 未填）——key 由使用者生成後填
+  /opt/portal/portal.env（600）+ up -d portal 即亮。
+- 部署 deploy-020.sh（使用者授權執行）：dist+bff tar+sha256→pct push→CT201 備份→
+  docker build 0.2.0→compose 換版（+env_file/extra_hosts/LOKI_URL，config 驗證）→up -d；
+  九端點 200/404 全過；RWD 9 頁×3 斷點截圖自查 PASS。
+- 回滾：/opt/monitoring/_backups/docker-compose.yml.before-portal020-20260708_054846 蓋回
+  + up -d portal（0.1.0 image 仍在）；/root/_backups/portal-src-before-020-*.tgz；
+  CT260 crontab 備份 ~/_backups/crontab.before-life-*；hl-write-life cron 行刪除即停。
+- 附帶：CT260 補 playwright 系統庫（pct exec apt，截圖用）；V7 uptime-kuma 補
+  compose 位置註記（/opt/uptime-kuma，實機核實）。
+
 ### 待辦25 Switch3F SNMP 監控鏈部署（進行中，等交換機側開啟收案）
 - 調查結論：AP=小米 BE3600 Pro(RN04/RN01) 硬不支援 SNMP（規格/韌體/實測三重確認）；
   Switch3F=三旺通信(3onedata) 工業交換機，韌體支援 v2c/v3（UI 語言檔證實）但未啟用。

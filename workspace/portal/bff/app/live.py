@@ -1,42 +1,30 @@
-"""live 模式:Prometheus / Alertmanager 唯讀查詢(§4/§8)。
+"""live 模式:Prometheus / Alertmanager / Loki / Kuma 唯讀查詢(§4/§8)。
 
-上游皆走 compose 內網,無憑證、無寫入;PC40 健檢走既有防火牆放行
-(Allow/SNAT-Monitor-To-PC40-Health-18080)。查詢聚合 by(job),
-一次 overview 只打 Prometheus 6 發、PC40 1 發,外層另有 3–10s 快取。
+上游走 compose 內網(Kuma 例外:獨立 compose,經 host.docker.internal);
+PC40 健檢走既有防火牆放行(Allow/SNAT-Monitor-To-PC40-Health-18080)。
+全部唯讀、無寫入;外層 providers 有 3–10s 快取 + 30s negative cache。
+M2:新增 services(Kuma 綠燈)/security/game/host_detail 與告警 24h 時間軸。
 """
 import asyncio
 import os
+import re
+import time
 from datetime import datetime, timezone
 
 import httpx
 
 from .providers import UpstreamError
+from .registry import (BY_SLUG, DASH_OVERVIEW, GRAFANA_LAN, HOSTS,
+                       SERVICE_GROUPS, services_of_host)
 
 PROM = os.environ.get("PROM_URL", "http://prometheus:9090")
 AM = os.environ.get("AM_URL", "http://alertmanager:9093")
+LOKI = os.environ.get("LOKI_URL", "http://loki:3100")
 PC40_HEALTH = os.environ.get("PC40_HEALTH", "http://192.168.40.4:18080/")
-
-# 主機註冊表(拓樸 V7 §1/§2;job 對應監控告警 §2)
-#   job:node_exporter 類 job 名;pve:pve-exporter 的 pve_up id;http:健檢 URL
-#   off_ok:關機屬正常(unk 而非 crit);pending:數據源未接完成的說明
-HOSTS: list[dict] = [
-    {"name": "openwrt", "vlan": "路由", "job": "openwrt-system", "bare": True, "note": "textfile 9105"},
-    {"name": "router-pve", "vlan": "infra", "job": "n95-router-pve-node"},
-    {"name": "pve24", "vlan": "infra", "job": "pve-node"},
-    {"name": "dxp4800", "vlan": "storage", "job": "dxp4800-node"},
-    {"name": "switch3f", "vlan": "infra", "job": "snmp-switch3f", "bare": True,
-     "pending": "SNMP 待接(待辦25)", "off_ok": True},
-    {"name": "pc40", "vlan": "trusted", "http": PC40_HEALTH, "off_ok": True},
-    {"name": "ct100 · mc", "vlan": "game", "job": "mc-server-node"},
-    {"name": "ct102 · velocity", "vlan": "game", "job": "ct102-mc-proxy-node"},
-    {"name": "ct201 · monitor", "vlan": "svc", "job": "monitor-node"},
-    {"name": "ct202 · fwdproxy", "vlan": "svc", "job": "ct202-fwdproxy-node"},
-    {"name": "ct203 · dmz", "vlan": "dmz", "job": "ct-dmz-proxy-node"},
-    {"name": "ct250 · lab", "vlan": "srv", "pve": "lxc/250", "off_ok": True, "note": "常態關機(onboot 0)"},
-    {"name": "ct260 · codex", "vlan": "srv", "job": "ct260-codex-ops-node"},
-    {"name": "ct270 · life", "vlan": "srv", "job": "ct270-life-ops-node"},
-    {"name": "vm300 · honeypot", "vlan": "666", "job": "vm300-honeypot-node", "pve": "qemu/300"},
-]
+KUMA_URL = os.environ.get("KUMA_URL", "http://host.docker.internal:3001")
+KUMA_API_KEY = os.environ.get("KUMA_API_KEY", "")
+MCSM_URL = os.environ.get("MCSM_URL", "http://10.70.70.20:23333")
+MCSM_API_KEY = os.environ.get("MCSM_API_KEY", "")
 
 
 def _now() -> str:
@@ -67,6 +55,33 @@ async def _promq(client: httpx.AsyncClient, query: str) -> list[dict]:
     return body["data"]["result"]
 
 
+async def _promq_range(client: httpx.AsyncClient, query: str,
+                       seconds: int, step: int, end: float | None = None) -> list[dict]:
+    end = end if end is not None else time.time()
+    try:
+        r = await client.get(f"{PROM}/api/v1/query_range",
+                             params={"query": query, "start": end - seconds,
+                                     "end": end, "step": step})
+        r.raise_for_status()
+        body = r.json()
+    except Exception as e:  # noqa: BLE001
+        raise UpstreamError(f"Prometheus range 查詢失敗: {type(e).__name__}") from e
+    if body.get("status") != "success":
+        raise UpstreamError(f"Prometheus 回應異常: {body.get('error', '?')}")
+    return body["data"]["result"]
+
+
+def _series(matrix: list[dict]) -> list[list[float]]:
+    """單序列 matrix → [[ts,val]…];空結果回 []。"""
+    if not matrix:
+        return []
+    return [[float(t), round(float(v), 2)] for t, v in matrix[0]["values"]]
+
+
+def _scalar(vec: list[dict]) -> float | None:
+    return float(vec[0]["value"][1]) if vec else None
+
+
 def _by_job(result: list[dict]) -> dict[str, float]:
     out: dict[str, float] = {}
     for r in result:
@@ -83,6 +98,8 @@ async def _pc40_alive(client: httpx.AsyncClient) -> bool:
     except Exception:  # noqa: BLE001 —— 拒連/逾時=關機,屬正常狀態非錯誤
         return False
 
+
+# ---------------- overview(M1;M2 增 slug) ----------------
 
 async def overview() -> dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -108,7 +125,7 @@ async def overview() -> dict:
         c = m = dk = None
         if h.get("pending") and up.get(job or "", 0) < 1:
             note = h["pending"]
-        elif "http" in h:
+        elif h.get("http"):
             state = "ok" if pc40 else "unk"
             note = "health OK" if pc40 else "關機(正常)"
             uptime = "on" if pc40 else "off"
@@ -145,7 +162,7 @@ async def overview() -> dict:
                 uptime = "off"
                 if state == "crit":
                     crit_notes.append(f"{name} 停機")
-        hosts.append({"name": name, "vlan": h["vlan"], "up": state,
+        hosts.append({"slug": h["slug"], "name": name, "vlan": h["vlan"], "up": state,
                       "cpu": c, "mem": m, "disk": dk, "uptime": uptime, "note": note})
 
     total = len(up_vec)
@@ -163,12 +180,14 @@ async def overview() -> dict:
     return {
         "summary": summary,
         "hosts": hosts,
-        "services_ok": None,           # M2:Kuma
-        "alerts_firing": -1,           # 前端以 /api/alerts 為準;此欄 M1 不重複查
+        "services_ok": None,           # providers 以 services 快取補真值
+        "alerts_firing": -1,           # 前端以 /api/alerts 為準;此欄不重複查
         "targets": {"up": n_up, "total": total},
         "generated_at": _now(),
     }
 
+
+# ---------------- alerts(M1;M2 增 24h 時間軸) ----------------
 
 def _humanize_since(start: str) -> str:
     try:
@@ -178,21 +197,37 @@ def _humanize_since(start: str) -> str:
         return "?"
 
 
+def _fill_buckets(series: list[list[float]], end: float, seconds: int, step: int) -> list[list[float]]:
+    """把稀疏 range 結果補滿等距桶(count() 對空向量整步缺樣本=0 firing,補 0 才誠實)。"""
+    base = end - seconds
+    have = {round((t - base) / step): v for t, v in series}
+    return [[base + k * step, have.get(k, 0)] for k in range(seconds // step + 1)]
+
+
 async def alerts() -> dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             fr = await client.get(f"{AM}/api/v2/alerts",
                                   params={"active": "true", "silenced": "false", "inhibited": "false"})
             fr.raise_for_status()
+            fr_body = fr.json()
             sr = await client.get(f"{AM}/api/v2/silences")
             sr.raise_for_status()
-        except Exception as e:  # noqa: BLE001
+            sr_body = sr.json()
+        except Exception as e:  # noqa: BLE001 —— 含 200 非 JSON body,一律折成 UpstreamError
             raise UpstreamError(f"Alertmanager 查詢失敗: {type(e).__name__}") from e
         try:
             pr = await client.get(f"{PROM}/api/v1/alerts")
             pending_raw = [a for a in pr.json()["data"]["alerts"] if a.get("state") == "pending"]
         except Exception:  # noqa: BLE001 —— pending 屬加值資訊,失敗不整包壞
             pending_raw = []
+        try:
+            tl_end = time.time()
+            tl = _fill_buckets(_series(await _promq_range(
+                client, 'count(ALERTS{alertstate="firing"})', 24 * 3600, 1800, end=tl_end)),
+                tl_end, 24 * 3600, 1800)
+        except UpstreamError:  # 時間軸屬加值資訊,失敗不整包壞
+            tl = []
 
     def sev(labels: dict) -> str:
         s = labels.get("severity", "info")
@@ -224,4 +259,259 @@ async def alerts() -> dict:
     sev_rank = {"critical": 0, "warning": 1, "info": 2}
     firing.sort(key=lambda a: sev_rank.get(a["severity"], 3))
 
-    return {"firing": firing, "pending": pending, "silences": silences, "generated_at": _now()}
+    return {"firing": firing, "pending": pending, "silences": silences,
+            "timeline_24h": tl, "generated_at": _now()}
+
+
+# ---------------- services(M2:註冊表 × Kuma 綠燈) ----------------
+
+_KUMA_LINE = re.compile(r'^monitor_status\{(?P<labels>[^}]*)\}\s+(?P<val>[\d.]+)')
+_KUMA_NAME = re.compile(r'monitor_name="(?P<name>[^"]*)"')
+
+
+async def _kuma_status() -> dict[str, int]:
+    """Kuma /metrics(API key,唯讀)→ {monitor_name(lower): status};1=up。"""
+    async with httpx.AsyncClient(timeout=4.0, auth=("", KUMA_API_KEY)) as client:
+        try:
+            r = await client.get(f"{KUMA_URL}/metrics")
+        except Exception as e:  # noqa: BLE001
+            raise UpstreamError(f"Kuma 失聯: {type(e).__name__}") from e
+    if r.status_code in (401, 403):
+        raise UpstreamError("Kuma 憑證失效(401/403)——請輪替 API key")
+    if r.status_code != 200:
+        raise UpstreamError(f"Kuma 回應異常: HTTP {r.status_code}")
+    out: dict[str, int] = {}
+    for line in r.text.splitlines():
+        m = _KUMA_LINE.match(line)
+        if not m:
+            continue
+        n = _KUMA_NAME.search(m.group("labels"))
+        if n:
+            out[n.group("name").strip().lower()] = int(float(m.group("val")))
+    return out
+
+
+async def services() -> dict:
+    """服務目錄:靜態表永遠可回(M2 §3:此端點不因 Kuma 掛而 502)。"""
+    kuma: dict[str, int] | None = None
+    note = None
+    if KUMA_API_KEY:
+        try:
+            kuma = await _kuma_status()
+        except UpstreamError as e:
+            note = str(e)
+    else:
+        note = "Kuma API key 未設定——綠燈待接(待辦49 決策4)"
+
+    groups = []
+    for g in SERVICE_GROUPS:
+        items = []
+        for i in g["items"]:
+            ok = None
+            if kuma is not None and i.get("kuma"):
+                # Kuma monitor_status:1=up、0=down;2(pending)/3(maintenance)不裝紅也不裝綠
+                s = kuma.get(i["kuma"])
+                ok = True if s == 1 else False if s == 0 else None
+            items.append({"name": i["name"], "url": i.get("url"), "url_hl": i.get("url_hl"),
+                          "pc40": i.get("pc40", False), "phone": i.get("phone", False),
+                          "host": i.get("host"), "kuma_ok": ok, "note": i.get("note")})
+        groups.append({"group": g["group"], "items": items})
+    return {"groups": groups, "kuma_note": note, "generated_at": _now()}
+
+
+# ---------------- security(M2) ----------------
+
+async def security() -> dict:
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        banned, trend, trip24, tripd, cow_up = await asyncio.gather(
+            _promq(client, "sum(portscan_autoban_banned_ips)"),
+            _promq_range(client, "sum(portscan_autoban_banned_ips)", 24 * 3600, 3600),
+            _promq(client, "sum(increase(openwrt_ssh22_tripwire_total[24h]))"),
+            _promq_range(client, "sum(increase(openwrt_ssh22_tripwire_total[1d]))",
+                         30 * 86400, 86400),
+            _promq(client, 'up{job="cowrie-exporter"}'),
+        )
+        cowrie: dict
+        if _scalar(cow_up) == 1:
+            cnt, top = await asyncio.gather(
+                _promq(client, "sum(increase(cowrie_sessions_total[24h]))"),
+                _promq(client, "topk(5, cowrie_top_source_ip_sessions)"),
+            )
+            def _ip(metric: dict) -> str:
+                for k in ("ip", "src_ip", "source_ip", "address", "source"):
+                    if k in metric:
+                        return metric[k]
+                return "?"
+            cowrie = {"count": int(_scalar(cnt) or 0),
+                      "top_src": [{"ip": _ip(r["metric"]), "n": int(float(r["value"][1]))}
+                                  for r in top]}
+        else:
+            # 誠實態(M2 §2):源=VM300 cowrie-exporter,停機時不擺舊數據
+            cowrie = {"offline": True, "hint": "資料源離線(VM300 停機)——重啟屬使用者裁決"}
+
+    # 誠實區分:整窗無樣本(exporter 沒數據)→ None;有樣本但全 0 → 零事件 ≥30 天
+    samples = _series(tripd)
+    hits = [(t, v) for t, v in samples if v > 0.5]
+    now = time.time()
+    if not samples:
+        days_clean, last_hit = None, None
+    elif hits:
+        last_ts = hits[-1][0]
+        days_clean = max(0, int((now - last_ts) // 86400))
+        last_hit = datetime.fromtimestamp(last_ts, timezone.utc).date().isoformat()
+    else:
+        days_clean, last_hit = 30, None  # 30 天窗內零事件;顯示「≥30 天」
+
+    return {
+        "autoban_today": int(_scalar(banned) or 0),  # 現行封鎖 IP 數(gauge)
+        "autoban_trend_24h": _series(trend),
+        "tripwire": {"today": int(_scalar(trip24) or 0),
+                     "last_hit": last_hit, "days_clean": days_clean},
+        "cowrie": cowrie,
+        "generated_at": _now(),
+    }
+
+
+# ---------------- game(M2:Prometheus 為主,MCSM key 就緒後補玩家數) ----------------
+
+async def game() -> dict:
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        pve, exp, cpu, mem = await asyncio.gather(
+            _promq(client, 'pve_up{id="lxc/100"}'),
+            _promq(client, 'up{job=~"mc-server-node|ct102-mc-proxy-node"}'),
+            _promq(client, '100 * (1 - avg by (job)(rate(node_cpu_seconds_total{mode="idle",job=~"mc-server-node|ct102-mc-proxy-node"}[5m])))'),
+            _promq(client, '100 * avg by (job)(1 - node_memory_MemAvailable_bytes{job=~"mc-server-node|ct102-mc-proxy-node"} / node_memory_MemTotal_bytes)'),
+        )
+    up, cpu, mem = _by_job(exp), _by_job(cpu), _by_job(mem)
+    running = (_scalar(pve) or 0) >= 1
+
+    players, names, note = None, None, None
+    if MCSM_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                r = await client.get(f"{MCSM_URL}/api/overview",
+                                     params={"apikey": MCSM_API_KEY},
+                                     headers={"X-Requested-With": "XMLHttpRequest"})
+            if r.status_code in (401, 403):
+                note = "MCSManager 憑證失效(401/403)——請輪替 API key"
+            elif r.status_code == 200:
+                # 面板總覽僅證明可達;實例玩家數待實測 key 後補上精確端點
+                note = "MCSM 已連線;玩家數端點待 key 實測後接上"
+            else:
+                note = f"MCSManager 回應異常: HTTP {r.status_code}"
+        except Exception as e:  # noqa: BLE001
+            note = f"MCSManager 失聯: {type(e).__name__}"
+    else:
+        note = "MCSM API key 未設定——玩家數待接(待辦49 決策4)"
+
+    def _host(job: str, label: str) -> dict:
+        return {"name": label, "up": up.get(job, 0) >= 1,
+                "cpu": round(cpu[job]) if job in cpu else None,
+                "mem": round(mem[job]) if job in mem else None}
+
+    return {
+        "server_up": up.get("mc-server-node", 0) >= 1,
+        "instance_state": "running" if running else "stopped",
+        "players_online": players,
+        "player_names": names,
+        "hosts": [_host("mc-server-node", "ct100 · backend"),
+                  _host("ct102-mc-proxy-node", "ct102 · velocity")],
+        "note": note,
+        "generated_at": _now(),
+    }
+
+
+# ---------------- host detail(M2 L2) ----------------
+
+async def _loki_tail(host_label: str) -> list[dict] | None:
+    end_ns = int(time.time() * 1e9)
+    start_ns = end_ns - 15 * 60 * int(1e9)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{LOKI}/loki/api/v1/query_range",
+                                 params={"query": f'{{host="{host_label}"}}',
+                                         "start": start_ns, "end": end_ns,
+                                         "limit": 50, "direction": "backward"})
+            r.raise_for_status()
+            data = r.json()["data"]["result"]
+    except Exception:  # noqa: BLE001 —— 日誌尾巴屬加值資訊,失敗回 null 不整包壞
+        return None
+    rows: list[tuple[int, str]] = []
+    for stream in data:
+        rows.extend((int(t), line) for t, line in stream["values"])
+    rows.sort(reverse=True)
+    return [{"ts": datetime.fromtimestamp(t / 1e9, timezone.utc).isoformat(timespec="seconds"),
+             "line": line[:300]} for t, line in rows[:50]]
+
+
+async def host_detail(slug: str) -> dict:
+    h = BY_SLUG.get(slug)
+    if h is None:
+        raise KeyError(slug)
+    job = h.get("job")
+    metrics: dict[str, list] = {"cpu": [], "mem": [], "disk": [], "net": []}
+    if job and not h.get("bare"):
+        q = {
+            "cpu": f'100 * (1 - avg(rate(node_cpu_seconds_total{{mode="idle",job="{job}"}}[5m])))',
+            "mem": f'100 * avg(1 - node_memory_MemAvailable_bytes{{job="{job}"}} / node_memory_MemTotal_bytes{{job="{job}"}})',
+            "disk": f'100 * max(1 - node_filesystem_avail_bytes{{mountpoint="/",job="{job}"}} / node_filesystem_size_bytes{{mountpoint="/",job="{job}"}})',
+            # 網路:rx+tx KB/s,排除虛擬介面
+            "net": (f'sum(rate(node_network_receive_bytes_total{{job="{job}",device!~"lo|veth.*|br.*|docker.*|tap.*|fwbr.*|fwpr.*|fwln.*"}}[5m])'
+                    f' + rate(node_network_transmit_bytes_total{{job="{job}",device!~"lo|veth.*|br.*|docker.*|tap.*|fwbr.*|fwpr.*|fwln.*"}}[5m])) / 1024'),
+        }
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            res = await asyncio.gather(*[
+                _promq_range(client, expr, 6 * 3600, 300) for expr in q.values()
+            ], return_exceptions=True)
+        for key, r in zip(q.keys(), res):
+            metrics[key] = [] if isinstance(r, BaseException) else _series(r)
+
+    related: list[dict] = []
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            fr = await client.get(f"{AM}/api/v2/alerts",
+                                  params={"active": "true", "silenced": "false", "inhibited": "false"})
+            fr.raise_for_status()
+        short = h["name"].split(" ")[0]
+        for a in fr.json():
+            labels = a.get("labels", {})
+            inst = labels.get("instance", "")
+            desc = (a.get("annotations", {}).get("summary")
+                    or a.get("annotations", {}).get("description", ""))
+            # 帶 pve guest id 的告警(PveGuest*)只歸屬該 guest——不因 instance=宿主 FQDN
+            # 而攀到宿主頁(否則 vm300 停機同時出現在 pve24 頁,歸屬顛倒)。
+            alert_id = labels.get("id", "")
+            if alert_id and alert_id.startswith(("lxc/", "qemu/")):
+                hit = alert_id == h.get("pve")
+            else:
+                # 一般告警:job 相等,或 instance host(切埠切網域)精確 token 命中
+                inst_host = inst.split(":")[0]
+                tokens = {inst_host, inst_host.split(".")[0]}
+                hit = (job and labels.get("job") == job) or slug in tokens or short in tokens
+            if hit:
+                s = labels.get("severity", "info")
+                related.append({
+                    "name": labels.get("alertname", "?"),
+                    "severity": s if s in ("critical", "warning") else "info",
+                    "description": desc,
+                    "instance": inst,
+                    "since": _humanize_since(a.get("startsAt", "")),
+                })
+    except Exception:  # noqa: BLE001 —— 相關告警屬加值資訊
+        related = []
+
+    log_tail = await _loki_tail(h["loki"]) if h.get("loki") else None
+
+    return {
+        "slug": slug,
+        "name": h["name"],
+        "vlan": h["vlan"],
+        "bare": bool(h.get("bare") or not job),
+        "metrics_6h": metrics,
+        "services": services_of_host(slug),
+        "related_alerts": related,
+        "log_tail": log_tail,
+        "loki": h.get("loki"),
+        "grafana_url": f"{GRAFANA_LAN}{DASH_OVERVIEW}",
+        "generated_at": _now(),
+    }

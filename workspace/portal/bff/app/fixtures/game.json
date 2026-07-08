@@ -1,0 +1,22 @@
+{
+ "server_up": true,
+ "instance_state": "running",
+ "players_online": null,
+ "player_names": null,
+ "hosts": [
+  {
+   "name": "ct100 · backend",
+   "up": true,
+   "cpu": 31,
+   "mem": 72
+  },
+  {
+   "name": "ct102 · velocity",
+   "up": true,
+   "cpu": 4,
+   "mem": 29
+  }
+ ],
+ "note": "MCSM API key 未設定——玩家數待接(待辦49 決策4)",
+ "generated_at": "fixture"
+}

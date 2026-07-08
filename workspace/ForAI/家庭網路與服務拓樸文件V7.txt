@@ -811,7 +811,8 @@ Docker services(/opt/monitoring):
 homepage      3000   Up/healthy
 grafana       3002   Up
 prometheus    9090   Up
-uptime-kuma   3001   Up/healthy
+uptime-kuma   3001   Up/healthy(compose 在 /opt/uptime-kuma、獨立 docker 網路,非本表其餘
+              服務所在的 /opt/monitoring——同 Homepage 模式;2026-07-08 實機核實補記)
 gotify        8090   告警推播(內網;admin 密碼 /opt/monitoring/gotify.env)
 alertmanager  9093   設定 /opt/monitoring/alertmanager.yml
 alertmanager-gotify-bridge   無 host port(內網 docker network)
@@ -825,14 +826,23 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.1.0 本地 build(python:3.13.5-slim+pin;待辦49,2026-07-08)
-              入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager compose 內網+PC40 健檢)
+portal        8088   portal:0.2.0 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08)
+              入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
+              +PC40 健檢;Kuma 經 extra_hosts host.docker.internal:3001,API key 待使用者
+              於 UI 生成後填 /opt/portal/portal.env(600)——未填=綠燈灰、誠實降級)
               +Vite SPA 靜態檔;bind-mount /opt/portal/{static,data}(ro);
               晨報=CT260 homelab-notify.py --write-brief(cron 06:00 台北)→hl-push→
-              /opt/portal/data/brief.json(日期副本保留 30 期);源檔 CT260 ~/workspace/portal(git);
+              /opt/portal/data/brief.json(日期副本保留 30 期);
+              生活=CT260 hl-write-life(cron */30;GCal 行事曆+NocoDB 借貸,憑證只在 CT260)
+              →hl-push→/opt/portal/data/life.json——推不是拉,BFF 零新憑證零新防火牆;
+              源檔 CT260 ~/workspace/portal(git,docs/M2-架構.md=設計稿);
               建置 CT260 vite build→tar+sha256→pve24 pct push,CT201 不裝 node;
               存取:PC40 直達 :8088 + 手機 https://portal.hl(CT203 Authelia,2026-07-08);
-              M2 待做:七模塊頁+L2+服務目錄→屆時 Homepage 退役;Kuma 探活 /api/health 待 UI 加
+              M2 已上線(2026-07-08):七模塊頁+L2 /host/<slug>(6h sparkline+Loki 尾巴)
+              +服務目錄(可達性三態,Homepage 退役等使用者驗收後另案)+告警 24h 時間軸;
+              電力=pending 誠實態(nut_exporter 未部署);Cowrie 卡=源停機誠實態;
+              MCSM_API_KEY 待使用者(玩家數);Kuma 探活 /api/health 待 UI 加;
+              M3(動作按鈕)/M4(kiosk)未做
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);稽核 19 up / 4 down——

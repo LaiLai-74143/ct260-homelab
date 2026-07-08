@@ -1,0 +1,281 @@
+{
+ "groups": [
+  {
+   "group": "觀測",
+   "items": [
+    {
+     "name": "Grafana",
+     "url": "http://10.80.80.11:3002",
+     "url_hl": "https://grafana.hl.lailai74143.com",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "總覽 dashboard",
+     "url": "http://10.80.80.11:3002/d/homelab-overview",
+     "url_hl": "https://grafana.hl.lailai74143.com/d/homelab-overview",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "安全 dashboard",
+     "url": "http://10.80.80.11:3002/d/openwrt-portscan-autoban/openwrt-portscan-autoban",
+     "url_hl": "https://grafana.hl.lailai74143.com/d/openwrt-portscan-autoban/openwrt-portscan-autoban",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "Uptime Kuma",
+     "url": "http://10.80.80.11:3001",
+     "url_hl": "https://kuma.hl.lailai74143.com",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": null,
+     "note": null
+    },
+    {
+     "name": "Prometheus",
+     "url": "http://10.80.80.11:9090",
+     "url_hl": "https://prometheus.hl.lailai74143.com",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "Portal 本站",
+     "url": "http://10.80.80.11:8088",
+     "url_hl": "https://portal.hl.lailai74143.com",
+     "pc40": true,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "ntfy",
+     "url": "http://10.80.80.11:8091",
+     "url_hl": null,
+     "pc40": false,
+     "phone": true,
+     "host": "ct201",
+     "kuma_ok": true,
+     "note": "PC40 未放行(僅手機,待辦49 決策6)"
+    }
+   ]
+  },
+  {
+   "group": "虛擬化/網路",
+   "items": [
+    {
+     "name": "pve24 PVE",
+     "url": "https://pve24.home.arpa:8006",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "pve24",
+     "kuma_ok": null,
+     "note": null
+    },
+    {
+     "name": "RouterPVE",
+     "url": "https://router-pve.home.arpa:8006",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "router-pve",
+     "kuma_ok": null,
+     "note": null
+    },
+    {
+     "name": "OpenWrt LuCI",
+     "url": "http://192.168.10.1",
+     "url_hl": null,
+     "pc40": false,
+     "phone": false,
+     "host": "openwrt",
+     "kuma_ok": null,
+     "note": "PC40/手機皆未放行(管理面)"
+    },
+    {
+     "name": "Switch3F",
+     "url": "http://192.168.10.21",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "switch3f",
+     "kuma_ok": null,
+     "note": null
+    },
+    {
+     "name": "AP Main",
+     "url": "http://192.168.50.2",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": null,
+     "kuma_ok": null,
+     "note": null
+    },
+    {
+     "name": "NAS 管理 UI",
+     "url": "https://nas.home.arpa:8243",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "dxp4800",
+     "kuma_ok": null,
+     "note": null
+    }
+   ]
+  },
+  {
+   "group": "安全",
+   "items": [
+    {
+     "name": "Wazuh",
+     "url": "https://10.80.80.12",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": null,
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "AdGuard Home",
+     "url": "http://192.168.10.1:8080",
+     "url_hl": null,
+     "pc40": false,
+     "phone": true,
+     "host": "openwrt",
+     "kuma_ok": true,
+     "note": "PC40 未放行(僅手機,待辦49 決策6)"
+    }
+   ]
+  },
+  {
+   "group": "生活",
+   "items": [
+    {
+     "name": "NocoDB",
+     "url": "http://192.168.20.70:8080",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "ct270",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "Home Assistant",
+     "url": "http://192.168.20.70:8123",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "ct270",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "Paperless",
+     "url": "http://192.168.20.70:8000",
+     "url_hl": null,
+     "pc40": true,
+     "phone": false,
+     "host": "ct270",
+     "kuma_ok": true,
+     "note": null
+    },
+    {
+     "name": "Navidrome",
+     "url": "http://192.168.20.70:4533",
+     "url_hl": null,
+     "pc40": true,
+     "phone": true,
+     "host": "ct270",
+     "kuma_ok": true,
+     "note": "媒體豁免,手機免發證"
+    }
+   ]
+  },
+  {
+   "group": "媒體",
+   "items": [
+    {
+     "name": "Jellyfin",
+     "url": "http://192.168.30.3:8096",
+     "url_hl": null,
+     "pc40": false,
+     "phone": true,
+     "host": "dxp4800",
+     "kuma_ok": true,
+     "note": "媒體豁免;PC40 未放行(僅手機,待辦49 決策6)"
+    },
+    {
+     "name": "qBittorrent",
+     "url": "http://192.168.30.3:8080",
+     "url_hl": null,
+     "pc40": false,
+     "phone": false,
+     "host": "dxp4800",
+     "kuma_ok": false,
+     "note": "PC40/手機皆未放行(待辦49 決策6)"
+    }
+   ]
+  },
+  {
+   "group": "遊戲",
+   "items": [
+    {
+     "name": "MCSManager",
+     "url": "http://10.70.70.20:23333",
+     "url_hl": null,
+     "pc40": false,
+     "phone": false,
+     "host": "ct100",
+     "kuma_ok": null,
+     "note": "PC40/手機皆未放行(僅 CT201 監控面)"
+    },
+    {
+     "name": "MC 對外入口",
+     "url": "mc.lailai74143.com:49169",
+     "url_hl": null,
+     "pc40": true,
+     "phone": true,
+     "host": "ct100",
+     "kuma_ok": null,
+     "note": "Java 49169 / Bedrock 43915,公網 hairpin"
+    }
+   ]
+  },
+  {
+   "group": "基礎",
+   "items": [
+    {
+     "name": "Vaultwarden",
+     "url": null,
+     "url_hl": null,
+     "pc40": false,
+     "phone": false,
+     "host": "dxp4800",
+     "kuma_ok": true,
+     "note": "經 CF Tunnel,入口不在此列出"
+    }
+   ]
+  }
+ ],
+ "kuma_note": null,
+ "generated_at": "fixture"
+}

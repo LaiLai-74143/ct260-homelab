@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""hl-write-life — 待辦49 M2:產出入口大廳生活模塊 JSON 並投遞 CT201。
+
+行事曆=Google Calendar(讀 ~/.config/homelab/gcal.env,同 life-ops-mcp);
+借貸=NocoDB base Life-Ops Transactions(讀 ~/.config/homelab/nocodb.env,唯讀查詢)。
+比照晨報「推不是拉」:CT260 產檔 → hl-push → CT201 /opt/portal/data/life.json;
+BFF 零新憑證、零新防火牆。任一數據源失敗=整次不投遞(exit 1),
+讓 portal 端 stale 警示自然浮現——不推殘缺資料裝完整。
+cron:*/30(flock .life.lock)。手動:hl-write-life [--dry-run]
+"""
+import datetime
+import json
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+STATE = HOME / ".local/state/homelab-notify"
+OUT = STATE / "life.json"
+TZI = datetime.timezone(datetime.timedelta(hours=8))
+
+
+def load_env(path: str) -> dict:
+    env = {}
+    for line in open(Path(path).expanduser()):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            env[k] = v.strip().strip('"').strip("'")
+    return env
+
+
+def log(msg: str) -> None:
+    print(f"hl-write-life: {msg}", flush=True)
+
+
+# ---- Google Calendar(唯讀 events.list) ----
+
+def gcal_today() -> list[dict]:
+    c = load_env("~/.config/homelab/gcal.env")
+    data = urllib.parse.urlencode({
+        "client_id": c["GCAL_CLIENT_ID"], "client_secret": c["GCAL_CLIENT_SECRET"],
+        "refresh_token": c["GCAL_REFRESH_TOKEN"], "grant_type": "refresh_token"}).encode()
+    tok = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=20).read())["access_token"]
+
+    now = datetime.datetime.now(TZI)
+    t0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    t1 = t0 + datetime.timedelta(days=1)
+    cal = c.get("GCAL_CALENDAR_ID", "primary")
+    q = urllib.parse.urlencode({"timeMin": t0.isoformat(), "timeMax": t1.isoformat(),
+                                "singleEvents": "true", "orderBy": "startTime", "maxResults": 50})
+    req = urllib.request.Request(
+        f"https://www.googleapis.com/calendar/v3/calendars/{urllib.parse.quote(cal)}/events?{q}",
+        headers={"Authorization": f"Bearer {tok}"})
+    items = json.loads(urllib.request.urlopen(req, timeout=20).read()).get("items", [])
+
+    out = []
+    for e in items:
+        start = e.get("start", {})
+        if "dateTime" in start:
+            hhmm = start["dateTime"][11:16]
+        else:
+            hhmm = "全天"
+        out.append({"time": hhmm, "title": e.get("summary", "(無標題)")})
+    return out
+
+
+# ---- NocoDB(唯讀 records list) ----
+
+def nocodb_debts() -> dict:
+    c = load_env("~/.config/homelab/nocodb.env")
+    url, tok = c["NC_URL"].rstrip("/"), c["NC_TOKEN"]
+    base = c.get("NC_BASE", "ppralaha4e76q5o")
+
+    def api(path: str) -> dict:
+        req = urllib.request.Request(url + path, headers={"xc-token": tok})
+        return json.loads(urllib.request.urlopen(req, timeout=20).read())
+
+    tid = None
+    for t in api(f"/api/v1/db/meta/projects/{base}/tables")["list"]:
+        if t["title"] == "Transactions":
+            tid = t["id"]
+            break
+    if tid is None:
+        raise RuntimeError("NocoDB 無 Transactions 表")
+
+    rows = []
+    while True:
+        r = api(f"/api/v2/tables/{tid}/records?limit=200&offset={len(rows)}")
+        batch = r["list"]
+        rows += batch
+        # offset 用實際累加筆數推進,不假設每頁必滿 200(NocoDB 調低上限也不漏列)
+        if not batch or r.get("pageInfo", {}).get("isLastPage", True):
+            break
+
+    open_rows = [x for x in rows if not x.get("settled")]
+    net = 0
+    for x in open_rows:
+        if x.get("kind") == "金錢" and x.get("amount"):
+            net += x["amount"] if x.get("direction") == "我借出" else -x["amount"]
+    return {"count": len(open_rows), "total": net}
+
+
+def main() -> None:
+    try:
+        cal = gcal_today()
+    except Exception as e:  # noqa: BLE001
+        log(f"GCal 失敗 {type(e).__name__}: {e}")
+        sys.exit(1)
+    try:
+        debts = nocodb_debts()
+    except Exception as e:  # noqa: BLE001
+        log(f"NocoDB 失敗 {type(e).__name__}: {e}")
+        sys.exit(1)
+
+    STATE.mkdir(parents=True, exist_ok=True)
+    doc = {"calendar_today": cal, "debts_open": debts,
+           "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    log(f"written: 行程 {len(cal)} · 未結 {debts['count']} 筆(淨額 {debts['total']})")
+
+    if "--dry-run" in sys.argv:
+        log("dry-run: 不投遞 CT201")
+        return
+    push = subprocess.run([str(HOME / ".local/bin/hl-push"), "ct201",
+                           str(OUT), "/opt/portal/data/life.json"],
+                          capture_output=True, text=True, timeout=90)
+    if push.returncode != 0:
+        log(f"push failed rc={push.returncode}: {push.stderr.strip()[:200]}")
+        sys.exit(1)
+    log("pushed -> CT201 /opt/portal/data/life.json")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,18 @@
+{
+ "calendar_today": [
+  {
+   "time": "14:00",
+   "title": "牙醫回診"
+  },
+  {
+   "time": "19:30",
+   "title": "家庭聚餐"
+  }
+ ],
+ "debts_open": {
+  "count": 3,
+  "total": 4200
+ },
+ "stale_seconds": 900,
+ "generated_at": "fixture"
+}

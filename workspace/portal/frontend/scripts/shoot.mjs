@@ -3,6 +3,7 @@ import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 
 const OUT = process.env.SHOT_DIR || 'shots'
+const BASE = process.env.SHOT_BASE || 'http://localhost:8088'
 mkdirSync(OUT, { recursive: true })
 
 const BREAKPOINTS = [
@@ -14,6 +15,12 @@ const PAGES = [
   { tag: 'home', path: '/' },
   { tag: 'devices', path: '/m/devices' },
   { tag: 'alerts', path: '/m/alerts' },
+  { tag: 'services', path: '/m/services' },
+  { tag: 'security', path: '/m/security' },
+  { tag: 'power', path: '/m/power' },
+  { tag: 'game', path: '/m/game' },
+  { tag: 'life', path: '/m/life' },
+  { tag: 'host', path: '/host/ct201' },
 ]
 
 const browser = await chromium.launch()
@@ -22,8 +29,8 @@ for (const bp of BREAKPOINTS) {
   const page = await ctx.newPage()
   for (const p of PAGES) {
     // SSE 常駐連線使 networkidle 永不成立 → 等 load + 面板元素出現
-    await page.goto(`http://localhost:8088${p.path}`, { waitUntil: 'load' })
-    await page.waitForSelector('.bg-panel', { timeout: 10_000 })
+    await page.goto(`${BASE}${p.path}`, { waitUntil: 'load' })
+    await page.waitForSelector('main .rounded-card', { timeout: 10_000 })
     await page.waitForTimeout(600) // 字體/淡入落定
     await page.screenshot({ path: `${OUT}/${p.tag}-${bp.tag}.png`, fullPage: true })
     console.log(`${p.tag}-${bp.tag}.png`)

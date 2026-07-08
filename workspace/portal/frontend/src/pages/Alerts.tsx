@@ -1,6 +1,7 @@
 import { useAlerts } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import Timeline from '../components/Timeline'
 import type { AlertItem } from '../types'
 
 function sevState(s: AlertItem['severity']) {
@@ -57,10 +58,10 @@ export default function Alerts() {
         </>
       )}
 
-      <div className="mt-3.5 rounded-card border border-dashed border-line px-5 py-10 text-center text-[13.5px] text-muted">
-        近 24h 告警時間軸(M2 實作)
-        <span className="mt-1.5 block font-mono text-[11px]">GET /api/alerts?range=24h</span>
-      </div>
+      <section className="mt-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
+        <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">近 24H 告警時間軸(firing 數)</div>
+        <Timeline data={al.data?.timeline_24h ?? []} />
+      </section>
     </>
   )
 }

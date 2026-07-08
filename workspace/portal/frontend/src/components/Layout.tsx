@@ -13,10 +13,17 @@ export default function Layout() {
   const pendingG = useRef(false)
   useStream()
 
-  // 鍵盤捷徑(§7):g d 回大廳、g a 告警
+  // 鍵盤捷徑(§7):g d 回大廳、g a 告警、/ 服務目錄搜尋
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === '/' && !pathname.startsWith('/m/services')) {
+        // 進服務目錄;頁內的 / 聚焦由 Services 自己接手
+        e.preventDefault()
+        pendingG.current = false
+        nav('/m/services')
+        return
+      }
       if (e.key === 'g') { pendingG.current = true; return }
       if (pendingG.current) {
         if (e.key === 'd') nav('/')
@@ -26,7 +33,7 @@ export default function Layout() {
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [nav])
+  }, [nav, pathname])
 
   return (
     <div className="flex min-h-screen">
@@ -37,7 +44,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.1</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.2</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {

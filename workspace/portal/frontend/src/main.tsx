@@ -17,6 +17,11 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import Devices from './pages/Devices'
 import Alerts from './pages/Alerts'
+import Services from './pages/Services'
+import Security from './pages/Security'
+import Power from './pages/Power'
+import Game from './pages/Game'
+import Life from './pages/Life'
 import More from './pages/More'
 import Host from './pages/Host'
 import Stub from './pages/Stub'
@@ -29,11 +34,11 @@ const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: 'm/devices', element: <Devices /> },
       { path: 'm/alerts', element: <Alerts /> },
-      { path: 'm/services', element: <Stub title="服務目錄" api="GET /api/services" /> },
-      { path: 'm/security', element: <Stub title="安全面板" api="GET /api/security" /> },
-      { path: 'm/power', element: <Stub title="電力" api="GET /api/power" /> },
-      { path: 'm/game', element: <Stub title="遊戲" api="GET /api/game" /> },
-      { path: 'm/life', element: <Stub title="生活" api="GET /api/life" /> },
+      { path: 'm/services', element: <Services /> },
+      { path: 'm/security', element: <Security /> },
+      { path: 'm/power', element: <Power /> },
+      { path: 'm/game', element: <Game /> },
+      { path: 'm/life', element: <Life /> },
       { path: 'more', element: <More /> },
       { path: 'host/:name', element: <Host /> },
       { path: 'kiosk', element: <Stub title="Kiosk 輪播" api="M4(待辦44 牆面平板)" /> },
