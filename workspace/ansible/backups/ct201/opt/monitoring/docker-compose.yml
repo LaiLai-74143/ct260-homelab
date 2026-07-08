@@ -78,6 +78,38 @@ services:
       - ./pve.yml:/etc/prometheus/pve.yml:ro
     # 無 host port:僅 prometheus 經 compose 內網 scrape(pve-exporter:9221),比照 bridge 模式
 
+  snmp-exporter:
+    image: prom/snmp-exporter:v0.30.1
+    container_name: snmp-exporter
+    restart: unless-stopped
+    volumes:
+      - ./snmp-auth.yml:/etc/snmp_exporter/snmp-auth.yml:ro
+    command:
+      - "--config.file=/etc/snmp_exporter/snmp.yml"
+      - "--config.file=/etc/snmp_exporter/snmp-auth.yml"
+    # 無 host port:僅 prometheus 經 compose 內網 scrape(snmp-exporter:9116),比照 pve-exporter
+
+  portal:
+    image: portal:0.5.0
+    container_name: portal
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      - PORTAL_MODE=live
+      - PROM_URL=http://prometheus:9090
+      - AM_URL=http://alertmanager:9093
+      - LOKI_URL=http://loki:3100
+      - KUMA_URL=http://host.docker.internal:3001
+    env_file:
+      - /opt/portal/portal.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /opt/portal/static:/app/static:ro
+      - /opt/portal/data:/app/data:ro
+    # 入口大廳(待辦49 M1):BFF 唯讀聚合 + SPA;PC40 直達 :8088;image 本地 build pin
+
   loki:
     image: grafana/loki:3.7.3
     container_name: loki

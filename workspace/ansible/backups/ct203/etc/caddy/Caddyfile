@@ -93,5 +93,17 @@ https://homepage.hl.lailai74143.com {
 	reverse_proxy 10.80.80.11:3000
 }
 
+# 受保護服務 #5：入口大廳 portal（CT201 10.80.80.11:8088；待辦49，2026-07-08）。
+#   portal 程式碼零認證，身份全靠此層（Authelia default two_factor）；
+#   /api/stream 為 SSE（text/event-stream），Caddy 對 event-stream 自動即時 flush。
+https://portal.hl.lailai74143.com {
+	tls internal
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+	reverse_proxy 10.80.80.11:8088
+}
+
 # 之後逐一收編（待辦③f，每次一個服務）：複製上面模板改 host 與後端即可。
 #   （app 走 API token 的服務要對 app 路徑 bypass，在 Authelia access_control rules 處理）

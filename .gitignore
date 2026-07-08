@@ -27,6 +27,7 @@
 !/.gitignore
 
 # --- 全域排除:秘鑰/憑證/暫存(即使位於納管目錄內) ---
+snmp-auth.yml
 __pycache__/
 *.pyc
 .env

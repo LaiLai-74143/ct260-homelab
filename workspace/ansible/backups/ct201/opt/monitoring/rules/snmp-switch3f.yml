@@ -1,0 +1,13 @@
+groups:
+  - name: snmp_switch3f
+    rules:
+      # Switch3F(3onedata,192.168.10.21)SNMP if_mib;待辦25 2026-07-07。
+      # 斷線由 alerts.yml 泛用 TargetDown(up==0)涵蓋,此檔只管錯包。
+      - alert: Switch3FIfErrors
+        expr: rate(ifInErrors{job="snmp-switch3f"}[10m]) + rate(ifOutErrors{job="snmp-switch3f"}[10m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Switch3F 埠 {{ $labels.ifName }} 錯包"
+          description: "介面 {{ $labels.ifName }}(ifIndex {{ $labels.ifIndex }})10 分鐘錯包率 >0.1 pps(in+out)。查線材/雙工/埠狀態。"
