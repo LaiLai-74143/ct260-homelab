@@ -1750,6 +1750,13 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   uci delete firewall.allow_pc40_to_monitor_portal / allow_dmzproxy_to_portal；
   Caddyfile 蓋回 before-portal 備份+restart caddy；notifier 蓋回+crontab 刪 --write-brief 行。
 - M2 之後：七模塊頁+L2 主機詳情+服務目錄（屆時 Homepage/homepage.hl 退役）、M3 動作按鈕、M4 kiosk。
+- 追加（2026-07-08 使用者要求「單一入口登入成功後自動跳轉大廳」）：gate.py 發證成功／
+  內網直連兩分支加 2s meta refresh 轉跳 portal.hl（附手動連結；403/400/500 失敗分支不轉跳）；
+  default_redirection_url 維持 gate.hl 不動，登入→發證→進大廳一氣呵成、tailnet 發證流程不斷。
+  部署=CT260 源檔改好→finish-gate-portal-redirect.sh（~/workspace/ct-dmz-proxy/，使用者授權執行）：
+  備份→push→sha256→py_compile→install→restart ts-gate→三分支實測 PASS（nft 測試元素已清）。
+  回滾：CT203:/root/_backups/gate.py.before-portal-redirect-20260708_023642 蓋回 /opt/authelia/gate/
+  gate.py + systemctl restart ts-gate。
 
 ### 待辦25 Switch3F SNMP 監控鏈部署（進行中，等交換機側開啟收案）
 - 調查結論：AP=小米 BE3600 Pro(RN04/RN01) 硬不支援 SNMP（規格/韌體/實測三重確認）；

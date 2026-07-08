@@ -776,7 +776,8 @@ CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct d
       不符者 tcp reject / 其他 drop。tailscale0 的 IPv6 轉發一律 drop(閘門僅 v4;路由皆 v4)。
       ★ ctdmz-nft 重啟或 CT203 重開機=白名單清空(要重驗,安全預設)。
     - PREROUTING(nat):未驗證「自有節點」打內網 http(80/8080)redirect→Caddy:8082→302 到
-      auth.hl 登入頁(HTTPS/非 web 埠快速 reject;登入後 Authelia 落 gate.hl 自動發通行證)。
+      auth.hl 登入頁(HTTPS/非 web 埠快速 reject;登入後 Authelia 落 gate.hl 自動發通行證,
+      發證頁 2s 轉跳 portal.hl 大廳,2026-07-08)。
     - INPUT:非自有 tailnet 來源擋 {22,80,443,8082,9091,9100,9959}(朋友只剩 Jellyfin)。
   流量路徑:phone(100.x)→CT203(閘門→masq 10.60.60.10)→OpenWrt dmz zone→各 VLAN
   (OpenWrt 端 9 條 TSGate 放行見 §4.4)。在家開著 Tailscale 的手機同樣走閘門(使用者接受)。
@@ -1184,7 +1185,9 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
   動態閘門:規則本體與流程見 §4.8。ts-gate.service=python3 stdlib(/opt/authelia/gate/gate.py,
     127.0.0.1:9092,root 跑 nft):經 https://gate.hl(forward_auth;header_up X-Gate-Client 防偽造)
     把來源 tailnet IP 寫入 ts_authed_v4(timeout=距台北當日 00:00)。
-    Authelia default_redirection_url → gate.hl(登入即發通行證)。
+    Authelia default_redirection_url → gate.hl(登入即發通行證;2026-07-08 起 gate.py
+    發證成功/內網直連分支 2s meta refresh 轉跳 portal.hl 大廳,403/400/500 失敗分支不轉跳;
+    回滾備份 CT203:/root/_backups/gate.py.before-portal-redirect-20260708_023642)。
     媒體豁免(destination-based,不經 Authelia):Jellyfin 30.3:8096、Navidrome 20.70:4533。
     ntfy 豁免(待辦19,@owned_v4 限定,比媒體豁免緊):10.80.80.11:8091(訂閱)+
       192.168.20.60:5001(按鈕 webhook);2026-07-07 已套用(備份 ctdmz.nft.before-todo19-20260707-062444)。

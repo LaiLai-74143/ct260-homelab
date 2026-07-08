@@ -649,6 +649,7 @@
     【進度 2026-07-08】M0+M1+portal.hl 完成(依 pve24:/root/入口大廳設計報告-3.md):
     源檔 CT260 ~/workspace/portal(git);CT201 compose portal:0.1.0 :8088(BFF 唯讀+SPA);
     晨報 --write-brief cron 06:00 台北;PC40 直達 :8088 + 手機 https://portal.hl(Authelia);
+    單一入口登入→gate 發證後自動轉跳大廳(07-08 追加,gate.py 2s meta refresh);
     驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活)。
     ▶ 剩 M2(七模塊頁+L2+服務目錄→Homepage 退役)、M3(動作按鈕)、M4(kiosk)。
     等第 2/3/6 項與監控補強落定後再做，避免反覆改設計。
