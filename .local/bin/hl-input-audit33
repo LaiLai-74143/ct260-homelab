@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""hl-input-audit33(待辦33):讀 OpenWrt inputaudit33 觀察數據,彙總 servers/infra→router input 埠用量。
+一週觀察期滿後據此寫顯式放行,再切 zone input REJECT。"""
+import json, subprocess, sys
+from collections import defaultdict
+
+raw = subprocess.run(["ssh", "openwrt", "/usr/bin/input-audit33 dump"],
+                     capture_output=True, text=True, timeout=20)
+if raw.returncode != 0:
+    sys.exit(f"讀取失敗:{raw.stderr.strip()[:200]}")
+d = json.loads(raw.stdout)
+
+sets, counters = {}, {}
+for obj in d.get("nftables", []):
+    if "set" in obj and obj["set"].get("elem"):
+        sets[obj["set"]["name"]] = obj["set"]["elem"]
+    if "counter" in obj:
+        c = obj["counter"]
+        counters[c["name"]] = c.get("packets", 0)
+
+for name, label in [("srv_tcp", "servers→router tcp"), ("srv_udp", "servers→router udp"),
+                    ("inf_tcp", "infra→router tcp"), ("inf_udp", "infra→router udp")]:
+    elems = sets.get(name, [])
+    ports = defaultdict(lambda: defaultdict(int))
+    for e in elems:
+        v = e["elem"] if isinstance(e, dict) else e
+        src, port = v["val"]["concat"]
+        ports[port][src] += (v.get("counter") or {}).get("packets", 0)
+    print(f"\n== {label}({len(elems)} 組合) ==")
+    for port in sorted(ports):
+        srcs = ports[port]
+        total = sum(srcs.values())
+        src_s = " ".join(f"{s}×{n}" for s, n in sorted(srcs.items()))
+        print(f"  port {port:>5}  {total:>6} pkt   {src_s}")
+
+print(f"\nicmp:servers={counters.get('srv_icmp', 0)} pkt  infra={counters.get('inf_icmp', 0)} pkt")

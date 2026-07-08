@@ -584,15 +584,21 @@
     給 Waterfly III → 與 NocoDB 分工記入拓樸：Firefly 管收支、NocoDB 管借貸。
 
 -------------------------------------------------------------------------------
-33. servers / infra zone input 收緊（trusted 保留全訪問——使用者裁決）
-    流程（漸進，防鎖死自己）：
-    a. 觀察期：先加 log-only 計數規則統計 servers/infra 對 router input 實際用到的埠一週。
-    b. 依觀察結果寫顯式放行：53/tcp+udp、123/udp、icmp、（各段實際需要者），
-       另點名放行：CT201→AGH:8080、CT260 現行管理路徑:52438。
-    c. zone input ACCEPT → REJECT，逐 zone 切（先 servers 後 infra），每切一個驗證
-       全監控綠 + hl-* 工具通。
-    d. 與第 16 項絆線互補：切換後絆線理論上更乾淨。
-    回滾：uci revert 即回 ACCEPT。
+◐33. servers / infra zone input 收緊(trusted 保留全訪問——使用者裁決)
+    a✔ 觀察期上線(2026-07-08,期滿 2026-07-15 讀數):OpenWrt 自建 nft table
+       inputaudit33(比照 ssh22tripwire 模式:/usr/bin/input-audit33+init.d S99,
+       hook input priority -150 policy accept 純觀察零行為影響)——動態集
+       {src IP . dport} 計數 ×4(srv/inf × tcp/udp)+icmp 計數 ×2;
+       讀數工具=CT260 ~/.local/bin/hl-input-audit33(彙總 port→src×pkt 表)。
+       ★計數不跨重開機(init.d 重建空集,觀察期內路由器重開需順延)。
+       ★首讀即錄到 CT260→52438 與 DNS;另見 src=192.168.20.1(路由器自身
+       VLAN20 IP)打 53 的迴環樣本,期滿分析時解讀。
+    b. 期滿依觀察寫顯式放行:53/tcp+udp、123/udp、icmp、各段實際需要者,
+       另點名:CT201→AGH:8080、CT260 現行管理路徑:52438。
+    c. zone input ACCEPT → REJECT,逐 zone 切(先 servers 後 infra),每切一個驗證
+       全監控綠 + hl-* 工具通。(b/c=下輪維護窗)
+    d. 與第 16 項絆線互補:切換後絆線理論上更乾淨。
+    回滾:uci revert 即回 ACCEPT;觀察面=/etc/init.d/input-audit33 stop(刪 table)。
 
 -------------------------------------------------------------------------------
 ✗34. Grafana 告警總覽面板 — 刪除(2026-07-08 使用者裁決:與 portal(待辦49)

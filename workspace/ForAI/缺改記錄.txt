@@ -2101,3 +2101,13 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 註:create-user 憑證在 CT270 內以 argv 帶入(容器 CLI 無 env/stdin 介面),
   暴露面=CT270 本機 ps 一瞬,已知取捨;pve24 側維持檔案 push 不過命令列。
 - 回滾:compose down+rm /opt/freshrss;env 回註 FRESHRSS_URL;DNS/防火牆條目照備份撤。
+
+### 待辦㉝ input 收緊觀察期上線(2026-07-08 晚,期滿 07-15)
+- OpenWrt 自建 nft table inputaudit33(照 ssh22tripwire 模式:/usr/bin/input-audit33
+  +/etc/init.d/input-audit33 S99):hook input priority -150、policy accept 純觀察,
+  動態集 {ipv4_addr . inet_service} counter ×4(servers/infra × tcp/udp)+icmp 計數 ×2。
+- 讀數:CT260 ~/.local/bin/hl-input-audit33(nft -j dump→port→src×pkt 彙總表)。
+- 首讀實證:CT260→52438(tcp)與 :53(udp)即時入集;發現 src=192.168.20.1(路由器
+  自身 VLAN20 IP)對 53 的樣本——期滿分析時解讀,寫放行清單勿照單全收。
+- 計數不跨重開機;觀察期內路由器重開需順延起算。切 REJECT=下輪維護窗(b/c)。
+- 回滾:/etc/init.d/input-audit33 stop && disable(刪 table 零殘留)。

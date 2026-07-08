@@ -506,6 +506,9 @@ wg         input REJECT  forward REJECT   (WireGuard break-glass,待辦24 2026-0
 
 必要 broad forwarding(各段 -> wan):lan / infra / servers / trusted / iot / dmz / game / service。
 (iot->wan 另擋 udp/443 QUIC,見 §4.4。)
+★ 待辦33 觀察期(2026-07-08 起一週):自建 nft table inputaudit33(hook input -150,
+  純觀察)統計 servers/infra→router input 實際埠;期滿讀 CT260 hl-input-audit33
+  寫顯式放行後,servers/infra input ACCEPT→REJECT(逐 zone 切,防鎖死)。
 
 ### 4.2 WAN DNAT
 
