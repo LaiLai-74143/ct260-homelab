@@ -1719,3 +1719,45 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 已知侷限（接受）：watchdog 🚨 的📱註記為靜態文案（shell 無回傳值可依），以「CT201 全滅時
   ntfy 不可達」警語對沖；critical RESOLVED 不通知 ntfy 側（規格：閱讀型不進 ntfy，路由表可調）。
 - 回滾：cp ~/_backups/<檔名>.before-route-split-20260707_* 蓋回，cron 下一分鐘生效。
+
+## 2026-07-08
+
+### 待辦49 入口大廳 portal M0+M1+portal.hl 上線（設計依據 pve24:/root/入口大廳設計報告-3.md）
+- 源檔：CT260 ~/workspace/portal（git 白名單新增 /workspace/portal）——
+  frontend=Vite6+React18+TS+Tailwind3（全 pin；tokens 照報告 §6/portal-demo.html；
+  @fontsource 自托管三字體，mono 堆疊補 Noto Sans TC 後備修 CJK 豆腐）；
+  bff=FastAPI（fixtures/live 雙模式，/api overview|alerts|brief|stream(SSE)|health，
+  M2 端點回 501 stub；錯誤統一 {error,hint}）。
+- 部署：CT201 /opt/monitoring compose 新服務 portal（本地 build portal:0.1.0＝
+  python:3.13.5-slim + requirements pin，:8088；/opt/portal/{static,data} ro bind-mount）；
+  建置在 CT260 vite build → tar+sha256 → pve24 → pct push，CT201 不裝 node。
+  BFF 唯讀：Prometheus 聚合查詢(by job)+pve_up 停機判別+PC40 健檢（走既有放行），
+  AM firing/silences+Prom pending；上游斷線誠實報錯+SSE 改推 lag（不擺舊數據裝正常）。
+- 晨報：homelab-notify.py 新增 --write-brief（與 --daily-report 解耦：不發 TG、不清計數器、
+  同日重跑期號不灌水、--dry-run 不投遞；備份 ~/_backups/homelab-notify.py.before-brief-*）；
+  cron 06:00 台北（22:00 UTC）→ hl-push → CT201 /opt/portal/data/brief.json＋日期副本 30 期保留。
+- 防火牆（各一條，改前雙備份 router+CT260 ~/_backups）：
+  Allow-PC40-To-Monitor-Portal-8088（firewall.before-portal-20260707_233312）、
+  Allow-DMZProxy-To-Portal-8088（firewall.before-portalhl-20260708_003719）。
+- portal.hl：CT260 ~/workspace/ct-dmz-proxy/Caddyfile（備份 .before-portal-20260708-003613）
+  加受保護站 portal.hl→10.80.80.11:8088（forward_auth Authelia，default two_factor 免改
+  access_control）→ pct push → validate → restart caddy；實測未登入 302 auth.hl、
+  CT203→8088 後端 200。手機即日可用 https://portal.hl.lailai74143.com。
+- 驗收：a RWD 3頁×3寬度截圖自查 PASS；c 手動 --write-brief 重生→/api/brief 內容更新 PASS；
+  d 模擬斷 Prometheus→{error,hint}+離線畫面 PASS（已還原）；b PC40 瀏覽、e Kuma UI 加
+  http://10.80.80.11:8088/api/health（200/60s）＝待使用者。
+- 回滾：compose 撤 portal+刪 /opt/portal（_backups/docker-compose.yml.before-portal-*）；
+  uci delete firewall.allow_pc40_to_monitor_portal / allow_dmzproxy_to_portal；
+  Caddyfile 蓋回 before-portal 備份+restart caddy；notifier 蓋回+crontab 刪 --write-brief 行。
+- M2 之後：七模塊頁+L2 主機詳情+服務目錄（屆時 Homepage/homepage.hl 退役）、M3 動作按鈕、M4 kiosk。
+
+### 待辦25 Switch3F SNMP 監控鏈部署（進行中，等交換機側開啟收案）
+- 調查結論：AP=小米 BE3600 Pro(RN04/RN01) 硬不支援 SNMP（規格/韌體/實測三重確認）；
+  Switch3F=三旺通信(3onedata) 工業交換機，韌體支援 v2c/v3（UI 語言檔證實）但未啟用。
+- 已部署：CT201 snmp-exporter v0.30.1（community=/opt/monitoring/snmp-auth.yml 600，
+  同值 CT260 ~/.config/homelab/switch3f-snmp.env）、Prometheus job snmp-switch3f(order 23)、
+  rules/snmp-switch3f.yml（錯包率）、Grafana 面板 switch3f-snmp、OpenWrt
+  Allow/SNAT-Monitor-To-Switch3F-Infra-SNMP-161（備份 firewall.before-snmp-20260707_154149）。
+- 現況：交換機 161/udp 拒連（使用者已加 community 但疑漏開全局開關/未按應用；手機不便，擇日）；
+  TargetDown 靜默至 2026-07-14（silence 867811af→延長版 bf25d384）。
+- 收案待辦：交換機開通→驗數據→獨立驗證→AP「無法觀測」記拓樸→缺改補收案結論。

@@ -646,6 +646,11 @@
 ## 最終階段（塵埃落定後）
 
 49. 自建入口大廳
+    【進度 2026-07-08】M0+M1+portal.hl 完成(依 pve24:/root/入口大廳設計報告-3.md):
+    源檔 CT260 ~/workspace/portal(git);CT201 compose portal:0.1.0 :8088(BFF 唯讀+SPA);
+    晨報 --write-brief cron 06:00 台北;PC40 直達 :8088 + 手機 https://portal.hl(Authelia);
+    驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活)。
+    ▶ 剩 M2(七模塊頁+L2+服務目錄→Homepage 退役)、M3(動作按鈕)、M4(kiosk)。
     等第 2/3/6 項與監控補強落定後再做，避免反覆改設計。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

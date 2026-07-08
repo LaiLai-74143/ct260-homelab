@@ -316,7 +316,7 @@ IPv6:RA server(SLAAC),見 §4.7。
                直連傳輸端點(主機 v6 守衛擋冷 inbound,§4.7)
 
 現況:DMZ->WAN enabled;DMZ<->內網僅逐項 allowlist(monitor→dmz:80,9100,9959、
-  dmz→storage:50303/8096、dmz→service:9090、trusted/servers→10.60.60.10:443;§4.4)。
+  dmz→storage:50303/8096、dmz→service:9090/8088、trusted/servers→10.60.60.10:443;§4.4)。
 L2:VM101 net1 trunk 現含 VID 10;20;30;40;50;60;70;80;666(60/70 已補,90 未 trunk、要用時再補)。
 ```
 
@@ -545,6 +545,7 @@ PC40 -> CT270      192.168.20.70 tcp/8000         (Allow-PC40-To-CT270-Paperless
 PC40 -> CT270      192.168.20.70 tcp/4533         (Allow-PC40-To-CT270-Navidrome)
 PC40 -> AP Main/Node web/ping
 PC40 -> CT201      10.80.80.11   tcp/3000,3001,3002,9090,9100, ping
+PC40 -> CT201      10.80.80.11   tcp/8088         (Allow-PC40-To-Monitor-Portal-8088,portal 待辦49)
 PC40 -> DXP4800    192.168.30.3  tcp/5243,8243(SNAT 192.168.30.1)
 PC40 -> Minecraft public hairpin 49169/tcp、43915/udp
 ★ 殘留:temp_allow_pc40_to_openwrt_ssh(PC40 -> 192.168.40.1:52438)temp 前綴仍在,待清理或轉正。
@@ -621,6 +622,9 @@ Allow/SNAT-DMZProxy-To-Jellyfin     10.60.60.10 -> 192.168.30.3 tcp/8096(SNAT 19
 Allow-Trusted-To-DMZProxy-443       trusted -> 10.60.60.10 tcp/443
 Allow-Servers-To-DMZProxy-443       servers -> 10.60.60.10 tcp/443
 Allow-DMZProxy-To-Prometheus-9090   dmz/10.60.60.10 -> 10.80.80.11 tcp/9090
+Allow-DMZProxy-To-Portal-8088       dmz/10.60.60.10 -> 10.80.80.11 tcp/8088(portal.hl,待辦49 2026-07-08)
+Allow/SNAT-Monitor-To-Switch3F-Infra-SNMP-161  10.80.80.11 -> 192.168.10.21 udp/161(SNAT .10.1;
+  待辦25 snmp_exporter,2026-07-07;交換機側未開=掛起中)
 
 # Loki 日誌管線(push 單向、無 SNAT;CT202 同段、CT100 走 CT201 eth1 直連皆免規則)
 Allow-CT260-To-Monitor-Loki-3100           servers/192.168.20.60 -> 10.80.80.11 tcp/3100
@@ -817,11 +821,23 @@ pve-exporter  compose 內網 :9221   prompve/prometheus-pve-exporter:3.9.0
 ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07;auth deny-all,
               user pub/phone,憑證在 CT260 ~/.config/homelab/ntfy.env;原文 :8090 因撞
               Gotify 改 :8091;詳見監控告警 §5g;Kuma 探活 :8091/v1/health 待 UI 加)
+snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
+              2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
+              ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
+portal        8088   portal:0.1.0 本地 build(python:3.13.5-slim+pin;待辦49,2026-07-08)
+              入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager compose 內網+PC40 健檢)
+              +Vite SPA 靜態檔;bind-mount /opt/portal/{static,data}(ro);
+              晨報=CT260 homelab-notify.py --write-brief(cron 06:00 台北)→hl-push→
+              /opt/portal/data/brief.json(日期副本保留 30 期);源檔 CT260 ~/workspace/portal(git);
+              建置 CT260 vite build→tar+sha256→pve24 pct push,CT201 不裝 node;
+              存取:PC40 直達 :8088 + 手機 https://portal.hl(CT203 Authelia,2026-07-08);
+              M2 待做:七模塊頁+L2+服務目錄→屆時 Homepage 退役;Kuma 探活 /api/health 待 UI 加
 ```
 
-Prometheus targets:22 個;2026-07-07 稽核 19 up / 3 down——
+Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);稽核 19 up / 4 down——
   dxp4800-node(connection refused,非預期,見 §1.4)、cowrie-exporter 與 vm300-honeypot-node
-  (no route,VM300 停機屬預期)。
+  (no route,VM300 停機屬預期)、snmp-switch3f(交換機側 SNMP 未開,待辦25 掛起,
+  TargetDown 靜默至 2026-07-14)。
 Loki 管線細節(各節點 promtail、label 慣例、風險注記)見《監控告警.txt》§5e(單一來源,本文不重列)。
 
 node_exporter:原生 systemd(unit 名=prometheus-node-exporter.service,寫自動化時注意);
@@ -1149,7 +1165,8 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
     (★admin off 與 reload 不相容,一律 systemctl restart caddy,斷 ~1s)。
     站點::80 /health→200(Kuma 探活)+ Vaultwarden 反代(→192.168.30.3:50303)+
     auth.hl→127.0.0.1:9091 + 受保護站(forward_auth 前置):prometheus.hl→10.80.80.11:9090、
-    grafana.hl→:3002、kuma.hl→:3001、homepage.hl→:3000 + :8082 跳轉站(未驗證 http 被 nft
+    grafana.hl→:3002、kuma.hl→:3001、homepage.hl→:3000、portal.hl→:8088(入口大廳,待辦49
+    2026-07-08;M2 服務目錄上線後 homepage.hl 退役)+ :8082 跳轉站(未驗證 http 被 nft
     redirect 至此 → 302 auth.hl)。
   cloudflared:active/enabled(Vaultwarden 對外=CF Tunnel → 本機 connector → Caddy → DXP:50303;
     tunnel token 機密由使用者持有)。cutover 已完成;仍 OPEN:AGH vault.* rewrite→10.60.60.10、
