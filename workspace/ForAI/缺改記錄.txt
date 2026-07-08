@@ -2049,3 +2049,21 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 驗證:mock 6/6 PASS(14 顆/5 組標籤/noreferrer/模塊卡回歸/手機斷點);
   finish-portal-051.sh 部署全綠(11 端點 200+/kiosk 200+M3 回歸 403+live bundle grep)。
 - 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal050-* + force-recreate。
+
+### 待辦㉑ Docker image 版本 pin + diun(2026-07-08 晚,主體完成)
+- pin 原則=現役版查實(app version API/labels)→ pin tag 先 docker manifest inspect 驗存在
+  → pin=現役 digest 零行為變化 → compose candidate 驗證(config -q)後換裝 up -d。
+- CT201 /opt/monitoring:prometheus :latest→v3.12.0、grafana-oss→13.0.2、gotify→2.9.1、
+  alertmanager→v0.33.0、gotify-bridge→2.3.2(版本靠容器內 --version,image 無 label);
+  /opt/uptime-kuma::1→1.23.17(版本靠容器內 package.json)。重建後棧全綠:
+  buildinfo/health/version 全數同版,targets 回 21/23,rules 10 組,AM silences 卷持久無損。
+- CT270:HA :stable→2026.7.0(:8123 回應驗證);nocodb pin 中斷——CT270 docker egress
+  走 CT202 squid,dockerhub 為「暫時窗」慣例常閉(待辦15 前例),registry HEAD 403;
+  agent 開窗改 squid.conf 被 auto-mode 分類器攔 → compose 已回退 :latest 保持一致,
+  收斂 ~/workspace/monitoring/finish-21-nocodb.sh 待使用者(開窗→pin→復關 403 驗證)。
+- diun 4.30.0:file provider 21 條(捨 docker.sock watch——跨 CT 覆蓋+不掃本地 build);
+  通知=本機 ntfy homelab-updates+pub 專用 token(tokenFile 掛載)。
+  ★踩坑:token 檔尾換行→ntfy 回「invalid header field value for Authorization」,
+  tr -d '\n' 重寫+restart 後 notif test 通,phone 讀取端 poll 實收(中文 body 正常)。
+- 首掃=基線記錄不通知(firstCheckNotif=false);排程每日 08:15;diun 自身也在監看清單。
+- 回滾:三處 _backups/docker-compose.yml.before-todo21-* 蓋回+up -d;diun=compose 刪段。

@@ -824,14 +824,20 @@ hostname:monitor   正式 IP:10.80.80.11   DNS:10.80.80.1 192.168.20.5
 Docker services(/opt/monitoring):
 
 ```text
-homepage      3000   Up/healthy
-grafana       3002   Up
-prometheus    9090   Up
-uptime-kuma   3001   Up/healthy(compose 在 /opt/uptime-kuma、獨立 docker 網路,非本表其餘
-              服務所在的 /opt/monitoring——同 Homepage 模式;2026-07-08 實機核實補記)
-gotify        8090   告警推播(內網;admin 密碼 /opt/monitoring/gotify.env)
-alertmanager  9093   設定 /opt/monitoring/alertmanager.yml
-alertmanager-gotify-bridge   無 host port(內網 docker network)
+homepage      3000   Up/healthy(:latest 刻意不 pin——退役在即,凍結不再投入;待辦21)
+grafana       3002   grafana/grafana-oss:13.0.2(2026-07-08 待辦21 脫 :latest,pin=現役 digest)
+prometheus    9090   prom/prometheus:v3.12.0(pin 同上)
+uptime-kuma   3001   louislam/uptime-kuma:1.23.17(浮動 :1→pin 同上;compose 在 /opt/uptime-kuma、
+              獨立 docker 網路,非本表其餘服務所在的 /opt/monitoring——同 Homepage 模式)
+gotify        8090   gotify/server:2.9.1(pin 同上)告警推播(內網;admin 密碼 /opt/monitoring/gotify.env)
+alertmanager  9093   prom/alertmanager:v0.33.0(pin 同上)設定 /opt/monitoring/alertmanager.yml
+alertmanager-gotify-bridge   無 host port(內網 docker network)ghcr.io/druggeri 2.3.2(pin 同上)
+diun          無 host port   crazymax/diun:4.30.0(待辦21,2026-07-08:全站映像新版偵測;
+              file provider 清單 /opt/monitoring/diun-images.yml=21 條跨 CT201/203/204/270,
+              每日 08:15 台北掃;通知=本機 ntfy topic homelab-updates,token 檔
+              /opt/monitoring/secrets/diun-ntfy-token 600(副本 CT260 ntfy.env DIUN_NTFY_TOKEN);
+              ★手機 ntfy app 須另訂閱 homelab-updates 才看得到;★diun.yml/diun-images.yml
+              單檔 bind-mount,改檔後 docker restart diun)
 loki          3100   grafana/loki:3.7.3(retention 30d,loki_data 卷=SSD)
 promtail      1514/udp   grafana/promtail:3.6.11(OpenWrt syslog listener + 本機 journal/docker)
 pve-exporter  compose 內網 :9221   prompve/prometheus-pve-exporter:3.9.0
@@ -847,7 +853,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.5.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.5.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1106,6 +1112,9 @@ OS:Debian 13。Docker 29.6.1 + compose plugin v5.2.0。
 
 ```text
 NocoDB:/opt/nocodb compose = nocodb + postgres16(volumes nc_data/pg_data)。
+  ★nocodb 仍 :latest(現役 2026.06.2):pin 需開 CT202 squid dockerhub 暫時窗,
+  待使用者跑 ~/workspace/monitoring/finish-21-nocodb.sh(開窗→pin→復關);
+  postgres:16=主版 pin 維持(小版滾動屬安全更新,待辦21 決策)。
   Web/API :8080(health /api/v1/health)。compose 600 內含 DB 密碼。NC_DISABLE_TELE=true。
   資料模型(base Life-Ops id=ppralaha4e76q5o;3 表):People、Transactions、Notes;
   Transactions.counterparty、Notes.people 皆 mm link -> People。admin=LaiLai74143@Gmail.com。
@@ -1126,7 +1135,8 @@ Google Calendar(v2.0):OAuth2 installed-app refresh token;憑證存 CT260
   屆時重跑取 token。
 
 Home Assistant(HA Container 形態;LXC 內不能 HAOS/Supervised,無官方 Add-on,HACS 可用):
-  /opt/homeassistant compose = home-assistant:stable,network_mode host,Web :8123,
+  /opt/homeassistant compose = home-assistant:2026.7.0(2026-07-08 待辦21 脫 :stable pin),
+  network_mode host,Web :8123,
   TZ Asia/Taipei。recorder commit_interval:30 + purge_keep_days:7(HDD 調校,與 postgres 共
   5400rpm 盤)。存取:PC40 tcp/8123。image 拉取經 fwdproxy。
   米家(xiaomi_miot 側載 v1.1.4;Mi Account 雲端匯入 server_country=cn,一次進 20 台;

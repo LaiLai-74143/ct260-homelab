@@ -459,14 +459,21 @@
        增量有限 → 移除，維持自製方案，缺改記錄結論。
 
 -------------------------------------------------------------------------------
-21. Docker image 版本 pin + diun
-    【說明】:latest 某次 pull 可能拉進 breaking change，最壞讓監控鏈路靜默失效。
-    流程：
-    a. 盤點：各 CT docker inspect 取現行 image digest 對應版號，逐一寫死進 compose
-       （grafana/kuma/gotify/homepage/nocodb/HA/…全數）。
-    b. CT201 compose 加 diun（pin 版本）：掛 docker.sock 唯讀，watch 全容器，
-       notification 直接用 telegram provider（token/chatid 進 .env）。
-    c. 升級流程入規範：diun 通知 → 查 changelog → 維護窗改版號 → up -d → 驗證 → 缺改記錄。
+◐21. Docker image 版本 pin + diun —— 主體完成(2026-07-08),餘 nocodb 尾段待使用者
+    【說明】:latest 某次 pull 可能拉進 breaking change,最壞讓監控鏈路靜默失效。
+    a✔ 盤點+pin(以現役版為準,pin tag=現役 digest,零行為變化):CT201 prometheus v3.12.0/
+       grafana-oss 13.0.2/gotify 2.9.1/alertmanager v0.33.0/gotify-bridge 2.3.2/
+       uptime-kuma 1.23.17(浮動 :1→pin);CT270 HA 2026.7.0(:stable→pin)。
+       postgres:16=主版 pin 維持(小版滾動屬安全更新,決策入 V7);homepage 退役在即不 pin。
+    b✔ diun 4.30.0 上線。★偏離原文兩處:(1) telegram provider→本機 ntfy topic
+       homelab-updates(TG egress 集中 CT260 戒律,diun 零對外通知);(2) docker.sock
+       watch 全容器→file provider 21 條清單(跨 CT201/203/204/270 全站 pin 皆納監看,
+       本地 build 與 homepage 不列)。notif test 實測 phone 讀取端收到。
+       ★手機 ntfy app 須訂閱 homelab-updates topic。
+    c✔ 升級流程紀律入監控告警.txt(通知→changelog→維護窗改 pin→up -d→驗證→缺改記錄)。
+    ★ 待使用者:bash ~/workspace/monitoring/finish-21-nocodb.sh——nocodb pin 需開
+       CT202 squid dockerhub 暫時窗(agent 改 squid 現役檔被分類器攔,腳本=開窗→
+       pin 2026.06.2→復關+403 驗證,冪等)。
 
 -------------------------------------------------------------------------------
 22. CT260 金鑰收緊方案（建設期結束後實作）
