@@ -555,10 +555,17 @@
     （統計 TOP 來源/憑證/命令、行為變化、值得注意的新手法）→ TG 發送 + 存 ForAI/reports/。
 
 -------------------------------------------------------------------------------
-30. RSS + AI 晨報
-    流程：CT270 compose 跑 FreshRSS（sqlite 即可，pin 版本）→ 訂閱源由使用者提供 →
-    CT260 晨報腳本擴充：Google Reader API 拉未讀標題+摘要 → DeepSeek 濃縮 5–8 條
-    → 併入 daily_brief 段落「今日訊息」。
+◐30. RSS + AI 晨報 —— 管線全備(2026-07-08),上線待使用者跑 finish 腳本
+    a✔ 基建先行:CT270 /opt/freshrss compose staged(freshrss/freshrss:1.29.1,:8082,
+       sqlite);rss.home.arpa→20.70(dnsmasq hosts+24pve 備援);Allow-PC40-To-CT270-
+       FreshRSS-8082;憑證 CT260 ~/.config/homelab/freshrss.env(600,UI+API 雙密碼)。
+    b✔ 晨報擴充:homelab-notify.py 新增「今日訊息」段(Google Reader API 拉未讀 40 條
+       →DeepSeek 濃縮 5-8 條單段;未設定=不出段、讀取失敗/無未讀=誠實註記);
+       dry-run 驗證 4 段不受影響,FRESHRSS_URL 先註釋=上線前晨報零干擾。
+    ★ 待使用者:bash ~/workspace/monitoring/finish-30-freshrss.sh(dockerhub 暫時窗
+       →pull→復關→do-install+建使用者→ClientLogin 驗證→自動啟用晨報段);
+       跑完後 PC40 開 http://rss.home.arpa:8082 登入加訂閱源(帳密在 freshrss.env),
+       訂閱源清單由你在 UI 維護,晨報自動跟進。
 
 -------------------------------------------------------------------------------
 31. MCP 工具擴充

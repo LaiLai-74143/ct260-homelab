@@ -2086,3 +2086,18 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   入規則為閘門。回歸:Loki 200、tripwire 在;CT260→portal:8088 之 000 為原有姿態非回歸。
 - 待使用者:手機匯入 conf(QR 指令見待辦24)+行動網路握手實測;協議面=每季連一次。
 - 回滾:network/firewall/dropbear 三檔 before-todo24-* 蓋回+reload+ip link del wg0。
+
+### 待辦㉚ FreshRSS + 晨報「今日訊息」管線備妥(2026-07-08 晚)
+- 基建(agent 直做):rss.home.arpa→20.70(hosts 檔+dnsmasq restart+push-24pve;
+  備份 before-todo30-*)、Allow-PC40-To-CT270-FreshRSS-8082、CT270 /opt/freshrss
+  compose staged(1.29.1 pin,:8082,sqlite)、freshrss.env 雙密碼生成(600)。
+- 晨報:homelab-notify.py CONFIG_FILES 加 freshrss.env;新 fetch_rss_unread(Google
+  Reader API ClientLogin→reading-list 未讀 40 條)+rss_section(DeepSeek 濃縮 5-8 條
+  單段,BriefCard 不吃換行故用「;」相隔;三態誠實:未設定不出段/失敗註記/無未讀註記);
+  FRESHRSS_URL 先註釋=上線前晨報零干擾,dry-run 驗證既有 4 段不變。
+- image 拉取撞同一 dockerhub 暫時窗 → finish-30-freshrss.sh 收斂使用者(開窗→pull→
+  復關 403 驗證→do-install/create-user(kebab-case CLI,失敗退 update-user)→CT260
+  ClientLogin 驗證→sed 啟用 FRESHRSS_URL→dry-run 斷言「今日訊息」在段列)。
+- 註:create-user 憑證在 CT270 內以 argv 帶入(容器 CLI 無 env/stdin 介面),
+  暴露面=CT270 本機 ps 一瞬,已知取捨;pve24 側維持檔案 push 不過命令列。
+- 回滾:compose down+rm /opt/freshrss;env 回註 FRESHRSS_URL;DNS/防火牆條目照備份撤。

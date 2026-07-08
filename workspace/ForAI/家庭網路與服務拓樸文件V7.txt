@@ -1145,6 +1145,15 @@ NocoDB:/opt/nocodb compose = nocodb + postgres16(volumes nc_data/pg_data)。
   ★nocodb 仍 :latest(現役 2026.06.2):pin 需開 CT202 squid dockerhub 暫時窗,
   待使用者跑 ~/workspace/monitoring/finish-21-nocodb.sh(開窗→pin→復關);
   postgres:16=主版 pin 維持(小版滾動屬安全更新,待辦21 決策)。
+
+FreshRSS(待辦30,2026-07-08 staged;上線=使用者跑 ~/workspace/monitoring/finish-30-freshrss.sh):
+  /opt/freshrss compose = freshrss/freshrss:1.29.1,:8082,sqlite(data/ bind),CRON_MIN=13,43
+  (image 拉取同樣需 dockerhub 暫時窗)。存取:PC40 Allow-PC40-To-CT270-FreshRSS-8082 +
+  rss.home.arpa→20.70(dnsmasq hosts 檔+推 24pve 備援)。憑證:CT260
+  ~/.config/homelab/freshrss.env(600;UI 密碼+Google Reader API 密碼分開)。
+  晨報:CT260 homelab-notify --write-brief 新增「今日訊息」段(Google Reader API 拉未讀
+  →DeepSeek 濃縮 5-8 條單段;FRESHRSS_URL 註釋=段落關閉;失敗/無未讀=誠實註記)。
+  訂閱源由使用者在 UI 維護,晨報自動跟進。
   Web/API :8080(health /api/v1/health)。compose 600 內含 DB 密碼。NC_DISABLE_TELE=true。
   資料模型(base Life-Ops id=ppralaha4e76q5o;3 表):People、Transactions、Notes;
   Transactions.counterparty、Notes.people 皆 mm link -> People。admin=LaiLai74143@Gmail.com。
