@@ -131,6 +131,41 @@ export interface Life {
   generated_at: string
 }
 
+// ---- M3 動作契約(待辦49 M3;BFF actions.py) ----
+
+export interface ActionSpec {
+  desc: string
+  /** 該動作收的參數語義(僅 silence-* = alertname) */
+  param?: string
+  /** 確認框追加的琥珀警告行 */
+  danger?: string
+}
+
+export interface ActionsInfo {
+  /** live 下 WEBHOOK_URL+token 已配置;false 時前端完全不提動作 */
+  enabled: boolean
+  /** 本請求可否操作(僅 portal.hl 帶 Remote-User 時 true,使用者裁決 2026-07-08) */
+  allowed: boolean
+  scope: 'all-firing' | 'mapped-only'
+  actions: Record<string, ActionSpec>
+  /** 告警名 → 預定義處置動作(鏡像自 CT260 NTFY_ACTION_MAP) */
+  alert_map: Record<string, string>
+  generated_at: string
+}
+
+export interface ActionResult {
+  ok: boolean
+  action: string
+  rc?: number
+  out?: string
+  desc?: string
+  /** fire-and-forget(pct-reboot-201)= 202 已受理,結果見 TG */
+  accepted?: boolean
+  hint?: string
+  mock?: boolean
+  generated_at: string
+}
+
 export interface HostDetail {
   slug: string
   name: string

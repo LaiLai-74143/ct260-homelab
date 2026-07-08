@@ -127,3 +127,36 @@ SERVICE_GROUPS: list[dict] = [
 
 def services_of_host(slug: str) -> list[str]:
     return [i["name"] for g in SERVICE_GROUPS for i in g["items"] if i.get("host") == slug]
+
+
+# ---- M3 動作鏡像表(待辦49 M3,2026-07-08) ----
+# 單一事實來源=CT260 ~/.local/bin/ntfy-webhook.py 的 ACTIONS 字典(待辦19d)。
+# 改動作先改那邊,再同步這裡;漂移的失敗模式安全:BFF 先 403(新動作按不到)
+# 或 webhook 403(BFF 有、CT260 無),錯誤 hint 直指同步。
+#   param:該動作收的參數語義(僅 silence-* 收 alertname,webhook 端 regex 驗參)。
+#   danger:確認框追加的琥珀警告行(不影響執行)。
+#   fire_and_forget:動作會殺掉 BFF 自身(pct-reboot-201)→ 送出即回 202 不等結果。
+WEBHOOK_ACTIONS: dict[str, dict] = {
+    "silence-1h":  {"desc": "靜音該告警 1 小時", "param": "alertname"},
+    "silence-24h": {"desc": "靜音該告警 24 小時", "param": "alertname"},
+    "restart-gotify":       {"desc": "重啟 Gotify"},
+    "restart-kuma":         {"desc": "重啟 Uptime Kuma"},
+    "restart-grafana":      {"desc": "重啟 Grafana"},
+    "restart-prometheus":   {"desc": "重啟 Prometheus"},
+    "restart-alertmanager": {"desc": "重啟 Alertmanager"},
+    "restart-ntfy":         {"desc": "重啟 ntfy"},
+    "restart-monitoring-stack": {"desc": "重啟整個監控棧",
+                                 "danger": "Prometheus/Alertmanager 短暫離線,告警頁會空窗"},
+    "pct-reboot-201": {"desc": "重啟 CT201(監控主機)", "fire_and_forget": True,
+                       "danger": "入口本身將短暫離線,結果見 TG 回報"},
+    "pct-start-250":  {"desc": "啟動 CT250(沙盒)"},
+    "restart-squid":     {"desc": "重啟 CT202 squid"},
+    "restart-ctdmz-nft": {"desc": "重啟 CT203 ctdmz-nft",
+                          "danger": "清空 tailnet 通行證,手機需重新發證"},
+}
+
+# 鏡像自 CT260 homelab-notify.py NTFY_ACTION_MAP(告警名→預定義處置)
+ALERT_ACTION_MAP: dict[str, str] = {
+    "SquidProxyDown": "restart-squid",
+    "CtdmzGateDown": "restart-ctdmz-nft",
+}

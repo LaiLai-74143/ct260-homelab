@@ -15,13 +15,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import providers
+from . import actions, providers
 
 BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.2.2", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.3.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -132,6 +132,29 @@ async def stream():
             await asyncio.sleep(SSE_INTERVAL)
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---- M3 動作(待辦49;唯一寫入方向端點,轉發 CT260 webhook 白名單,見 actions.py) ----
+
+@app.get("/api/actions")
+async def actions_info(request: Request):
+    return actions.actions_info(request.headers.get("Remote-User"))
+
+
+@app.post("/api/action")
+async def action(request: Request):
+    # body 手動驗(不用 Pydantic 模型):維持全站 {error,hint} 錯誤格式,不引入 422
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"action": "...", "param": "..."}')
+    try:
+        status, payload = await actions.run(body, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except actions.ActionError as e:
+        return _err(e.status, e.error, e.hint)
 
 
 @app.get("/api/{rest:path}")

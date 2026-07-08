@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { Alerts, Brief, Game, HostDetail, Life, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, Game, HostDetail, Life, Overview, Power, Security, Services } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -104,6 +104,51 @@ export function useHostDetail(slug: string | undefined) {
     enabled: !!slug,
     refetchInterval: 60_000,
     staleTime: 30_000,
+  })
+}
+
+// ---- M3 動作(待辦49;BFF POST /api/action → CT260 webhook 白名單) ----
+
+/** 動作錯誤:保留 status 供 429/202 分流與專用文案 */
+export interface ActionHttpError {
+  status: number
+  error: string
+  hint?: string
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<{ status: number; data: T }> {
+  // webhook 同步執行最長 120s → 前端上限 130s,與 BFF httpx timeout 對齊
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(130_000),
+  })
+  let data: unknown = null
+  try { data = await r.json() } catch { /* 非 JSON 錯誤體 */ }
+  if (!r.ok) {
+    const e = (data ?? {}) as { error?: string; hint?: string }
+    throw { status: r.status, error: e.error || `HTTP ${r.status}`, hint: e.hint || '' } satisfies ActionHttpError
+  }
+  return { status: r.status, data: data as T }
+}
+
+/** 能力探測:enabled(已配置)/ allowed(本請求可操作)/ 動作字典 */
+export function useActions() {
+  return useQuery<ActionsInfo>({
+    queryKey: ['actions'],
+    queryFn: () => getJson('/api/actions'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** 動作執行:retry 明文 0——限速 6/分與手機 ntfy 按鈕共用,絕不自動重試 */
+export function useActionMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: ActionResult }, ActionHttpError, { action: string; param?: string | null }>({
+    retry: 0,
+    mutationFn: ({ action, param }) => postJson('/api/action', { action, param: param ?? null }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts'] }) },
   })
 }
 

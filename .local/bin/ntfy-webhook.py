@@ -188,8 +188,14 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(404, {"ok": False, "error": "not found"})
             return
         auth = self.headers.get("Authorization", "")
-        want = "Bearer " + CFG.get("WEBHOOK_TOKEN", "")
-        if not CFG.get("WEBHOOK_TOKEN") or not hmac.compare_digest(auth, want):
+        # 雙 token(待辦49 M3):WEBHOOK_TOKEN_PORTAL 供 portal BFF,與 ntfy 按鈕 token 分開輪替(報告 §9)
+        via = None
+        for kind, tok in (("ntfy", CFG.get("WEBHOOK_TOKEN", "")),
+                          ("portal", CFG.get("WEBHOOK_TOKEN_PORTAL", ""))):
+            if tok and hmac.compare_digest(auth, "Bearer " + tok):
+                via = kind
+                break
+        if via is None:
             log(f"DENY auth src={src}")
             self._reply(401, {"ok": False, "error": "unauthorized"})
             return
@@ -221,12 +227,12 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(429, {"ok": False, "error": "rate limited"})
             return
         label = f"{action}" + (f"({param})" if param else "")
-        log(f"RUN src={src} {label}")
+        log(f"RUN src={src} via={via} {label}")
         rc, out, dt = run_action(action, param)
         ok = rc == 0
         log(f"DONE {label} rc={rc} {dt:.1f}s out={out[:160]!r}")
         emoji = "✅" if ok else "❌"
-        tg_send(f"🔘 ntfy 按鈕：已執行 {label} — {spec['desc']}\n"
+        tg_send(f"🔘 {'portal' if via == 'portal' else 'ntfy 按鈕'}：已執行 {label} — {spec['desc']}\n"
                 f"{emoji} 結果 rc={rc}（{dt:.1f}s）" + (f"\n{out[-300:]}" if out else ""))
         self._reply(200 if ok else 500,
                     {"ok": ok, "action": action, "rc": rc, "out": out[-200:]})

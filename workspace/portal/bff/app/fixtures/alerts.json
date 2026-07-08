@@ -1,6 +1,13 @@
 {
   "firing": [
     {
+      "name": "SquidProxyDown",
+      "severity": "critical",
+      "description": "CT202 squid 3128 探測失敗(mock 演示:此告警在 ALERT_ACTION_MAP 有處置鍵)",
+      "instance": "10.80.80.10:3128",
+      "since": "12m"
+    },
+    {
       "name": "VM300HoneypotDown",
       "severity": "critical",
       "description": "onboot=1 卻停機 · cowrie/vm300 兩 target no route · 原因未查",

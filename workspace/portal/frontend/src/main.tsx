@@ -14,6 +14,7 @@ import '@fontsource/jetbrains-mono/600.css'
 import './index.css'
 
 import Layout from './components/Layout'
+import { ToastProvider } from './components/Toast'
 import Home from './pages/Home'
 import Devices from './pages/Devices'
 import Alerts from './pages/Alerts'
@@ -56,7 +57,9 @@ const qc = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 )

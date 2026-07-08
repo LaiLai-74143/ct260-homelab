@@ -666,7 +666,23 @@
     誤 127.0.0.1+CT100 兜底 drop 誤丟本機 mcping,已修 nft lo 放行+UI 伺服器地址欄改 10.70.70.20);
     MCSM 網頁即時終端 24444 已放行(PC40+手機,finish-mcsm-daemon-24444.sh)。
     驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活);
-    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
+    【進度 2026-07-08 M3(0.3.0)】動作按鈕施工(裁決:批准 OpenWrt 一條+雙 token;
+    按鈕僅 portal.hl 可按=BFF 驗 Remote-User 兩層模式;全部 firing 掛靜音 1h/24h,
+    NTFY_ACTION_MAP 對映者加處置鍵——偏離報告 §7「僅對映者」,使用者裁決擴大):
+    BFF 新增 GET /api/actions+POST /api/action(唯一寫入方向端點,轉發 CT260 webhook
+    白名單;驗證鏈 Remote-User→白名單→param regex→409 防重;429 透傳、timeout 504、
+    pct-reboot-201=fire-and-forget 202);前端 Toast/ConfirmDialog/AlertActions 三組件
+    (確認框寫明將執行什麼+danger 警告行;命名一致「重啟X」→「已重啟X」;頁面級單飛鎖);
+    mock 驗收 13/13 PASS(Playwright 三斷點+Remote-User 兩態)。
+    基建已上線(scripts/finish-webhook-portal-token.sh,冪等):OpenWrt
+    Allow-Monitor-To-CT260-Webhook-5001+webhook 雙 token 補丁(驗證矩陣
+    401/403/403 全過)+CT201 portal.env 兩鍵落位+CT201 視角通路驗證 OK。
+    ▶ 待使用者:①跑 finish-portal-030.sh(部署 0.3.0,agent 被分類器攔,照慣例收斂)
+    ②跑 finish-m3-e2e.sh(live 無害自測 silence-1h/NotifySelfTest,驗 TG 收 via=portal)
+    ③手機 portal.hl 按掉一次真實告警=M3 DoD(報告 §11)。
+    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M4(kiosk;
+    設計已備於 2026-07-08 plan 審查:/kiosk 頂層路由重用 Home/Devices/Security 三屏
+    輪播 20s/屏+tap 三分區+reduced-motion 瞬切,屆時直接動工)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

@@ -391,6 +391,13 @@ selftest（分流後）：--selftest=warning（只 TG，驗敘事鏈）；--self
 手機端 e2e 實測（2026-07-07 收案）：app 訂閱成功（subscribers 0→1），按〔靜音1h〕→
   webhook RUN src=10.60.60.10（=CT203 tailscale SNAT，gate 豁免路徑實證）→ silence rc=0 →
   TG 回發實收。待辦19 全案 DONE。
+★ 2026-07-08 待辦49 M3 追記：webhook 改雙 token——WEBHOOK_TOKEN_PORTAL（portal BFF 專用，
+  同存 ntfy-webhook.env 600，可獨立輪替；報告 §9「token 分開」落地）；驗證塊改雙 token 迴圈
+  （hmac 常數時間比對不變），log/TG 標 via=ntfy|portal 稽核；portal 來源=OpenWrt
+  Allow-Monitor-To-CT260-Webhook-5001（10.80.80.11→192.168.20.60:5001，只 Allow 無 SNAT）。
+  限速 6/分為全域共用——portal 按鈕與手機 ntfy 按鈕同一額度（portal 前端已做頁面級單飛＋
+  不自動重試＋429 專用文案）。token 自測法：任一 token＋白名單外假動作→403＝驗證通過且
+  不執行不耗限速。備份：~/_backups/ntfy-webhook.py.before-portal-*。
 ```
 
 ---

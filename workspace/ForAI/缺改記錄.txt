@@ -1856,3 +1856,40 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   兩條 24444 accept。running-state 驗證 + 回歸(23333:200、Velocity→25565 通)通過。
 - 安全:24444=daemon 控制 ws,實際操作需面板發的 token,已由面板登入把關(同 23333 信任級)。
 - 回滾:uci delete firewall.allow_pc40_to_game_mcsdaemon;CT100 蓋回 before-24444 備份。
+
+### 待辦49 入口大廳 M3 動作按鈕:基建上線+0.3.0 施工(2026-07-08,使用者批准)
+- 裁決(2026-07-08):①批准 OpenWrt 一條+webhook 雙 token ②按鈕僅 portal.hl 可按
+  (Remote-User 兩層模式,非硬邊界) ③全部 firing 掛靜音 1h/24h+對映者加處置鍵
+  (偏離報告 §7「僅對映者」,明文記錄) ④本輪僅 M3(M4 kiosk/Homepage 盤點下輪)。
+- 架構:照待辦49 既定形態「入口唯讀,操作類一律 BFF 轉發 webhook→CT260(待辦19 白名單)」。
+  偏離報告清單:D1 body={action,param} 無 nonce(webhook 實碼契約);D2「後端零新工程」
+  不成立(BFF 新增 POST+CT260 第二把 token);D3 按鈕範圍擴大(裁決③)。
+- 基建(finish-webhook-portal-token.sh,冪等,已跑完):
+  a) OpenWrt +Allow-Monitor-To-CT260-Webhook-5001(service 10.80.80.11→servers
+     192.168.20.60 tcp/5001,只 Allow 無 SNAT);running ruleset 驗證+回歸(CT260→Loki 200)過。
+  b) webhook 雙 token:ntfy-webhook.env +WEBHOOK_TOKEN_PORTAL(600);ntfy-webhook.py 錨點
+     補丁(驗證塊雙 token 迴圈+log/TG 標 via=);驗證矩陣 health 200/錯token 401/
+     舊token 403/portal token 403 全過(403=過驗證被白名單擋,不耗限速的自測法)。
+     ★ 插曲:錨點初版用半形冒號,實檔為全形「：」→ 未命中即中止(fail-fast 如預期),修正後過。
+  c) CT201 portal.env +WEBHOOK_URL/WEBHOOK_TOKEN_PORTAL(token 走檔案動線 scp+pct push,
+     不經 pve24 ps);CT201 視角通路驗證:health 200+portal token 403 OK。
+- 程式(portal 0.3.0,源檔已入 repo;三處版本同步 package.json/main.py/compose):
+  BFF:registry.py +WEBHOOK_ACTIONS 13 動作鏡像表(SoT=ntfy-webhook.py ACTIONS,兩檔互註)
+  +ALERT_ACTION_MAP;actions.py(轉發 httpx 130s timeout、驗證鏈、in-flight 409 防重、
+  mock 四態 PORTAL_MOCK_ACTION);main.py +GET /api/actions+POST /api/action(catchall 前);
+  錯誤映射:webhook 500→502(rc/out 摘要)、401/403→502(hint 指 token/鏡像同步)、
+  429 透傳(共用額度文案)、timeout→504(「動作可能仍在執行,見 TG」);
+  pct-reboot-201=fire-and-forget 202(同步等必死於 BFF 自身重啟)。
+  前端:Toast/ConfirmDialog/AlertActions 三組件+Alerts 整合;確認框寫明將執行什麼+
+  danger 警告行(monitoring-stack 空窗/reboot-201 離線/ctdmz-nft 清通行證);
+  命名一致「重啟X」→toast「已重啟X」;頁面級單飛鎖;silence 成功 optimistic
+  「已送出靜音」標記(蓋 AM 生效+快取 5-20s 延遲觀感);useMutation retry:0 明文。
+- 驗收:mock 13/13 PASS(Playwright:按鈕顯隱/確認框/toast/Esc/直達唯讀提示/RWD 三斷點;
+  frontend/e2e-m3-mock.mjs 留存);tsc+vite build 過。
+- 待使用者:①finish-portal-030.sh 部署(agent 被分類器攔=現役 compose 覆寫,照慣例收斂)
+  ②finish-m3-e2e.sh(silence-1h/NotifySelfTest 無害自測,四點驗證+自動 expire 清理)
+  ③手機按掉一次真實告警=M3 DoD。M1 驗收 e(Kuma UI 加 /api/health)仍待。
+- 回滾:OpenWrt uci delete allow_monitor_to_ct260_webhook;webhook/env 蓋回
+  ~/_backups/*.before-portal-*;部署後回滾=compose 蓋回 before-portal030 + 0.2.2 image 仍在。
+- 已知接受:Remote-User 可偽造(同生活頁 8b,真邊界=白名單+獨立 token+限速);
+  限速全域共用(portal 猛按可餓死手機按鈕額度,文案提醒即止);鏡像表漂移失敗模式安全(403)。

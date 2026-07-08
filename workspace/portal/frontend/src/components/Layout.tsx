@@ -17,6 +17,8 @@ export default function Layout() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // 確認框開啟時(焦點在 dialog 內)不吃全域捷徑,避免 g/a 誤導航(M3)
+      if (e.target instanceof HTMLElement && e.target.closest('[role="dialog"]')) return
       if (e.key === '/' && !pathname.startsWith('/m/services')) {
         // 進服務目錄;頁內的 / 聚焦由 Services 自己接手
         e.preventDefault()
@@ -44,7 +46,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.2</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.3</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {
