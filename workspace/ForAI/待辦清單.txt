@@ -723,6 +723,14 @@
     switch3f 卡接 SNMP 數據(BFF overview 批次加 sysUpTime/ifOperStatus 三查詢,
     up 後自動顯示 uptime+N/M 埠 up;現況 unk「SNMP 未應答(待辦25)」誠實態)。
     部署 finish-portal-041.sh(11 端點 200+/kiosk 200+M3 回歸 403)。
+    【進度 2026-07-08(0.5.0)】使用者點名:遊戲頁加 MCSM 面板入口卡+電力模塊實作。
+    電力方案(VLAN100 帶外 L2 孤島,CT201 打不到 upsd:3493→比照 CT202 squid textfile):
+    pve24 ups-metrics.sh(cron 每分鐘 upsc,免 sudo 可讀)→ups.prom→pve-node:9100;
+    BFF live.power(nut_* 八指標+7 天 on_battery 轉換事件;缺席/upsc 失敗/>5min 過期
+    =pending 誠實態);前端電力頁擴 6 tiles(+估計功耗/輸入電壓,battery_low 紅點);
+    rules/power.yml 三告警已載入。mock 9/9 PASS、0.5.0 部署全綠。
+    ★ 待使用者:pve24 root 執行 portal/scripts/finish-ups-metrics.sh(codex-admin
+    sudo 僅 pct/qm/pvesh/pvesm 寫不了 host 檔)→電力頁自動亮。
     ▶ 剩:Homepage 退役儀式(低優先級,使用者點名後開)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

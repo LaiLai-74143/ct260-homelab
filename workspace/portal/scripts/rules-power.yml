@@ -1,0 +1,31 @@
+# rules/power.yml — UPS 告警(待辦49 電力模塊,2026-07-08)
+# 數據源:pve24 /usr/local/bin/ups-metrics.sh(upsc→textfile,騎 pve-node:9100)
+groups:
+  - name: power-ups
+    rules:
+      - alert: UPSOnBattery
+        expr: nut_ups_on_battery == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "UPS on battery (mains lost)"
+          description: "CyberPower CP1500 轉電池供電已 1m——市電中斷;NUT 180s 後開始優雅關機序。"
+
+      - alert: UPSLowBattery
+        expr: nut_battery_low == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "UPS low battery"
+          description: "UPS 回報 LB(低電量)——關機序應已觸發,立即確認。"
+
+      - alert: UPSDataStale
+        expr: time() - node_textfile_mtime_seconds{file=~".*ups[.]prom"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "UPS metrics stale on {{ $labels.instance }}"
+          description: "ups.prom 超過 5 分鐘未更新——pve24 cron/upsc 管線中斷(電力頁已切 pending 誠實態)。"

@@ -104,9 +104,12 @@ export interface Power {
   pending?: boolean
   hint?: string
   on_battery?: boolean
+  battery_low?: boolean
   charge?: number
   load?: number
   runtime_s?: number
+  input_v?: number
+  watts?: number
   events_7d?: { ts: string; text: string }[]
   generated_at: string
 }

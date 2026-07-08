@@ -54,6 +54,12 @@ export default function Game() {
               </div>
             ))}
           </div>
+
+          {/* 管理入口:MCSM 面板(PC40 直達;手機發證後可達,見服務目錄) */}
+          <a href="http://10.70.70.20:23333" target="_blank" rel="noreferrer"
+             className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+            MCSManager 面板(實例管理/網頁終端)→ <span className="font-mono text-[12px] text-muted">10.70.70.20:23333 ↗</span>
+          </a>
         </>
       )}
     </>

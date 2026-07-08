@@ -130,14 +130,14 @@ async def get_host(slug: str) -> dict:
 
 
 async def get_power() -> dict:
-    # nut_exporter 待部署(待辦49 決策2:先誠實 pending,不隱藏、不擺假數據)
+    # 電力(待辦49 決策2 落地 2026-07-08):pve24 upsc→textfile→Prometheus;
+    # 指標缺席/過期由 live.power 回 pending 誠實態,不隱藏、不擺假數據
     if MODE == "mock":
         d = _fixture("power")
         d["generated_at"] = _now()
         return d
-    return {"pending": True,
-            "hint": "nut_exporter 待部署(待辦49 決策2)——pve24 NUT secondary 已運行,exporter 上線後此頁自動有數據",
-            "generated_at": _now()}
+    from . import live
+    return await _get("power", live.power)
 
 
 def _life_file() -> Path:

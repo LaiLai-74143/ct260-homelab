@@ -1998,3 +1998,32 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - AP 收案面:小米 BE3600 Pro 不支援 SNMP→V7 AP Main 條目記「無法觀測」。
 - 回滾:snmp-auth.yml 蓋回 before-trunc 備份+restart snmp-exporter;
   prometheus.yml 蓋回 before-sysuptime 備份+restart prometheus;portal 換回 0.4.1。
+
+### portal 0.5.0:電力模塊 live + 遊戲頁 MCSM 入口(2026-07-08 晚)
+- 使用者點名兩項:遊戲板塊加 MCSM 入口、開始實作電力模塊(待辦49 決策2 落地)。
+- 電力方案選型:VLAN100 帶外=無路由 L2 孤島(V7 §2.12),CT201 容器打不到
+  upsd 192.168.100.2:3493→放棄 nut_exporter 容器方案;改比照 CT202 squid-metrics
+  前例:pve24(upsmon secondary,nut-client 已裝、upsc 免 sudo 可讀)cron 每分鐘
+  upsc→/var/lib/prometheus/node-exporter/ups.prom→騎現有 pve-node:9100。
+  零新埠、零防火牆、零新憑證。
+- UPS 實體確認:CyberPower CP1500PFCLCDa TW,標稱 1000W,battery.runtime/charge/
+  ups.load/input.voltage 全變數可讀(upsc 實測)。
+- 指標八枚:nut_upsc_ok/on_battery/battery_low/charge/runtime/load/input_voltage/
+  realpower_nominal;script emit() 守衛非數值不寫(不弄壞 textfile 格式);
+  同目錄 mktemp+mv 原子換檔。
+- BFF live.power:八查詢+7 天 on_battery range(step 300)轉換事件(跨 >15min
+  資料缺口不判轉換,防管線斷點誤報);三層誠實態=指標缺席(管線未上線)/
+  nut_upsc_ok=0(upsc 失聯)/textfile mtime>5min(cron 中斷)皆回 pending+指路 hint。
+  估計功耗=load%×標稱 1000W。
+- 前端:電力頁 4→6 tiles(+估計功耗 W/輸入電壓 V;battery_low 紅點掛電池 tile);
+  遊戲頁底部 MCSManager 面板入口卡(10.70.70.20:23333,PC40/發證手機直達)。
+  fixture 改 live 形狀(mock 可走查真 UI)。
+- 告警:rules/power.yml=UPSOnBattery(critical,for 1m)/UPSLowBattery(critical,0m)/
+  UPSDataStale(warning,mtime>5m)——promtool 過、HUP 後 rules API 確認三條已載。
+- 驗證:mock 9/9 PASS(6 tiles+270W+事件+MCSM href);0.5.0 部署 11 端點 200+
+  /kiosk 200+M3 回歸 403;live /api/power=pending+「pve24 執行 finish-ups-metrics.sh」
+  hint 正確;switch3f 卡回歸 ok|8/28 埠 up|39d。
+- ★ 權限邊界入檔:pve24 codex-admin sudo 僅 (root) NOPASSWD: pct/qm/pvesh/pvesm,
+  寫 host 檔(/usr/local/bin、/etc/cron.d)不行→收斂 finish-ups-metrics.sh 待使用者
+  root 執行(冪等;回滾=rm 三檔)。跑完 60s 內 Prometheus 入庫,電力頁自動亮。
+- 回滾:portal 換回 0.4.2;rules/power.yml rm+HUP;pve24 三檔 rm。

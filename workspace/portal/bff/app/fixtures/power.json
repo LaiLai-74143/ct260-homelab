@@ -1,5 +1,14 @@
 {
- "pending": true,
- "hint": "nut_exporter 待部署(待辦49 決策2)——pve24 NUT secondary 已運行,exporter 上線後此頁自動有數據",
+ "on_battery": false,
+ "battery_low": false,
+ "charge": 100,
+ "load": 27,
+ "runtime_s": 1550,
+ "input_v": 114.0,
+ "watts": 270,
+ "events_7d": [
+  {"ts": "07-06 14:22", "text": "市電恢復"},
+  {"ts": "07-06 14:19", "text": "轉電池供電(市電中斷)"}
+ ],
  "generated_at": "fixture"
 }

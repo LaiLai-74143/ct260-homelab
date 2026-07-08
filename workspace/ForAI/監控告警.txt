@@ -84,6 +84,19 @@ Loki / PVE API targets（2026-07-05 待辦11/12 新增，order 20-22）：
 （2026-07-05 finish-11-12.sh 啟用完成，22/22 up；job=pve 60s 間隔）
 ```
 
+pve24 UPS 指標（待辦49 電力模塊，2026-07-08，同 squid textfile 模式）：
+
+```text
+來源：pve24 /usr/local/bin/ups-metrics.sh（cron /etc/cron.d/ups-metrics 每分鐘）
+      upsc ups0@192.168.100.2（VLAN100 帶外）-> /var/lib/prometheus/node-exporter/ups.prom（隨 pve-node:9100 出）
+指標：nut_upsc_ok、nut_ups_on_battery、nut_battery_low、nut_battery_charge_percent、
+      nut_battery_runtime_seconds、nut_ups_load_percent、nut_input_voltage_volts、
+      nut_ups_realpower_nominal_watts
+告警：rules/power.yml——UPSOnBattery(critical,1m)/UPSLowBattery(critical,0m)/
+      UPSDataStale(warning,mtime>5m)；portal 電力頁同源（缺席/過期=pending 誠實態）
+安裝：portal/scripts/finish-ups-metrics.sh（pve24 root 執行；codex-admin sudo 僅 pct/qm/pvesh/pvesm）
+```
+
 CT202 squid 指標（待辦⑩b 極簡方案，2026-07-05）：
 
 ```text

@@ -9,7 +9,7 @@ import asyncio
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -465,6 +465,72 @@ async def _loki_tail(host_label: str) -> list[dict] | None:
     rows.sort(reverse=True)
     return [{"ts": datetime.fromtimestamp(t / 1e9, timezone.utc).isoformat(timespec="seconds"),
              "line": line[:300]} for t, line in rows[:50]]
+
+
+# ---------------- power(待辦49 決策2;pve24 upsc→textfile→pve-node:9100) ----------------
+
+_TZ_TAIPEI = timezone(timedelta(hours=8))  # 事件時戳用;台灣無夏令,固定偏移即可
+
+
+def _ups_events(res: list[dict]) -> list[dict]:
+    """on_battery 7 天序列 → 轉換事件(新的在前)。跨資料缺口(管線斷)不判轉換。"""
+    if not res:
+        return []
+    events = []
+    prev, prev_ts = None, 0.0
+    for ts, v in res[0].get("values", []):
+        cur = str(v) == "1"
+        if prev is not None and cur != prev and ts - prev_ts <= 900:
+            t = datetime.fromtimestamp(ts, _TZ_TAIPEI).strftime("%m-%d %H:%M")
+            events.append({"ts": t, "text": "轉電池供電(市電中斷)" if cur else "市電恢復"})
+        prev, prev_ts = cur, ts
+    return list(reversed(events))[:20]
+
+
+async def power() -> dict:
+    """指標缺席=管線未上線→pending 誠實態;upsc 失敗/資料過期同樣不裝正常。"""
+    async with httpx.AsyncClient(timeout=6.0) as client:
+        ok, onb, lb, charge, runtime, load, volt, nominal, stale, ev = await asyncio.gather(
+            _promq(client, "nut_upsc_ok"),
+            _promq(client, "nut_ups_on_battery"),
+            _promq(client, "nut_battery_low"),
+            _promq(client, "nut_battery_charge_percent"),
+            _promq(client, "nut_battery_runtime_seconds"),
+            _promq(client, "nut_ups_load_percent"),
+            _promq(client, "nut_input_voltage_volts"),
+            _promq(client, "nut_ups_realpower_nominal_watts"),
+            _promq(client, 'time() - node_textfile_mtime_seconds{file=~".*ups[.]prom"}'),
+            _promq_range(client, "nut_ups_on_battery", 7 * 24 * 3600, 300),
+        )
+
+    def val(vec: list[dict]) -> float | None:
+        return float(vec[0]["value"][1]) if vec else None
+
+    if val(onb) is None:
+        return {"pending": True,
+                "hint": "UPS 指標管線待上線——pve24 執行 finish-ups-metrics.sh(upsc→textfile)後此頁自動有數據",
+                "generated_at": _now()}
+    if val(ok) == 0:
+        return {"pending": True,
+                "hint": "pve24 upsc 讀不到 UPS(ups0@192.168.100.2)——查 DXP upsd / USB 線 / VLAN100 直連",
+                "generated_at": _now()}
+    st = val(stale)
+    if st is not None and st > 300:
+        return {"pending": True,
+                "hint": f"UPS 數據已 {int(st // 60)} 分鐘未更新(pve24 cron/upsc 中斷)——不擺舊數據裝正常",
+                "generated_at": _now()}
+    load_v, nom = val(load), val(nominal)
+    return {
+        "on_battery": val(onb) == 1,
+        "battery_low": val(lb) == 1,
+        "charge": round(val(charge)) if val(charge) is not None else None,
+        "load": round(load_v) if load_v is not None else None,
+        "runtime_s": int(val(runtime)) if val(runtime) is not None else None,
+        "input_v": val(volt),
+        "watts": round(load_v * nom / 100) if load_v is not None and nom else None,
+        "events_7d": _ups_events(ev),
+        "generated_at": _now(),
+    }
 
 
 async def host_detail(slug: str) -> dict:
