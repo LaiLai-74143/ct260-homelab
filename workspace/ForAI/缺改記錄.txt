@@ -2111,3 +2111,27 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   自身 VLAN20 IP)對 53 的樣本——期滿分析時解讀,寫放行清單勿照單全收。
 - 計數不跨重開機;觀察期內路由器重開需順延起算。切 REJECT=下輪維護窗(b/c)。
 - 回滾:/etc/init.d/input-audit33 stop && disable(刪 table 零殘留)。
+
+### 待辦㉑㉚ 尾段代跑+FreshRSS 全鏈上線(2026-07-09 凌晨,使用者授權)
+- finish-21-nocodb:nocodb :latest→2026.06.2 pin 成功;首驗撞 nocodb 冷啟(API 未 warm)
+  腳本中斷於關窗前——nocodb 後驗 OK;窗由 finish-30 步驟 3 收掉。
+- ★踩坑:「復關驗證 curl 403」斷言錯——CONNECT 被拒時 curl %{http_code} 回 000;
+  改 access.log 行為證據驗(TCP_DENIED 行),兩腳本已修。行為雙證:白名單 deb.debian.org
+  200+registry-1.docker.io TCP_DENIED/403。
+- FreshRSS:pull/up OK 後 greader API 一路 503→500——兩根因:①api_enabled 全域未開
+  (cli/reconfigure.php --api-enabled 官方參數);②CLI 以 root 跑弄壞檔案擁有權
+  (容器有提示 access-permissions.sh,漏跑;chown -R www-data data/ 後 ClientLogin OK)。
+  腳本已補兩步。晨報 dry-run 五段就位:全站概況/告警動態/安全/今日訊息/總評,
+  「今日訊息」現=「無未讀新訊」誠實態,待使用者 UI 加訂閱源。
+
+### 待辦㊲ DXP4800 盤點+exporter 根因(2026-07-09 凌晨,SSH 窗)
+- 盤點/健檢入備份索引 §1/§5(Back_up 全結構、df 四卷、三項使用者裁決:3.1T
+  database_cache.dat/非備份內容/散落 vzdump)。SMART 未讀(無 sudo)。
+- ★dxp-node-exporter 觀察項收案:exporter 由 user systemd(linger=yes)供養,
+  昨晚 21:37 起一直活著、本輪查時 target 已 up(22/23)。慢性病根兩條:
+  ①base unit ExecStart 綁 legacy 192.168.31.3(.31 純化殘影),override 蓋 .30.3——
+  開機時 IP 未就緒即起失敗;②textfile collector 指向不存在的 /var/lib/prometheus/
+  node-exporter,每 15s ERROR 灌 user journal→輪轉沖光歷史=「dead-no-journal」假象。
+- 修復=finish-37-exporter.sh(綁 0.0.0.0+--no-collector.textfile+unit 檔 world-writable
+  修 644+重啟+CT201/VLAN100 兩路驗證+散落檔歸位)——agent 對 NAS 寫入被分類器攔
+  (「盤點」授權不含設定寫),照慣例收斂使用者腳本,需 SSH 窗開著時跑。

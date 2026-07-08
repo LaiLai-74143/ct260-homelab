@@ -627,10 +627,17 @@
     首次 push 前跑一次 grep 掃描確認無憑證入庫。
 
 -------------------------------------------------------------------------------
-37. DXP4800 備份盤點（承備份索引 §5）
-    註：NAS SSH 3 小時自動關閉屬正常行為，非故障。
-    流程：手動開 SSH 窗 → 依備份索引 §5 清單盤點各共享目錄 → 散落備份收進標準 _backups
-    結構 → 更新《備份位置及策略索引.txt》→ 順做該機健檢（df、SMART 可讀則記錄）。
+◐37. DXP4800 備份盤點 —— 盤點+索引更新完成(2026-07-09 SSH 窗),收納一步待使用者腳本
+    ✔ 盤點入《備份位置及策略索引.txt》§1/§5:Back_up 共享全結構(pve24 主 vzdump 58 份/
+      VM101 15 份/MC 世界備份/Aegis/restore-lab);健檢 df 四卷(v3 64% 最高);
+      SMART 未讀(SSH 帳號無 sudo,UGOS UI 可看)。
+    ★ 三項裁決留使用者(見索引 §5.1):database_cache.dat 3.1T 不明單檔(可望回收)、
+      Back_up 內非備份內容(同人文/舊工具/重灌 22G)去留、散落 VM101 vzdump 歸位。
+    ★ 順帶根治 dxp-node-exporter 慢性離線(觀察項收案):exporter 其實活著,
+      病根=base unit 綁 legacy .31.3(開機時 IP 未就緒)+textfile collector 對不存在
+      目錄每 15s 刷 ERROR 灌爆 user journal(=先前 dead-no-journal 假象)。
+    ★ 待使用者(窗開著時):bash ~/workspace/monitoring/finish-37-exporter.sh
+      (override 綁 0.0.0.0+關 textfile+修 644+重啟驗證+散落檔歸位——agent 寫入被分類器攔)。
 
 ===============================================================================
 ## P3 低

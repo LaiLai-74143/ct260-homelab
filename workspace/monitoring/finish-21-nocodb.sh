@@ -37,8 +37,10 @@ set -e
 sed -i \"s|^acl ok dstdomain .docker.io production.cloudfront.docker.com|# acl ok dstdomain .docker.io production.cloudfront.docker.com|\" /etc/squid/squid.conf
 squid -k parse >/dev/null && squid -k reconfigure
 sleep 1
-code=\$(curl -sm8 -o /dev/null -w \"%{http_code}\" --proxy http://127.0.0.1:3128 https://registry-1.docker.io/v2/ || true)
-[ \"\$code\" = \"403\" ] || { echo \"復關驗證異常:squid 回 \$code(預期 403)\"; exit 1; }
+# CONNECT 被拒時 curl %{http_code} 常回 000(非 403),改以 access.log 行為證據驗
+curl -sm8 --proxy http://127.0.0.1:3128 https://registry-1.docker.io/v2/ -o /dev/null 2>/dev/null || true
+tail -5 /var/log/squid/access.log | grep -q \"TCP_DENIED.*registry-1.docker.io\" \
+  || { echo \"復關驗證失敗:access.log 未見 DENIED\"; exit 1; }
 echo window-closed-verified
 '"
 echo "== 完成。若第 2 步 pull 卡 blob:看 CT202 /var/log/squid/access.log 抓被拒的 CDN 域名回報 =="
