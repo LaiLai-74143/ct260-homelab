@@ -145,3 +145,9 @@
         find {{ backup_root }} -name 'server.properties' -exec \
           sed -i -E 's/^(management-server-secret|rcon\.password)=..*/\1=**REDACTED**/' {} +
       changed_when: true
+
+    - name: redact OpenWrt uci wireguard 金鑰欄位(待辦24;實鑰只存路由器)
+      ansible.builtin.shell: |
+        sed -i -E "s/^(\s*option (private_key|preshared_key)) '.*'/\1 '**REDACTED**'/" \
+          {{ backup_root }}/openwrt/etc/config/network 2>/dev/null || true
+      changed_when: true

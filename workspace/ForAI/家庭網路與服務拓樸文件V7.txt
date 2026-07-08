@@ -500,6 +500,8 @@ mgmt       input REJECT  forward REJECT
 storage    input REJECT  forward REJECT
 honeypot   input REJECT  forward REJECT
 tailscale  input ACCEPT  forward REJECT
+wg         input REJECT  forward REJECT   (WireGuard break-glass,待辦24 2026-07-08;
+           顯式 list device wg0——netifd 接管前 zone 也綁得上,見 §4.9)
 ```
 
 必要 broad forwarding(各段 -> wan):lan / infra / servers / trusted / iot / dmz / game / service。
@@ -808,6 +810,34 @@ CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct d
     (W2 主機自身不受閘門管制)ctdmz 無 output 鏈;CT203 被打穿即有 proto-all 橫移 8 內段能力。
       安全模型=「完全信任 CT203」,緩解靠 unprivileged LXC/Wazuh(★sshd 實況見 §10.7)。
       進一步收斂選項:把 8 條 proto-all 收成實際用到的目的服務埠(least-privilege,未做)。
+```
+
+### 4.9 WireGuard break-glass(待辦24,2026-07-08)
+
+```text
+定位:Tailscale 全掛時的第二條獨立進門路徑;常態啟用但不使用,每季連一次驗證存活。
+介面:wg0 = 10.66.0.1/24,udp/44873(WAN 固定 IP 125.228.123.224);uci network.wg0 為 SoT。
+peer:phone(10.66.0.2/32,含 preshared);conf 副本 CT260 ~/.config/homelab/
+     wg-phone-breakglass.conf(600);顯示 QR:ssh openwrt "qrencode -t ansiutf8
+     < /etc/wireguard/phone.conf"。金鑰實體僅存路由器 /etc/wireguard/(077)。
+放行(9 條,不給全網):
+  wan 入口   Allow-WAN-WireGuard-44873(udp,family ipv4)
+  router 入  Allow-WG-Router-SSH-52438 / Allow-WG-DNS-To-Router(53 tcp udp,AGH 綁 0.0.0.0)
+             / Allow-WG-Router-LuCI-443
+  轉發       Allow-WG-To-PVE24-Server-{API-8006,SSH-22}(192.168.20.5)
+             / Allow-WG-To-CT260-Server-SSH-22(192.168.20.60)
+             / Allow-WG-To-RouterPVE-Infra-{API-8006,SSH-22}(192.168.10.2)
+★ 施工註記:本機 OpenWrt 為 apk 世代(opkg 不存在);luci-proto-wireguard 裝於 netifd
+  啟動之後→proto 未註冊,netifd 拉不起 wg0(available:false)。因遊戲在線+PPPoE 重撥
+  代價,未跑 network restart,改手動 ip link add + wg set 拉起(與 uci 同值);
+  下次重開機/network restart 後 netifd 依 uci 原生接管。zone 已加顯式 list device wg0
+  (fw4 不依賴 netifd 解析,iifname 規則實測 5+4 條在位)。
+★ dropbear:已加 Interface wg0 實例(僅金鑰);現階段由既有 wildcard :::52438 listener
+  覆蓋 wg 來源,firewall 入規則為真正閘門。
+★ 備份 redact:uci network 含 wg 私鑰/psk——config-backup.yml 已加 redact task、
+  scan-secrets.sh 已加 1b 掃描(明文 wg 鑰入 backups 即擋)。
+回滾:/root/_backups/{network,firewall,dropbear}.before-todo24-* 蓋回 + reload;
+     CT260 ~/_backups/openwrt-todo24-*/ 亦有副本。
 ```
 
 ---

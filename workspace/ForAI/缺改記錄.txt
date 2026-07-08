@@ -2067,3 +2067,22 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   tr -d '\n' 重寫+restart 後 notif test 通,phone 讀取端 poll 實收(中文 body 正常)。
 - 首掃=基線記錄不通知(firstCheckNotif=false);排程每日 08:15;diun 自身也在監看清單。
 - 回滾:三處 _backups/docker-compose.yml.before-todo21-* 蓋回+up -d;diun=compose 刪段。
+
+### 待辦㉔ WireGuard break-glass 伺服端上線(2026-07-08 晚)
+- 全鏈:wg0 10.66.0.1/24 udp/44873(WAN 固定 IP)+zone wg(REJECT 預設)+9 條具名放行
+  (wan 入口/router 52438·53·443/轉發 pve24·CT260·RouterPVE 管理面)——細節 V7 §4.9。
+- ★踩坑1:OpenWrt 已是 apk 世代,opkg 不存在(ash: opkg: not found)——apk add 同名包即可。
+- ★踩坑2:luci-proto-wireguard 裝於 netifd 啟動後→proto 未註冊,ifstatus wg0
+  available:false 拉不起。當下 MC 2 人在線+network restart 會 PPPoE 重撥,
+  裁手動 ip link add wg0+wg set(與 uci committed 值一致)拉起;重開機後 netifd 原生接管。
+- ★踩坑3:netifd 不認 wg0→fw4 zone 解析不到裝置(iifname 規則 0 條)——zone 加顯式
+  list device 'wg0' 後 reload 實測 5 iif+4 oif 條在位;此寫法與日後 netifd 接管相容。
+- ★踩坑4:uci -q delete 不存在鍵回非 0,set -e 腳本靜默中斷——批次 uci 一律 || true。
+- 秘鑰面:金鑰只生在路由器 /etc/wireguard(077);uci network 含私鑰/psk 而該檔在
+  ansible 夜備覆蓋內→config-backup.yml 加 wireguard redact task+scan-secrets.sh 加
+  1b 掃描(44 字 base64 明文即擋)=雙保險;phone.conf 檔對檔複製到 CT260(600),
+  未經 stdout/命令列。
+- dropbear:加 Interface wg0 實例(僅金鑰);現由既有 wildcard :::52438 覆蓋,防火牆
+  入規則為閘門。回歸:Loki 200、tripwire 在;CT260→portal:8088 之 000 為原有姿態非回歸。
+- 待使用者:手機匯入 conf(QR 指令見待辦24)+行動網路握手實測;協議面=每季連一次。
+- 回滾:network/firewall/dropbear 三檔 before-todo24-* 蓋回+reload+ip link del wg0。

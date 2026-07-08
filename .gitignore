@@ -38,6 +38,7 @@ __pycache__/
 *token*
 !get_gcal_token.py
 *secret*
+!scan-secrets.sh
 *credential*
 *.pem
 *.key
