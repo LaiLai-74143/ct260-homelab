@@ -662,9 +662,11 @@
     【進度 2026-07-08 追加(0.2.2)】MCSM key 落地=決策4 結案:面板 API-user
     (permission-1 唯讀)+僅指派 Fabric-MC,BFF 走使用者級 /api/auth/?advanced=true
     解析 mcping 玩家數(權限最小化,admin 端點 403 屬預期)。
+    【0.2.2 收尾 2026-07-08】玩家數已亮(mcPingOnline=true/ver 26.2;根因=pingConfig.ip
+    誤 127.0.0.1+CT100 兜底 drop 誤丟本機 mcping,已修 nft lo 放行+UI 伺服器地址欄改 10.70.70.20);
+    MCSM 網頁即時終端 24444 已放行(PC40+手機,finish-mcsm-daemon-24444.sh)。
     驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活);
-    ▶ 剩:使用者把 MCSM 實例類型設 Minecraft Java(mcping 上線玩家數即亮,免重部署)、
-    Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
+    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

@@ -1838,8 +1838,21 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 修正:
   1) finish-mcping-fix.sh:CT100 nft 加 `iifname "lo" -> 10.70.70.20:25565 accept`
      (僅新增,兜底 drop 與 Velocity/CT201 路徑不變;三項回歸 200/通過);
-  2) finish-mcping-ip.sh:改 daemon 設定檔 InstanceConfig/<uuid>.json 的 pingConfig.ip
-     →10.70.70.20(此版 MCSM 無 UI 欄位;只改一欄,備份 CT100 /root/mcsm-instance-*.json.bak)。
-- 卡點:daemon 設定讀在記憶體,API key 唯讀(PUT /api/instance 403「金鑰不正確」)無法
-  live 更新;需重啟 Fabric-MC 實例(非 daemon,不動其他)重載設定檔才生效——待使用者按重啟。
-- 回滾:nft 蓋回 before-mcping 備份;設定檔蓋回 mcsm-instance-*.json.bak(下次 ping 週期回舊值)。
+  2) pingConfig.ip→10.70.70.20:直改 daemon 設定檔(finish-mcping-ip.sh)無效——daemon 把
+     設定讀在記憶體,重啟實例反把記憶體舊值寫回覆蓋檔;API key 唯讀(PUT 403「金鑰不正確」)。
+     正解=MCSM 網頁「Minecraft 狀態讀取」對話框的「伺服器地址」欄(此版確有 UI 欄位,位置隱蔽)
+     改 10.70.70.20 儲存,走面板→daemon 正規管道即持久生效。
+- 結果 2026-07-08:mcPingOnline=true、version 26.2、portal /api/game players_online 即時(0=真沒人)。
+- 回滾:nft 蓋回 before-mcping 備份;pingConfig 於 UI 改回 127.0.0.1 即可(finish-mcping-ip.sh 已無用途)。
+
+### 待辦49 入口大廳:MCSM daemon ws 24444 放行(網頁即時終端;2026-07-08,使用者授權)
+- 症狀:手機/PC40 開 MCSM 網頁載得出,但即時終端「無法連線到遠端節點 ws://10.70.70.20:24444
+  (xhr poll error)」。使用者疑問「手機吃到 DMZ 全域轉發為何連不上」。
+- 根因:OpenWrt dmz->game proto-all 確已放行手機到 24444,但 CT100 本機 nft(mc_backend_guard)
+  白名單制,24444 未點名→兜底 drop。兩層防護,主機層才是實際閘門(非 DMZ 轉發卡)。
+- 修正 finish-mcsm-daemon-24444.sh(冪等雙備份,比照 23333):
+  OpenWrt +Allow-PC40-To-Game-MCSM-Daemon-24444(trusted 192.168.40.4→game:24444;
+  手機經既有 dmz proto-all 免加);CT100 nft +define MCS_DAEMON_PORT=24444 + PC40/TS_GATE
+  兩條 24444 accept。running-state 驗證 + 回歸(23333:200、Velocity→25565 通)通過。
+- 安全:24444=daemon 控制 ws,實際操作需面板發的 token,已由面板登入把關(同 23333 信任級)。
+- 回滾:uci delete firewall.allow_pc40_to_game_mcsdaemon;CT100 蓋回 before-24444 備份。

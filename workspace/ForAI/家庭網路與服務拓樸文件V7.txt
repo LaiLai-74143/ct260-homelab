@@ -548,6 +548,8 @@ PC40 -> CT201      10.80.80.11   tcp/3000,3001,3002,9090,9100, ping
 PC40 -> CT201      10.80.80.11   tcp/8088         (Allow-PC40-To-Monitor-Portal-8088,portal 待辦49)
 PC40 -> CT100      10.70.70.20   tcp/23333        (Allow-PC40-To-Game-MCSM-23333,待辦49 2026-07-08;
   CT100 本機 nft 同步點名 192.168.40.4,見 §7 CT100)
+PC40 -> CT100      10.70.70.20   tcp/24444        (Allow-PC40-To-Game-MCSM-Daemon-24444,待辦49
+  2026-07-08;MCSM 網頁即時終端 daemon ws;手機經 dmz→game proto-all 免加,CT100 nft 同步)
 PC40 -> DXP4800    192.168.30.3  tcp/5243,8243(SNAT 192.168.30.1)
 PC40 -> Minecraft public hairpin 49169/tcp、43915/udp
 ★ 殘留:temp_allow_pc40_to_openwrt_ssh(PC40 -> 192.168.40.1:52438)temp 前綴仍在,待清理或轉正。
@@ -851,12 +853,11 @@ portal        8088   portal:0.2.2 本地 build(python:3.13.5-slim+pin;待辦49 M
               MCSM_API_KEY 已填(2026-07-08;MCSM 帳號 API-user permission-1 唯讀、
               僅指派 Fabric-MC——/api/overview 等 admin 端點 403 屬預期);
               玩家數 mcping 根因=實例 pingConfig.ip 誤為 127.0.0.1(MC server-ip 綁
-              10.70.70.20 不聽 loopback),且此版 MCSM 無 UI 欄位——已改 daemon 設定檔
-              /opt/mcsmanager/daemon/data/InstanceConfig/<uuid>.json 的 pingConfig.ip→
-              10.70.70.20(備份 CT100 /root/mcsm-instance-*.json.bak);CT100 nft 另加
-              iifname lo→10.70.70.20:25565 accept(loopback 放行,mc_backend_guard,
-              備份 /root/nftables.conf.before-mcping-*)。daemon 設定讀在記憶體,需
-              重啟 Fabric-MC 實例(非 daemon)重載才生效——待使用者按重啟即亮玩家數;
+              10.70.70.20 不聽 loopback)+ CT100 兜底 drop 未限介面誤丟本機 mcping。
+              解:CT100 nft 加 iifname lo→10.70.70.20:25565 accept;pingConfig 位址由
+              MCSM 網頁「Minecraft 狀態讀取→伺服器地址」欄改 10.70.70.20(直改 daemon
+              設定檔會被 daemon 記憶體覆寫,須走面板正規管道)。2026-07-08 已亮:
+              mcPingOnline=true、version 26.2、players_online 即時;
               Kuma 探活 /api/health 待 UI 加;
               M3(動作按鈕)/M4(kiosk)未做
 ```
@@ -933,11 +934,13 @@ RAM 16G   CPU 4 cores(cpuset 2-5)
   server-ip=10.70.70.20,25565 綁定生效)
 本機 nft(/etc/nftables.conf mc_backend_guard):
   放行 Velocity 10.70.70.10 -> 25565 + icmp echo-request;CT201 10.70.70.11 -> tcp/23333 +
-  tcp/9100(node_exporter)+ icmp(監控);PC40 192.168.40.4 -> tcp/23333 + 發證後手機
-  (CT203 masq 10.60.60.10)-> tcp/23333(待辦49 2026-07-08,MCSM 人員面;
-  回滾備份 /root/nftables.conf.before-mcsm-20260708_075622 + CT260 ~/_backups);
+  tcp/9100(node_exporter)+ icmp(監控);PC40 192.168.40.4 + 發證後手機(CT203 masq
+  10.60.60.10)-> tcp/23333(MCSM 網頁)+ tcp/24444(MCSM daemon ws 即時終端;待辦49
+  2026-07-08,回滾備份 /root/nftables.conf.before-mcsm-* / before-24444-* + CT260 ~/_backups);
   iifname "lo" -> 10.70.70.20:25565(本機 MCSM daemon mcping 放行,兜底 drop 未限介面會誤丟;
   待辦49 2026-07-08,回滾備份 /root/nftables.conf.before-mcping-*)。
+  ★ 24444 只到 CT100 本機 nft 才是把關層:OpenWrt dmz->game proto-all 已放行手機到全部埠,
+  但 CT100 本機 nft 白名單制,埠未點名即被兜底 drop(兩層防護,主機層為實際閘門)。
 promtail 3.6.11(原生 systemd):journal + /root/minecraft/logs/latest.log +
   /var/log/mcsmanager/*.log → push CT201 eth1 10.70.70.11:3100(同 VLAN70 L2 直達)。
 ```
