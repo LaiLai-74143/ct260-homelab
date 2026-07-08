@@ -523,9 +523,8 @@
     開 per-client 查詢記錄 → 一週後檢視遙測域名 → 決定封鎖清單（注意勿斷本地控依賴的域名）。
 
 -------------------------------------------------------------------------------
-27. changedetection.io
-    流程：CT201 compose（pin 版本）→ 監看：CF tunnel 對外頁、Grafana 登入頁、
-    mc 網域 DNS 解析（用其 restock/text 模式）→ 通知走 ntfy/TG webhook。
+✗27. changedetection.io — 刪除(2026-07-08 使用者裁決:Kuma 已覆蓋可用性監測,
+    頁面內容變化監看需求不成立)。
 
 -------------------------------------------------------------------------------
 28. Frigate 本地攝影機 AI
@@ -576,10 +575,8 @@
     回滾：uci revert 即回 ACCEPT。
 
 -------------------------------------------------------------------------------
-34. Grafana 告警總覽面板
-    單一 dashboard 四行：firing/pending 列表（按 severity）、硬體異常表、
-    服務狀態綠牆（up/kuma）、安全事件（autoban 封鎖數、tripwire、Cowrie 攻擊率）。
-    數據源全現成，Claude Code 生成 JSON 後 provisioning 匯入。
+✗34. Grafana 告警總覽面板 — 刪除(2026-07-08 使用者裁決:與 portal(待辦49)
+    首頁/告警頁/kiosk 功能重疊,由 portal 取代)。
 
 -------------------------------------------------------------------------------
 35. NocoDB 待辦/看板擴充
@@ -612,9 +609,8 @@
 ===============================================================================
 ## P3 低
 
-38. cifs 備份儲存清理（兩處皆 ~88%）
-    照備份索引 §3 保留策略：列 vzdump 檔按日期，超保留數者刪；OpenWrt _backups 留近 30 份。
-    清理前先確認最新一份可讀（listing 內容非零）。
+✗38. cifs 備份儲存清理 — 刪除(2026-07-08 使用者裁決:pvesm 實測兩處已降至 63.43%,
+    高水位自然解除;日後再爆量另開新項)。
 
 39. VM101（OpenWrt）還原演練（使用者認可、暫無空）
     流程要點（屆時用）：還原到新 VMID（如 199）→ **開機前先斷開所有網卡**（防 IP 衝突）
@@ -636,15 +632,14 @@
 
 43. Kiwix 離線知識庫（NAS 存 zim 檔，輕量 CT/docker 起 kiwix-serve）。
 
-44. Grafana 牆面平板展示（kiosk mode + 總覽面板，第 34 項後順做）。
+✗44. Grafana 牆面平板展示 — 刪除(2026-07-08 使用者裁決:portal M4 /kiosk 已上線取代)。
 
 45. Meshtastic / LoRa 離網告警通道（需購硬體 ~NT$1000；HA 有整合，屆時再排流程）。
 
 46. mDNS reflector（trusted↔iot 限定；使用者標最低優先，屆時評估 avahi reflector 於 OpenWrt）。
 
-47. PBS 評估
-    【說明】vzdump 每次全量吃空間；PBS 增量+去重+驗證。第 38 項清理後空間充裕可不急；
-    若仍緊張：DXP docker 跑 PBS，datastore 掛 NAS 卷，pve24/RouterPVE 加 PBS storage 改推。
+✗47. PBS 評估 — 刪除(2026-07-08 使用者裁決:cifs 實測 63% 空間充裕,vzdump 維持;
+    空間再緊張時重開)。
 
 ✔48. Ansible / config-as-code — Phase 1 全結（2026-07-05：使用者 finish-48.sh 加 cron 成功，
     wrapper 實測 59 檔 clean；Phase 2 push 路徑屆時再議）

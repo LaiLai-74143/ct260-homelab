@@ -2030,3 +2030,14 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 【收尾】使用者當晚已 root 執行(首跑 nut_upsc_ok=1、8 指標);live 驗收:
   Prometheus nut_upsc_ok=1(pve24-server:9100)、/api/power 活數據(市電/100%/28%≈280W/114V)、
   首頁電力卡 ok「市電·電池 100%」、三告警 inactive/ok、使用者截圖 6 tiles 實亮。電力模塊結案。
+
+### 待辦清單大盤點+使用者裁決(2026-07-08 晚)
+- 通盤列出未完成項+六路查證(pvesm 使用率/VM300 狀態/映像 pin 盤點/Wazuh 調噪記錄/
+  vault rewrite/Kuma 探活殘尾),據此使用者裁決:
+- 刪除五項:27 changedetection(Kuma 已覆蓋)、34 Grafana 告警面板(portal 取代)、
+  38 cifs 清理(實測 63.43% 自然解除)、44 牆面平板(M4 kiosk 取代)、47 PBS(空間充裕)。
+- 排程實作(依序):21 版本 pin+diun → 22 金鑰收緊(使用者自訂 6h 上鎖方案,設計待確認)
+  → 24 WireGuard break-glass → 30 FreshRSS+晨報 → 33 input 收緊觀察期 → 37 DXP 盤點。
+- Homepage 退役前置:底部 bookmarks(5 組 14 站)搬入 portal 大廳「常用網站」板塊。
+- 查證副產物:VM300 stopped(onboot=1 未被人工拉起,Cowrie 週報/出網收斂皆卡此);
+  Wazuh 14e 調噪期(至 07-12)零動作記錄;Kuma Paperless monitor 常年紅燈待修。
