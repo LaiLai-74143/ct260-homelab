@@ -12,6 +12,9 @@
 # --- 納管:入口大廳 portal 源檔(待辦49;node_modules/dist/.venv 由 portal/.gitignore 排除) ---
 !/workspace/portal
 
+# --- 納管:Switch3F 交換機 UI 參考檔(待辦25;defLang.js=選單/欄位定位用) ---
+!/workspace/switch3f
+
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local
 /.local/*

@@ -75,9 +75,12 @@ Loki / PVE API targets（2026-07-05 待辦11/12 新增，order 20-22）：
 20  loki(日誌庫)          loki:3100（compose 容器名；Loki 自身 metrics）
 21  pve(24Bay PVE API)    job=pve  pve24.home.arpa → pve-exporter:9221 /pve?module=pve24（multi-target）
 22  pve(N95 路由PVE API)  job=pve  router-pve.home.arpa → 同上 module=routerpve
-23  Switch3F 交換機       snmp-switch3f  192.168.10.21 → snmp-exporter:9116 /snmp(if_mib,60s;
-    待辦25 2026-07-07;★掛起:交換機側 SNMP 未開=down,TargetDown 靜默至 07-14;
-    規則檔 rules/snmp-switch3f.yml=錯包率;Grafana 面板 switch3f-snmp)
+23  Switch3F 交換機       snmp-switch3f  192.168.10.21 → snmp-exporter:9116 /snmp(60s;
+    module=if_mib,sys_uptime 一次抓兩模組——sys_uptime 為 snmp-auth.yml 疊加的自定義
+    module(stock if_mib 不含 sysUpTime);待辦25 2026-07-08 上線:交換機開通
+    (安全→管理访问权限→管理服务 勾 SNMP),community 被 UI 截斷為 20 字=雙端同步 20 字值,
+    silence 已撤;規則檔 rules/snmp-switch3f.yml=錯包率;Grafana 面板 switch3f-snmp;
+    ★改 prometheus.yml 後 HUP 不夠:sed -i 換 inode,單檔 bind-mount 須 restart prometheus)
 （2026-07-05 finish-11-12.sh 啟用完成，22/22 up；job=pve 60s 間隔）
 ```
 

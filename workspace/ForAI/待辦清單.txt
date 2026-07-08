@@ -503,13 +503,19 @@
     Prometheus job snmp-switch3f(order 23)、rules/snmp-switch3f.yml、Grafana 面板
     switch3f-snmp、OpenWrt Allow+SNAT-Monitor-To-Switch3F-Infra-SNMP-161;
     TargetDown silence 至 07-14(ID 867811af)。只差交換機側 SNMP 生效。
-    【進度 2026-07-08】使用者已在交換機 UI 建 community(表列 sw3f-3671ed76d4566e7,
-    view=all/只讀)——但 161/udp 仍 ICMP connection refused(exporter 實測;OpenWrt
-    Allow 132 包/SNAT 33 包=路徑正常),即 agent 未在聽:疑「SNMP 全局開關/使能」
-    未開或未按應用+保存。portal 0.4.1 已備妥接入(switch3f 卡 up 後自動顯示
-    sysUpTime+N/M 埠 up)。▶ 待使用者:UI 找 SNMP 狀態/使能開關開啟並保存後回報,
-    agent 立即驗鏈(注意:表列 community 恰 20 字,若通了但 timeout=可能被截斷,
-    屆時用全長 29 字/截斷 20 字兩種測試分辨)。
+    【收案 2026-07-08】交換機通,全鏈上線:
+    - 開關位置=安全→管理访问权限→管理服务(Telnet/SSH/HTTP/HTTPS/SNMP 服務清單),
+      不在管理→SNMP 選單下——由 UI 語言檔 lang/defLang.js 分析定位
+      (檔已留存 workspace/switch3f/defLang.js 利於日後設定);
+    - community 截斷實錘:開通後 refused→timeout,自製最小 SNMP GET A/B 測
+      (29 字 timeout/20 字有回應/16 字 timeout)=UI 建立時截斷為 20 字;
+      我方適配:snmp-auth.yml+CT260 env 同步 20 字值(雙端備份);
+    - sysUpTime 補齊:stock if_mib 不含→snmp-auth.yml 疊加自定義 sys_uptime module,
+      Prometheus job module=if_mib,sys_uptime(★sed -i 換 inode,單檔 bind-mount
+      須 docker restart prometheus,HUP 不夠);
+    - 驗證:target up、sysUpTime≈39d、28 介面入庫、silence bf25d384 已撤、
+      portal 設備卡實亮「ok|8/28 埠 up|39d」、targets 21/23(餘 2=VM300 停機預期);
+    - AP=小米 BE3600 Pro 不支援 SNMP,已記 V7「無法觀測」。本項收案。
 
 -------------------------------------------------------------------------------
 26. IoT 段 AGH per-client 過濾

@@ -1973,3 +1973,28 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   11 端點 200、/kiosk 200、M3 回歸 403、switch3f 卡=unk「SNMP 未應答」誠實態、
   Portal 本站 kuma_ok=true。零新 env、零防火牆、無新憑證。
 - 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal041-<TS>+force-recreate。
+
+### 待辦25 收案:Switch3F SNMP 上線(2026-07-08 晚;portal 0.4.2)
+- 卡點突破:使用者在管理→SNMP 家族頁遍尋不著開關——從 router 同網段抓交換機 UI
+  語言檔 lang/defLang.js 分析,定位總開關在「安全→管理访问权限→管理服务」
+  (Telnet/SSH/HTTP/HTTPS/SNMP 服務清單;RMON 頁提示原文「当前SNMP服务已禁用」佐證)。
+  defLang.js 已留存 workspace/switch3f/(使用者要求,git 白名單已納管)。
+- community 截斷:開通後 refused→timeout(=聽了但丟包)。自製最小 BER SNMPv2c GET
+  (portal 容器內跑,憑證走 scp+pct push 檔案動線)A/B 測:29 字 timeout、
+  20 字有回應、16 字 timeout=UI 建立時截斷為恰 20 字(表格顯示即實值,非顯示截斷)。
+  處置:我方適配——CT201 snmp-auth.yml(備份 _backups/snmp-auth.yml.before-trunc-*)
+  與 CT260 switch3f-snmp.env 同步 20 字值;20 字=sw3f-+15 hex≈60bit,RO+SNAT 限源可接受。
+- sysUpTime 補齊:v0.30.1 stock if_mib 不含 sysUpTime→snmp-auth.yml 疊加自定義
+  sys_uptime module(get 1.3.6.1.2.1.1.3.0),Prometheus job 參數改
+  module=["if_mib,sys_uptime"](一次抓兩模組,exporter 多檔 config 合併皆 v0.30 原生支援)。
+- ★新坑入檔:sed -i 改 /opt/monitoring/prometheus.yml 換了 inode,容器單檔 bind-mount
+  仍指舊 inode——promtool check(容器內)看的是舊檔、HUP reload 無效果;
+  必須 docker restart prometheus 重新解析掛載。日後改單檔掛載的設定一律 restart 該容器。
+- portal 0.4.2:live.py switch3f 卡 uptime/埠數解耦(原 0.4.1 寫法埠數被 sysUpTime
+  存在與否所擋);部署 finish-portal-042.sh 全綠。
+- 終驗:target up、sysUpTime≈39.2d、ifNumber=28、portal 卡「ok|8/28 埠 up|39d」、
+  silence bf25d384 撤(餘 0)、targets 21/23(cowrie/vm300=停機預期)、
+  Grafana switch3f-snmp 面板同源指標已有數據。
+- AP 收案面:小米 BE3600 Pro 不支援 SNMP→V7 AP Main 條目記「無法觀測」。
+- 回滾:snmp-auth.yml 蓋回 before-trunc 備份+restart snmp-exporter;
+  prometheus.yml 蓋回 before-sysuptime 備份+restart prometheus;portal 換回 0.4.1。

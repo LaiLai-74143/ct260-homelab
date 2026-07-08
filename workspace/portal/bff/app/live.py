@@ -142,9 +142,10 @@ async def overview() -> dict:
                     m = round(mem[job]) if job in mem else None
                     dk = round(disk[job]) if job in disk else None
                     uptime = _human_secs(boot[job]) if job in boot else "—"
-                elif job in snmp_upt:
-                    # SNMP bare 主機(switch3f):sysUpTime + 埠 up 數(待辦25 接入)
-                    uptime = _human_secs(snmp_upt[job])
+                else:
+                    # SNMP bare 主機(switch3f,待辦25):uptime 與埠數各自獨立,缺一不擋另一
+                    if job in snmp_upt:
+                        uptime = _human_secs(snmp_upt[job])
                     if job in ports_all:
                         note = f"{int(ports_up.get(job, 0))}/{int(ports_all[job])} 埠 up"
             else:

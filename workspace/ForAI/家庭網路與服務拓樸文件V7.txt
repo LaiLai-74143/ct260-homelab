@@ -200,7 +200,8 @@ PC health endpoint:    http://192.168.40.4:18080/(keyword "OK",供 Kuma 監控)
 ### 1.6 AP / Switch
 
 ```text
-AP Main   192.168.50.41(VLAN50;小米路由無法設 VLAN,AP 本體維持 IoT 段)
+AP Main   192.168.50.41(VLAN50;小米路由無法設 VLAN,AP 本體維持 IoT 段;
+          小米 BE3600 Pro 硬不支援 SNMP=監控面「無法觀測」,待辦25 調查結論 2026-07-08)
 AP Node   192.168.50.42(VLAN50)
 Switch3F  192.168.10.21(VLAN10 infra)
 ```
@@ -630,7 +631,7 @@ Allow-Servers-To-DMZProxy-443       servers -> 10.60.60.10 tcp/443
 Allow-DMZProxy-To-Prometheus-9090   dmz/10.60.60.10 -> 10.80.80.11 tcp/9090
 Allow-DMZProxy-To-Portal-8088       dmz/10.60.60.10 -> 10.80.80.11 tcp/8088(portal.hl,待辦49 2026-07-08)
 Allow/SNAT-Monitor-To-Switch3F-Infra-SNMP-161  10.80.80.11 -> 192.168.10.21 udp/161(SNAT .10.1;
-  待辦25 snmp_exporter,2026-07-07;交換機側未開=掛起中)
+  待辦25 snmp_exporter,2026-07-07;2026-07-08 交換機側開通=上線)
 
 # Loki 日誌管線(push 單向、無 SNAT;CT202 同段、CT100 走 CT201 eth1 直連皆免規則)
 Allow-CT260-To-Monitor-Loki-3100           servers/192.168.20.60 -> 10.80.80.11 tcp/3100
@@ -835,8 +836,13 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
               Gotify 改 :8091;詳見監控告警 §5g;Kuma 探活 :8091/v1/health 待 UI 加)
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
-              ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.4.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+              ~/.config/homelab/switch3f-snmp.env;2026-07-08 上線:交換機側開通後
+              community 實為 20 字——UI 建立時截斷,雙端已同步 20 字值;
+              snmp-auth.yml 並疊加自定義 sys_uptime module(stock if_mib 不含 sysUpTime),
+              Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
+              ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
+              後必須 docker restart prometheus,HUP reload 不夠)
+portal        8088   portal:0.4.2 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -881,13 +887,14 @@ portal        8088   portal:0.4.1 本地 build(python:3.13.5-slim+pin;待辦49 M
               M4 DoD 達成(2026-07-08 使用者實機確認);Kuma portal monitor 已建
               (kuma_ok=true,驗收 e 銷);0.4.1(2026-07-08):設備頁 Grafana 入口卡
               (homelab-overview)+安全頁入口卡升「防火牆審計」文案+switch3f 卡
-              接 SNMP(sysUpTime+埠 up 數,up 後自動亮;待辦25 交換機側仍未應答)
+              接 SNMP;0.4.2(2026-07-08):switch3f 卡 uptime/埠數解耦(缺一不擋另一),
+              交換機開通後實亮 ok|N/28 埠 up|uptime(待辦25 收案)
 ```
 
-Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);稽核 19 up / 4 down——
-  dxp4800-node(connection refused,非預期,見 §1.4)、cowrie-exporter 與 vm300-honeypot-node
-  (no route,VM300 停機屬預期)、snmp-switch3f(交換機側 SNMP 未開,待辦25 掛起,
-  TargetDown 靜默至 2026-07-14)。
+Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測
+  21 up / 2 down——僅 cowrie-exporter 與 vm300-honeypot-node(no route,VM300 停機屬預期);
+  dxp4800-node 已修復(exporter start 即癒)、snmp-switch3f 已上線(交換機側開通,
+  silence 已撤,uptime/28 埠指標入庫)。
 Loki 管線細節(各節點 promtail、label 慣例、風險注記)見《監控告警.txt》§5e(單一來源,本文不重列)。
 
 node_exporter:原生 systemd(unit 名=prometheus-node-exporter.service,寫自動化時注意);
