@@ -659,10 +659,12 @@
     服務目錄 phone flag 對齊 V7 發證模型(11 條由保守改可達;AP Main IP 錯植 .50.2→更正 .50.41);
     MCSM 人員面開通=OpenWrt Allow-PC40-To-Game-MCSM-23333 + CT100 nft 點名
     192.168.40.4/10.60.60.10(scripts/finish-mcsm-access.sh --with-phone;V7 §4.4/§7 已記)。
+    【進度 2026-07-08 追加(0.2.2)】MCSM key 落地=決策4 結案:面板 API-user
+    (permission-1 唯讀)+僅指派 Fabric-MC,BFF 走使用者級 /api/auth/?advanced=true
+    解析 mcping 玩家數(權限最小化,admin 端點 403 屬預期)。
     驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活);
-    ▶ 剩:使用者開 http://10.70.70.20:23333 生 MCSM key(驗唯讀形態)填 portal.env→
-    up -d --force-recreate portal、Homepage 退役儀式(服務目錄用順後點名,照
-    docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
+    ▶ 剩:使用者把 MCSM 實例類型設 Minecraft Java(mcping 上線玩家數即亮,免重部署)、
+    Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

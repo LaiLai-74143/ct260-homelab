@@ -830,8 +830,9 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.2.1 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08;
-              0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化)
+portal        8088   portal:0.2.2 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08;
+              0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
+              0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
               +PC40 健檢;Kuma 經 extra_hosts host.docker.internal:3001,KUMA_API_KEY
               已填 /opt/portal/portal.env(600,2026-07-08)——綠燈上線,對映鍵=Kuma UI
@@ -847,7 +848,10 @@ portal        8088   portal:0.2.1 本地 build(python:3.13.5-slim+pin;待辦49 M
               M2 已上線(2026-07-08):七模塊頁+L2 /host/<slug>(6h sparkline+Loki 尾巴)
               +服務目錄(可達性三態,Homepage 退役等使用者驗收後另案)+告警 24h 時間軸;
               電力=pending 誠實態(nut_exporter 未部署);Cowrie 卡=源停機誠實態;
-              MCSM_API_KEY 待使用者(玩家數);Kuma 探活 /api/health 待 UI 加;
+              MCSM_API_KEY 已填(2026-07-08;MCSM 帳號 API-user permission-1 唯讀、
+              僅指派 Fabric-MC——/api/overview 等 admin 端點 403 屬預期;
+              玩家數待使用者把實例類型設 Minecraft Java 使 mcping 上線,即亮免重部署);
+              Kuma 探活 /api/health 待 UI 加;
               M3(動作按鈕)/M4(kiosk)未做
 ```
 

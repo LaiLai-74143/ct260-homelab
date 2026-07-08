@@ -372,7 +372,7 @@ async def security() -> dict:
     }
 
 
-# ---------------- game(M2:Prometheus 為主,MCSM key 就緒後補玩家數) ----------------
+# ---------------- game(M2:Prometheus 為主;玩家數=MCSM 使用者級 API,2026-07-08 實測接上) ----------------
 
 async def game() -> dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -389,14 +389,26 @@ async def game() -> dict:
     if MCSM_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
-                r = await client.get(f"{MCSM_URL}/api/overview",
-                                     params={"apikey": MCSM_API_KEY},
+                # /api/overview 是 admin 端點;API-user 為 permission-1 唯讀帳號,
+                # 走自身資料端點只看得到被指派的實例(Fabric-MC)——權限最小化
+                r = await client.get(f"{MCSM_URL}/api/auth/",
+                                     params={"advanced": "true", "apikey": MCSM_API_KEY},
                                      headers={"X-Requested-With": "XMLHttpRequest"})
             if r.status_code in (401, 403):
                 note = "MCSManager 憑證失效(401/403)——請輪替 API key"
             elif r.status_code == 200:
-                # 面板總覽僅證明可達;實例玩家數待實測 key 後補上精確端點
-                note = "MCSM 已連線;玩家數端點待 key 實測後接上"
+                insts = (r.json().get("data") or {}).get("instances") or []
+                inst = next((i for i in insts if i.get("nickname") == "Fabric-MC"),
+                            insts[0] if insts else None)
+                if inst is None:
+                    note = "MCSM key 可用但無實例指派——面板把 Fabric-MC 指派給 API-user 即接通"
+                else:
+                    info = inst.get("info") or {}
+                    if info.get("mcPingOnline"):
+                        players = int(info.get("currentPlayers") or 0)
+                        # mcping 只給人數不給名單;player_names 維持 None(前端已誠實顯示)
+                    else:
+                        note = "MCSM mcping 未上線——面板實例類型設 Minecraft Java 後自動有玩家數"
             else:
                 note = f"MCSManager 回應異常: HTTP {r.status_code}"
         except Exception as e:  # noqa: BLE001

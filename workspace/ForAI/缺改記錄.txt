@@ -1815,3 +1815,16 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   up -d --force-recreate portal（0.2.0 image 仍在）；MCSM=uci delete
   firewall.allow_pc40_to_game_mcsm + CT100 蓋回 before-mcsm 備份。
 - 剩：使用者開 MCSM 面板生 key（驗唯讀形態）填 portal.env 後 force-recreate。
+
+### 待辦49 入口大廳 0.2.2:MCSM 玩家數管線接上(2026-07-08,使用者操作+授權)
+- 使用者建 MCSM 帳號 API-user(permission-1 普通使用者=唯讀形態成立,決策4 疑慮解除)
+  +生 API key 填 /opt/portal/portal.env+面板指派 Fabric-MC 實例。
+- BFF game():/api/overview(admin,403)改走使用者級 /api/auth/?advanced=true——
+  key 只看得到被指派實例,權限最小化;解析 instances[].info.currentPlayers(mcping)。
+- 實測 mcPingOnline=false(實例類型=通用)→ players_online=null+誠實 note;
+  使用者把實例類型改 Minecraft Java 後即亮,免重部署。mcping 無玩家名單,player_names 維持 None。
+- 部署 finish-portal-022.sh(0.2.1→0.2.2);十端點 200;容器內 KUMA_len=44/MCSM_len=32。
+- 附註:探測期間 MCSM /api/auth 回應含 apiKey 原文一度印入對話記錄(內網低權限帳號,
+  風險低;使用者可自行重生 key 並更新 portal.env)。
+- 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal022-*(最早一份)+
+  up -d --force-recreate portal(0.2.1 image 仍在)。
