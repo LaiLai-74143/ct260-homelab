@@ -55,6 +55,11 @@ body {
   to { opacity: 1; }
 }
 
+/* kiosk 深黑底 —— 報告 §6 RWD/kiosk 條文明定;非六色 token,僅此一處使用(偏離 D3) */
+.kiosk-root {
+  background: #000;
+}
+
 /* 鍵盤焦點可見(§7) */
 :focus-visible {
   outline: 2px solid var(--amber);

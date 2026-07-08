@@ -1919,3 +1919,31 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - portal Kuma 探活 URL 裁決:用既有 monitor.home.arpa(零 DNS 改動),
   http://monitor.home.arpa:8088/api/health(CT201 實測解析+ok:true;驗收 e 的 monitor
   建立仍待使用者 UI 確認)。
+
+### 待辦49 M4 kiosk 輪播(2026-07-08 晚,portal 0.3.0→0.4.0)
+- 使用者點名「可以開始實作M4了」;設計沿用 2026-07-08 plan 審查備妥方案(§3),直接動工。
+- 前端(純前端改動,BFF 僅版本字串):
+  - main.tsx:/kiosk 從 Layout children 抽出升頂層兄弟路由——側欄/tabbar/全域快捷鍵
+    天然不存在,零 Layout 條件式;原 kiosk Stub 退場,pages/Stub.tsx 已無使用者→刪除。
+  - 新 pages/Kiosk.tsx:重用 <Home/><Devices/><Security/> 三屏(整頁重用、新碼最小),
+    自持 useStream()(SSE 快取覆寫照常);輪播 20s/屏,?interval=秒 可調(下限 5、
+    非法值回預設);setTimeout 以屏 index 為 key=手動切屏自然重置計時;
+    tap 三分區 overlay(左=上屏/中=暫停續播/右=下屏),內容層 pointer-events-none
+    防牆板誤觸跳路由;鍵盤 ←/→/空白同義(驗收除錯用);footer 三圓點 active=amber
+    +「‖ 已暫停」mono 標記;reduced-motion(matchMedia)=去 route-fade 瞬切、輪播照轉
+    (換屏是內容更新非裝飾動效)。
+  - index.css:.kiosk-root 深黑底 #000(偏離 D3:報告 §6 kiosk 條文明定深黑底,
+    不進六色 token 表,單一 class 註明出處)。
+  - 版本三處對齊 0.4.0(package.json/Layout v0.4/BFF FastAPI version)。
+- mock 驗收 18/18 PASS(e2e-m4-mock.mjs 留存 repo;平板 1024×768 主斷點):
+  無導航/深黑底/三圓點、tap 三分區、暫停時不自動換屏、interval=5 自動輪播、
+  尾屏循環回頭、interval 非法值不 crash、reduced-motion 兩態(route-fade 有無)、
+  誤觸不離開 /kiosk。截圖核過(設備屏截於淡入中段偏暗屬正常)。
+- 部署:finish-portal-040.sh(照 030 冪等模式:build→tar+sha256→scp pve24→pct push→
+  docker build portal:0.4.0 pin→compose 錨點 0.3.0→0.4.0 先驗後裝→force-recreate)。
+  驗證:portal:0.4.0 Up、11 GET 端點 200、/kiosk SPA fallback 200、M3 驗證鏈回歸
+  (無 Remote-User→403)OK。零新 env 鍵、零防火牆變更、無新憑證。
+- 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal040-<TS> + force-recreate
+  (0.3.0 image 仍在本機);源碼備份 /root/_backups/portal-src-before-040-*.tgz。
+- 待使用者(M4 DoD):平板實機開 http://10.80.80.11:8088/kiosk(或 portal.hl/kiosk)
+  看輪播;建議過夜 soak(EventSource/計時器洩漏觀察)。

@@ -683,10 +683,23 @@
     TG 回發 DONE 無錯→已 expire 清理)。
     【M3 DoD 達成 2026-07-08 21:12】使用者手機 portal.hl 按掉真實告警
     silence-1h(HostHighMemory) rc=0,TG 實收 via=portal 兩則(含 E2E)——M3 結案。
-    ▶ 待使用者:驗收 b/e 舊項(PC40 瀏覽走查、Kuma UI 加 /api/health 探活=退役前置0)。
-    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M4(kiosk;
-    設計已備於 2026-07-08 plan 審查:/kiosk 頂層路由重用 Home/Devices/Security 三屏
-    輪播 20s/屏+tap 三分區+reduced-motion 瞬切,屆時直接動工)。
+    【進度 2026-07-08 M4(0.4.0)】kiosk 施工+部署(使用者點名「可以開始實作M4了」):
+    /kiosk 升頂層路由繞過 Layout(無側欄/tabbar/快捷鍵,Stub 頁退場),深黑底 #000
+    (偏離 D3:非六色 token,單一 .kiosk-root class 註明出處);重用大廳/設備/安全
+    三屏輪播 20s/屏(?interval=秒 可調、下限 5、非法值回預設);tap 三分區
+    (左=上屏/中=暫停續播/右=下屏,內容層 pointer-events-none 防牆板誤觸)+
+    鍵盤 ←/→/空白同義;reduced-motion=去 route-fade 瞬切、輪播照轉;
+    footer 三圓點(active=amber)+「‖ 已暫停」標記;自持 useStream(SSE 照推)。
+    mock 驗收 18/18 PASS(Playwright 平板 1024×768 主斷點:tap 三分區/暫停不換屏/
+    interval 生效/循環回頭/reduced-motion 兩態,e2e-m4-mock.mjs 留存 repo);
+    部署 finish-portal-040.sh(0.4.0 Up、11 端點 200、/kiosk SPA fallback 200、
+    M3 驗證鏈回歸 403 OK)。純前端+版本字串,零新 env 零防火牆。
+    ▶ M4 DoD 待使用者:平板實機開 http://10.80.80.11:8088/kiosk(或 portal.hl/kiosk)
+    看輪播;建議過夜 soak 觀察(EventSource/計時器洩漏)。
+    ▶ 待使用者:驗收 b/e 舊項(PC40 瀏覽走查、Kuma UI 加 /api/health 探活=退役前置0,
+    URL 用 http://monitor.home.arpa:8088/api/health、Friendly Name=portal)。
+    ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6;
+    35 條 href 盤點副本=ansible/backups/ct201/opt/homepage/config/services.yaml)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

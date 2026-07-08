@@ -836,7 +836,7 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.3.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3,2026-07-08;
+portal        8088   portal:0.4.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -871,7 +871,13 @@ portal        8088   portal:0.3.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               SoT=CT260 ntfy-webhook.py ACTIONS);pct-reboot-201=fire-and-forget 202;
               基建(finish-webhook-portal-token.sh)+0.3.0 部署(finish-portal-030.sh)
               +live E2E(finish-m3-e2e.sh:silence 自測四點過+自動清理)皆 2026-07-08 完成;
-              M4(kiosk)未做
+              M4 kiosk(2026-07-08 施工+部署,portal 0.4.0):/kiosk 頂層路由繞過 Layout
+              (無側欄/tabbar/快捷鍵),深黑底 #000,重用大廳/設備/安全三屏自動輪播
+              20s/屏(?interval=秒 可調,下限 5);tap 三分區(左=上屏/中=暫停/右=下屏,
+              內容層 pointer-events-none 防牆板誤觸跳路由)+鍵盤 ←/→/空白同義;
+              reduced-motion=去淡入瞬切、輪播照轉;純前端零新 env 零防火牆,
+              部署 finish-portal-040.sh(11 端點 200+/kiosk 200+M3 驗證鏈回歸);
+              牆板(待辦44)直接開 :8088/kiosk 或 portal.hl/kiosk
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);稽核 19 up / 4 down——

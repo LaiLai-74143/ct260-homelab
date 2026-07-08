@@ -25,7 +25,7 @@ import Game from './pages/Game'
 import Life from './pages/Life'
 import More from './pages/More'
 import Host from './pages/Host'
-import Stub from './pages/Stub'
+import Kiosk from './pages/Kiosk'
 
 const router = createBrowserRouter([
   {
@@ -42,10 +42,11 @@ const router = createBrowserRouter([
       { path: 'm/life', element: <Life /> },
       { path: 'more', element: <More /> },
       { path: 'host/:name', element: <Host /> },
-      { path: 'kiosk', element: <Stub title="Kiosk 輪播" api="M4(待辦44 牆面平板)" /> },
       { path: '*', element: <Home /> },
     ],
   },
+  // kiosk 頂層路由繞過 Layout:側欄/tabbar/全域快捷鍵天然不存在(M4)
+  { path: '/kiosk', element: <Kiosk /> },
 ])
 
 const qc = new QueryClient({
