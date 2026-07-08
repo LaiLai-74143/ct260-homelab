@@ -3,6 +3,7 @@ import StatusBanner from '../components/StatusBanner'
 import BriefCard from '../components/BriefCard'
 import ModuleCard, { type ModuleCardData } from '../components/ModuleCard'
 import { MODULES } from '../modules'
+import { SITE_GROUPS } from '../sites'
 import type { ModuleStub } from '../types'
 
 /** BFF 完全失聯:離線畫面給出路而非情緒(§7) */
@@ -69,6 +70,28 @@ export default function Home() {
       <div className="mb-2.5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">MODULES</div>
       <div className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
         {cards.map((c) => <ModuleCard key={c.route} m={c} />)}
+      </div>
+
+      {/* 常用網站(Homepage bookmarks 搬遷,Homepage 退役前置) */}
+      <div className="mb-2.5 ml-0.5 mt-6 font-mono text-[11px] tracking-[.12em] text-muted">SITES · 常用網站</div>
+      <div className="rounded-card border border-line bg-panel px-4 py-2.5">
+        {SITE_GROUPS.map((g) => (
+          <div key={g.label} className="flex flex-wrap items-center gap-1.5 border-b border-line py-2 last:border-b-0">
+            <span className="w-full shrink-0 font-mono text-[10px] tracking-wide text-muted sm:w-[104px]">{g.label}</span>
+            {g.sites.map((s) => (
+              <a
+                key={s.name}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-btn border border-line px-2.5 py-1 text-[12.5px] transition-colors duration-150 hover:border-amber"
+              >
+                <span className="mr-1.5 font-mono text-[10px] text-muted">{s.abbr}</span>
+                {s.name}
+              </a>
+            ))}
+          </div>
+        ))}
       </div>
     </>
   )

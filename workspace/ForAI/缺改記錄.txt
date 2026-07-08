@@ -2041,3 +2041,11 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - Homepage 退役前置:底部 bookmarks(5 組 14 站)搬入 portal 大廳「常用網站」板塊。
 - 查證副產物:VM300 stopped(onboot=1 未被人工拉起,Cowrie 週報/出網收斂皆卡此);
   Wazuh 14e 調噪期(至 07-12)零動作記錄;Kuma Paperless monitor 常年紅燈待修。
+
+### portal 0.5.1:大廳「常用網站」板塊(2026-07-08 晚,Homepage 退役前置)
+- 源=ansible 備份 bookmarks.yaml(5 組 14 站),沿用使用者原命名/縮寫/分組。
+- 前端:src/sites.ts(站點 SoT)+ Home.tsx MODULES 下方新 SITES 段(分組 chip,
+  target=_blank+noreferrer);純前端改動,零 env 零防火牆;e2e-sites-mock.mjs 留存。
+- 驗證:mock 6/6 PASS(14 顆/5 組標籤/noreferrer/模塊卡回歸/手機斷點);
+  finish-portal-051.sh 部署全綠(11 端點 200+/kiosk 200+M3 回歸 403+live bundle grep)。
+- 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal050-* + force-recreate。

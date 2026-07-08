@@ -728,7 +728,10 @@
     nut_upsc_ok=1、8 指標齊);live 驗收全過:Prometheus 入庫(pve24-server:9100)、
     /api/power 活數據(市電/充電 100%/負載 28%≈280W/輸入 114V)、首頁電力卡 ok
     「市電·電池 100%」、三告警 inactive/ok、使用者截圖電力頁 6 tiles 實亮——電力模塊結案。
-    ▶ 剩:Homepage 退役儀式(低優先級,使用者點名後開)。
+    【進度 2026-07-08(0.5.1)】Homepage 退役前置(使用者點名):底部 bookmarks
+    (AI/Social/Video/Private Tracker/Network 5 組 14 站)搬入大廳「常用網站」板塊
+    (src/sites.ts=站點 SoT,日後加站直接改檔);mock 6/6 PASS、部署全綠。
+    ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。
