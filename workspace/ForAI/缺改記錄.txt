@@ -1898,3 +1898,24 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   finish-m3-e2e.sh(silence-1h/NotifySelfTest:POST 200 rc=0→/api/alerts silences 可見→
   webhook.log RUN src=10.80.80.11 via=portal→DONE rc=0 TG 回發無錯→amtool expire 清理)。
   剩使用者面:TG 實收確認、手機按掉一次真實告警(M3 DoD)、驗收 b/e 舊項。
+
+### DXP4800 監控修復 + Kuma 探活整理(2026-07-08 晚,隨待辦49 M3 收尾)
+- 症狀:Kuma「UGREEN NAS」monitor 長紅(0.2.1 起如實亮紅);使用者查 UI 發現其實探的是
+  TCP nas.home.arpa:9100(node_exporter 當存活代理),與 Prometheus DXPNodeExporterDown
+  (connection refused)同根因。
+- 誤診支線(當日加、當日回滾,零殘留):初判為 8243 無 Monitor 放行,經使用者批准加
+  Allow-Monitor-To-DXP4800-Storage-NASUI-8243 並實測——規則載入但 8243 仍 timeout,
+  router(.30.1)同網段測通=UGOS 管理面只回同網段來源(PC40→8243 帶 SNAT .30.1 同因);
+  補 SNAT 需另一條(src='storage' 正確 egress 鏈)。使用者裁決維持 monitor 探 9100、
+  回滾該 Allow(uci delete,running ruleset 已無、Jellyfin/Loki 回歸綠)。
+  ★ 經驗:對 UGOS 管理埠(5243/8243)任何跨網段放行必須 Allow+SNAT .30.1 成對,單 Allow 無效。
+- exporter 根因:非 IP 綁定(drop-in override.conf 早已 192.168.30.3:9100)、非 linger
+  (My-Big-Nas 已在 /var/lib/systemd/linger)——unit 就是 inactive (dead) 沒被啟動,
+  journal 無事故線索。SSH 開窗後 systemctl --user start 即癒:本機/CT201 皆 200,
+  Prometheus dxp4800-node 轉 up(告警自動 resolve)。enabled+linger 齊備,重開機應自動起;
+  若再發生 dead-no-journal 再查 manager 生命週期。
+- repo 同步:workspace/dxp-node-exporter/{service,start-script} 的殘留 192.168.31.3
+  (legacy VLAN31)改 192.168.30.3,與 NAS 實況(drop-in)一致。
+- portal Kuma 探活 URL 裁決:用既有 monitor.home.arpa(零 DNS 改動),
+  http://monitor.home.arpa:8088/api/health(CT201 實測解析+ok:true;驗收 e 的 monitor
+  建立仍待使用者 UI 確認)。
