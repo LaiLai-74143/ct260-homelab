@@ -63,12 +63,20 @@ grep -q "IdentityAgent" ~/.ssh/config || sed -i '1i # 待辦22:互動鑰經 agen
 echo "== 3. 三節點裝自動鑰(from= 綁 CT260;冪等) =="
 ssh pve24 "mkdir -p ~/.ssh && cp -a ~/.ssh/authorized_keys ~/.ssh/authorized_keys.before-todo22-$TS 2>/dev/null || true
 grep -qF 'ct260-automation' ~/.ssh/authorized_keys 2>/dev/null || echo '$OPTS $PUB' >> ~/.ssh/authorized_keys"
+# dropbear 不支援 from=(OpenSSH 專屬),用其支援的 no-* 選項;來源面由防火牆(52438 放行拓樸)把關
 ssh openwrt "cp -a /etc/dropbear/authorized_keys /root/_backups/dropbear-authorized_keys.before-todo22-$TS 2>/dev/null || true
-grep -qF 'ct260-automation' /etc/dropbear/authorized_keys 2>/dev/null || echo '$OPTS $PUB' >> /etc/dropbear/authorized_keys"
+sed -i '/ct260-automation/d' /etc/dropbear/authorized_keys 2>/dev/null || true
+echo 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding $PUB' >> /etc/dropbear/authorized_keys"
+# routerpve:CT260→infra 路徑有 SNAT,對端看到的來源=192.168.10.1(SSH_CLIENT 實測)
 ssh routerpve "cp -a /etc/pve/priv/authorized_keys /root/_backups/pve-authorized_keys.before-todo22-$TS 2>/dev/null || true
-grep -qF 'ct260-automation' /root/.ssh/authorized_keys 2>/dev/null || echo '$OPTS $PUB' >> /root/.ssh/authorized_keys"
+sed -i '/ct260-automation/d' /root/.ssh/authorized_keys 2>/dev/null || true
+echo 'from=\"192.168.10.1\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding $PUB' >> /root/.ssh/authorized_keys"
 
 echo "== 4. 驗證 -auto 三別名 =="
+ssh -o BatchMode=yes -o ConnectTimeout=6 openwrt-auto 'echo ok' >/dev/null 2>&1 || {
+  echo "openwrt-auto 帶選項仍被拒,降級純鑰行(記錄取捨)"
+  ssh openwrt "sed -i '/ct260-automation/d' /etc/dropbear/authorized_keys; echo '$PUB' >> /etc/dropbear/authorized_keys"
+}
 for h in pve24-auto openwrt-auto routerpve-auto; do
   ssh -o BatchMode=yes -o ConnectTimeout=6 $h 'echo ok' >/dev/null && echo "$h OK" || { echo "$h 失敗"; exit 1; }
 done
@@ -127,20 +135,6 @@ systemctl --user enable --now hl-ssh-agent
 grep -q 'agent.sock' ~/.bashrc || echo 'export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"  # 待辦22' >> ~/.bashrc
 
 echo ""
-echo "== 8. ★互動:給 ops 鑰上密碼(自訂,輸兩次;之後 hl-unlock 用同一密碼) =="
-ssh-keygen -p -f "$OPS"
-ssh-keygen -y -P '' -f "$OPS" >/dev/null 2>&1 && { echo "鑰仍未加密?中止"; exit 1; } || echo "ops 鑰已靜態加密 ✔"
-
-echo ""
-echo "== 9. ★互動:首次解鎖(輸一次密碼,快取 6h) =="
-~/.local/bin/hl-unlock
-ssh -o BatchMode=yes pve24 'echo unlocked-path-ok'
-
-echo ""
-echo "== 10. 鎖定態演示:上鎖→直連面應失敗→再解鎖由你決定 =="
-~/.local/bin/hl-lock
-ssh -o BatchMode=yes -o ConnectTimeout=6 pve24 'echo x' 2>/dev/null && { echo "★異常:鎖定後仍可直連"; exit 1; } || echo "鎖定驗證 ✔(直連面已封)"
-~/.local/bin/watchdog-ct201.sh >/dev/null && echo "鎖定下 watchdog 仍通 ✔(自動軌不受鎖)"
-echo ""
-echo "== 完成。日常:要幹活時 hl-unlock(6h 自動失效);agent 碰鎖會請你解鎖。 =="
-echo "   現在是上鎖狀態;要繼續讓 agent 幹活就跑一次 hl-unlock。"
+echo "== 非互動段完成。最後一步(設密碼)請你親跑:"
+echo "   root 可直接:su - codex -c 'bash ~/workspace/monitoring/finish-22b-passphrase.sh'"
+echo "   (root su 到 codex 免密碼;中途要你自訂 ops 鑰密碼) =="

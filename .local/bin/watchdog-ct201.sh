@@ -11,7 +11,7 @@
 # 測試鉤子：WD_SSH_HOST=<不存在主機> 可模擬全鏈失敗。
 set -u
 
-SSH_HOST="${WD_SSH_HOST:-pve24}"
+SSH_HOST="${WD_SSH_HOST:-pve24-auto}"
 STATE="/var/tmp/wd-ct201.state"
 LOG="$HOME/.local/state/homelab-notify/watchdog-ct201.log"
 ENVF="$HOME/.config/homelab/notify-telegram.env"

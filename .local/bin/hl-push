@@ -26,8 +26,8 @@ case "$kind" in
   ssh)   # p2 = host
     scp -q "$local" "$p2:$new" ;;
   pct)   # p2 = ctid ; stage on pve24 then pct push into the container
-    scp -q "$local" "pve24:/tmp/hlpush.$$"
-    $SSH pve24 "sudo pct push $p2 /tmp/hlpush.$$ '$new' && rm -f /tmp/hlpush.$$" ;;
+    scp -q "$local" "pve24-auto:/tmp/hlpush.$$"
+    $SSH pve24-auto "sudo pct push $p2 /tmp/hlpush.$$ '$new' && rm -f /tmp/hlpush.$$" ;;
   *) echo "hl-push: unsupported node kind '$kind' for $node" >&2; exit 2 ;;
 esac
 

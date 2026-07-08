@@ -46,7 +46,7 @@ PARAM_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
 
 # --- 白名單動作字典：每顆按鈕 = 這裡一個具名動作；除 silence-* 外一律無參數 ---
 # 執行路徑沿用 notifier 慣例：CT260 不能直連 VLAN80 → ssh pve24 -> pct exec。
-_PCT201 = ["ssh", "pve24", "sudo", "pct", "exec", "201", "--"]
+_PCT201 = ["ssh", "pve24-auto", "sudo", "pct", "exec", "201", "--"]
 
 
 def _amtool(dur):
@@ -74,14 +74,14 @@ ACTIONS = {
                                  "cmd": _PCT201 + ["bash", "-lc",
                                                    "cd /opt/monitoring && docker compose restart"]},
     # 容器/CT 層級
-    "pct-reboot-201": {"desc": "重啟 CT201（監控主機）", "cmd": ["ssh", "pve24", "sudo", "pct", "reboot", "201"]},
-    "pct-start-250":  {"desc": "啟動 CT250（沙盒，窮人遙控器）", "cmd": ["ssh", "pve24", "sudo", "pct", "start", "250"]},
+    "pct-reboot-201": {"desc": "重啟 CT201（監控主機）", "cmd": ["ssh", "pve24-auto", "sudo", "pct", "reboot", "201"]},
+    "pct-start-250":  {"desc": "啟動 CT250（沙盒，窮人遙控器）", "cmd": ["ssh", "pve24-auto", "sudo", "pct", "start", "250"]},
     # 其他節點具名處置
     "restart-squid":     {"desc": "重啟 CT202 squid",
-                          "cmd": ["ssh", "pve24", "sudo", "pct", "exec", "202", "--",
+                          "cmd": ["ssh", "pve24-auto", "sudo", "pct", "exec", "202", "--",
                                   "systemctl", "restart", "squid"]},
     "restart-ctdmz-nft": {"desc": "重啟 CT203 ctdmz-nft（會清空 tailnet 通行證=需重驗）",
-                          "cmd": ["ssh", "pve24", "sudo", "pct", "exec", "203", "--",
+                          "cmd": ["ssh", "pve24-auto", "sudo", "pct", "exec", "203", "--",
                                   "systemctl", "restart", "ctdmz-nft"]},
 }
 

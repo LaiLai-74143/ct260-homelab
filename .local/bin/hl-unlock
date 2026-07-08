@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# hl-unlock(待辦22):解鎖高權 ops 金鑰 6 小時(ssh-agent 限時快取,到期自動失效)。
+# 解鎖範圍=ct260_ops_ed25519(pve24/openwrt/routerpve/dxp4800 直連面);
+# 自動化(watchdog/ansible/webhook/晨報)走 ct260_auto 專鑰,不受鎖影響。
+# 提前上鎖:hl-lock。密碼只進 KDF 記憶體運算,不落任何檔案。
+set -euo pipefail
+export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
+systemctl --user start hl-ssh-agent 2>/dev/null || true
+for i in 1 2 3; do [ -S "$SSH_AUTH_SOCK" ] && break; sleep 1; done
+[ -S "$SSH_AUTH_SOCK" ] || { echo "agent socket 未就緒:systemctl --user status hl-ssh-agent"; exit 1; }
+ssh-add -t 6h "$HOME/.ssh/ct260_ops_ed25519"
+echo "已解鎖 6h(到期自動上鎖):"
+ssh-add -l

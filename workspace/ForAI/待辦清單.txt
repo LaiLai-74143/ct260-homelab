@@ -489,8 +489,10 @@
     · 鎖線=直 root 面;pct 面常開(自動化命脈,受 codex-admin sudo 白名單束縛)。
     · 已知取捨入檔:auto 鑰在 openwrt/routerpve=root 明文(夜備連續性;wazuh FIM
       對 authorized_keys 變動 L10 兜底);github 部署鑰維持明文(單 repo 限權)。
-    ★ 待使用者(互動,終端跑):bash ~/workspace/monitoring/finish-22-keylock.sh
-      (agent 做金鑰/IAM 面被分類器攔+中途需你設密碼;跑完=上鎖態,幹活前 hl-unlock)。
+    【非互動段完成 2026-07-09】三節點 -auto 鑰裝妥(dropbear 無 from=/routerpve SNAT
+      兩踩坑見缺改)、六消費者切軌、回歸全綠、agent 常駐已啟。
+    ★ 待使用者最後一步(root 可跑):su - codex -c 'bash ~/workspace/monitoring/
+      finish-22b-passphrase.sh'(設 ops 鑰密碼+首解+鎖定態演示;跑完=上鎖態)。
     ▶ 執行後補:V7 金鑰段+memory 更新(以實跑結果為準)。.env 面(age 公鑰加密+tmpfs)
       =Phase 2,待鎖鑰跑順後評估(多數 .env 為 24/7 執行期需要,可鎖面小)。
 

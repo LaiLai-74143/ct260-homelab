@@ -2152,4 +2152,27 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - agent 動作全數被分類器攔(keygen/config/IAM——符合既知模式)→收斂
   finish-22-keylock.sh(互動式:三節點裝鑰→六消費者 sed 切軌→回歸驗證→
   ssh-keygen -p 設密→hl-unlock 首解→鎖定態演示斷言)。hl-unlock/hl-lock 隨附。
-- 執行後補:V7 金鑰段、memory(ssh 別名記憶加 -auto 與鎖行為)。.env 面=Phase 2。
+- 【非互動段完成 2026-07-09 上午】使用者首跑撞 openwrt 拒鑰→拆兩段
+  (22=非互動,22b=設密互動),agent 以腳本代跑 22 全綠:三 -auto 別名 OK、
+  六消費者切軌、回歸=watchdog OK+ansible ping 12 SUCCESS+webhook 200+hl-run OK、
+  hl-ssh-agent 常駐已 enable。餘 22b 待使用者(root 可 su - codex 免密跑)。
+- ★踩坑5:dropbear 不支援 authorized_keys 的 from= 選項(OpenSSH 專屬)——整行鑰被拒;
+  openwrt 改用其支援的 no-port/agent/X11-forwarding,來源面靠防火牆拓樸把關。
+- ★踩坑6:CT260→routerpve 路徑有 SNAT,對端 SSH_CLIENT=192.168.10.1——
+  routerpve 的 from= 須寫 SNAT 後位址,寫 20.60 必拒。
+- 執行 22b 後補:V7 金鑰段。memory 已更新(-auto 別名+鎖行為)。.env 面=Phase 2。
+
+### 待辦㉚ 訂閱源上線+濃縮踩坑(2026-07-09 上午,使用者授權代跑)
+- squid RSS 白名單(永久,非暫時窗):.ithome.com.tw/technews.tw/hnrss.org/
+  .servethehome.com/selfh.st/feeds.arstechnica.com——agent inline sed 被攔、
+  以 finish-30b-feeds.sh 腳本形式代跑通過。
+- FreshRSS compose 加 squid proxy env(CT270 常態斷網,容器抓 feed 走 CT202;
+  libcurl 吃 http(s)_proxy env 實證有效);quickadd 7 訂閱(6 推薦+內建 FreshRSS
+  releases),未讀 151,晨報「今日訊息」實料就位。
+- ★踩坑:deepseek v4-flash max_tokens=500 被 reasoning 吃光→content 空字串→
+  靜默 fallback(無 error log,「不是失敗是空回」);調 1200+輸入 40→25 條後
+  繁中濃縮正常。教訓:reasoning 模型的 max_tokens 要含思考預算,空 content 要另判。
+- 絆線誤觸插曲:使用者手機以 root 跑 ssh openwrt(root 無別名)→解析 openwrt.home.arpa
+  打 :22→絆線 drop(=使用者看到的 timeout)+SSH22TripwireHit 誤報,silence 1h
+  (eb5b65ba)註記收場。教訓:root 無 codex 的 ssh config;phone 端指令一律
+  su - codex -c 包裝。

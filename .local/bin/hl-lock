@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# hl-lock(待辦22):立即上鎖(清空 ssh-agent 快取)。到期本會自動失效,本工具供提前收回。
+set -euo pipefail
+export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
+ssh-add -D 2>/dev/null || true
+echo "已上鎖:agent 快取已清;直連面(openwrt/routerpve/pve24/dxp4800)需 hl-unlock 重新解鎖。"
