@@ -1092,6 +1092,23 @@ Codex CLI 0.142.2   config /home/codex/.codex/config.toml   model gpt-5.5   reas
   sandbox workspace-write   cli_auth_credentials_store file
 ```
 
+金鑰雙軌+6h 上鎖(待辦22,2026-07-09 上線;使用者自訂方案):
+  互動軌 ct260_ops_ed25519=passphrase 靜態加密(bcrypt KDF,密碼僅使用者知)+
+    ssh-agent 限時快取:hl-unlock 輸密解鎖 6h 自動失效、hl-lock 提前收回;
+    agent 常駐=systemd --user hl-ssh-agent(socket ~/.ssh/agent.sock,
+    ssh config 全域 IdentityAgent 指向)。鎖定時 openwrt/routerpve/pve24/dxp4800
+    直連別名 publickey 全拒(=設計行為,agent 碰鎖須請使用者 hl-unlock)。
+  自動軌 ct260_auto_ed25519(不加密)=cron 命脈:別名 pve24-auto/openwrt-auto/
+    routerpve-auto;消費者=watchdog/homelab-notify/ntfy-webhook/hl-run(pct hop)/
+    hl-push/ansible(infra 走 -auto 別名、ct 群換 auto 鑰;dxp4800 維持 ops 鑰=
+    鎖定時不可達,manual 群非日常)。
+  authorized_keys 限制:pve24 from="192.168.20.60"、routerpve from="192.168.10.1"
+    (★CT260→infra 有 SNAT,對端見 .10.1)、openwrt 僅 no-*-forwarding
+    (★dropbear 不支援 from=)。已知取捨:auto 鑰在 openwrt/routerpve=root 明文
+    (夜備連續性;wazuh FIM L10 兜底);github 部署鑰明文(單 repo 限權)。
+  鎖線:pct 面常開(codex-admin sudo 白名單束縛)、直 root 面上鎖。
+  回滾:~/_backups/todo22-*/ 蓋回+各節點 authorized_keys 刪 ct260-automation 行。
+
 ```text
 角色:乾淨的 Codex 操作節點,不是全權管理節點。
 inbound key:pc-homelab(PC -> CT260 codex)

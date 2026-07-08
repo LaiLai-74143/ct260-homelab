@@ -2161,6 +2161,9 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - ★踩坑6:CT260→routerpve 路徑有 SNAT,對端 SSH_CLIENT=192.168.10.1——
   routerpve 的 from= 須寫 SNAT 後位址,寫 20.60 必拒。
 - 執行 22b 後補:V7 金鑰段。memory 已更新(-auto 別名+鎖行為)。.env 面=Phase 2。
+- 【全案結 2026-07-09】使用者跑 22b:設密→首解→鎖定態演示全過(直連面封+watchdog 活);
+  隨後 finish-37 立即因鎖被拒(dxp4800=ops 鑰)=上鎖實戰印證。V7 §10 金鑰段已補。
+  待辦22 收案;.env 面(age)列 Phase 2 屆時再議。
 
 ### 待辦㉚ 訂閱源上線+濃縮踩坑(2026-07-09 上午,使用者授權代跑)
 - squid RSS 白名單(永久,非暫時窗):.ithome.com.tw/technews.tw/hnrss.org/
