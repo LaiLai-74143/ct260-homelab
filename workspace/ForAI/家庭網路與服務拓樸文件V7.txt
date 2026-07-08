@@ -836,7 +836,7 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.2.2 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08;
+portal        8088   portal:0.3.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -869,8 +869,8 @@ portal        8088   portal:0.2.2 本地 build(python:3.13.5-slim+pin;待辦49 M
               (BFF 驗 Remote-User,比照生活頁兩層模式,非硬邊界);按鈕=全部 firing 掛
               靜音 1h/24h+NTFY_ACTION_MAP 對映者加處置鍵(鏡像表 bff/app/registry.py,
               SoT=CT260 ntfy-webhook.py ACTIONS);pct-reboot-201=fire-and-forget 202;
-              基建已上線(finish-webhook-portal-token.sh),0.3.0 部署=finish-portal-030.sh
-              +live E2E=finish-m3-e2e.sh(待使用者執行);
+              基建(finish-webhook-portal-token.sh)+0.3.0 部署(finish-portal-030.sh)
+              +live E2E(finish-m3-e2e.sh:silence 自測四點過+自動清理)皆 2026-07-08 完成;
               M4(kiosk)未做
 ```
 

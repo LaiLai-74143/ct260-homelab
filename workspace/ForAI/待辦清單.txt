@@ -677,9 +677,12 @@
     基建已上線(scripts/finish-webhook-portal-token.sh,冪等):OpenWrt
     Allow-Monitor-To-CT260-Webhook-5001+webhook 雙 token 補丁(驗證矩陣
     401/403/403 全過)+CT201 portal.env 兩鍵落位+CT201 視角通路驗證 OK。
-    ▶ 待使用者:①跑 finish-portal-030.sh(部署 0.3.0,agent 被分類器攔,照慣例收斂)
-    ②跑 finish-m3-e2e.sh(live 無害自測 silence-1h/NotifySelfTest,驗 TG 收 via=portal)
-    ③手機 portal.hl 按掉一次真實告警=M3 DoD(報告 §11)。
+    【0.3.0 部署+live E2E 2026-07-08 完成】使用者授權後 agent 執行:finish-portal-030.sh
+    (0.3.0 Up、env 四鍵進容器、11 端點 200、action 驗證鏈 403/403)+ finish-m3-e2e.sh
+    (silence-1h/NotifySelfTest:200 rc=0→silences 可見→webhook.log via=portal→
+    TG 回發 DONE 無錯→已 expire 清理)。
+    ▶ 待使用者:①TG 實收確認(🔘 portal:已執行 silence-1h)②手機 portal.hl 按掉
+    一次真實告警=M3 DoD(報告 §11)③驗收 b/e 舊項(PC40 瀏覽、Kuma UI 加 /api/health)。
     ▶ 剩:Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M4(kiosk;
     設計已備於 2026-07-08 plan 審查:/kiosk 頂層路由重用 Home/Devices/Security 三屏
     輪播 20s/屏+tap 三分區+reduced-motion 瞬切,屆時直接動工)。

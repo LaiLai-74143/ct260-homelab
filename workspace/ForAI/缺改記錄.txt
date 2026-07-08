@@ -1893,3 +1893,8 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   ~/_backups/*.before-portal-*;部署後回滾=compose 蓋回 before-portal030 + 0.2.2 image 仍在。
 - 已知接受:Remote-User 可偽造(同生活頁 8b,真邊界=白名單+獨立 token+限速);
   限速全域共用(portal 猛按可餓死手機按鈕額度,文案提醒即止);鏡像表漂移失敗模式安全(403)。
+- 【收尾同日】使用者授權後 agent 執行部署+E2E:finish-portal-030.sh(portal:0.3.0 Up,
+  容器 env KUMA/MCSM/WHURL/WHTOK 四鍵齊,11 GET 端點 200,action 驗證鏈 403/403)、
+  finish-m3-e2e.sh(silence-1h/NotifySelfTest:POST 200 rc=0→/api/alerts silences 可見→
+  webhook.log RUN src=10.80.80.11 via=portal→DONE rc=0 TG 回發無錯→amtool expire 清理)。
+  剩使用者面:TG 實收確認、手機按掉一次真實告警(M3 DoD)、驗收 b/e 舊項。
