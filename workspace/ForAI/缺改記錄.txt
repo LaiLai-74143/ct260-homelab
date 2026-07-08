@@ -2135,3 +2135,21 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 修復=finish-37-exporter.sh(綁 0.0.0.0+--no-collector.textfile+unit 檔 world-writable
   修 644+重啟+CT201/VLAN100 兩路驗證+散落檔歸位)——agent 對 NAS 寫入被分類器攔
   (「盤點」授權不含設定寫),照慣例收斂使用者腳本,需 SSH 窗開著時跑。
+
+### 待辦㉒ 金鑰雙軌+6h 上鎖:全套備妥(2026-07-09 凌晨,使用者自訂方案)
+- 使用者裁定方案取代原 a/b/c:金鑰檔靜態加密+6h 自動上鎖+解鎖須人(密碼不落地)。
+- 機制對應:SSH 鑰=原生 passphrase(bcrypt KDF 靜態加密)+ssh-agent -t 6h=「上鎖=快取
+  到期」零重加密成本;agent 常駐=systemd --user hl-ssh-agent(固定 socket)+ssh config
+  全域 IdentityAgent(env 無關,cron/工具一體適用)。
+- 盤點結論:全站僅一把 ct260_ops_ed25519 走天下+github 部署鑰。24/7 消費者=watchdog(2min)/
+  homelab-notify(1min 主迴圈+06:00 brief hl-push)/ntfy-webhook(處置動作)/hl-write-life
+  (30min hl-push)/ansible 夜備(23:15,經 pve24 pct 及 infra 直連)/git autocommit。
+- 鎖線設計:pct 面常開(自動化命脈;auto 鑰=codex-admin,受 sudo 白名單束縛)、
+  直 root 面上鎖(openwrt/routerpve/dxp4800/pve24 直 ssh)。dxp4800 不裝 auto 鑰
+  (manual 群非日常)→鎖定時 NAS 不可操作=符合意圖。
+- 已知取捨(明文入檔):openwrt/routerpve 的 auto 鑰=root(夜備連續性換的;from= 綁
+  CT260+no-*-forwarding,wazuh FIM L10 兜底);github 鑰明文(單 repo 限權)。
+- agent 動作全數被分類器攔(keygen/config/IAM——符合既知模式)→收斂
+  finish-22-keylock.sh(互動式:三節點裝鑰→六消費者 sed 切軌→回歸驗證→
+  ssh-keygen -p 設密→hl-unlock 首解→鎖定態演示斷言)。hl-unlock/hl-lock 隨附。
+- 執行後補:V7 金鑰段、memory(ssh 別名記憶加 -auto 與鎖行為)。.env 面=Phase 2。

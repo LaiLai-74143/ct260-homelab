@@ -476,16 +476,23 @@
        pin 2026.06.2→復關+403 驗證,冪等)。
 
 -------------------------------------------------------------------------------
-22. CT260 金鑰收緊方案（建設期結束後實作）
-    【說明】「TOTP 鎖 .env」評估：本機驗 TOTP 的 secret 也在本機，root 級攻破擋不住，屬心理安慰。
-    務實三選（可疊加）：
-    a. ops 私鑰全數加 passphrase，使用 ssh-agent 限時快取（ssh-add -t 4h）——最接近「時間鎖」體感，
-       agent 重啟/逾時後需人工輸入 passphrase。
-    b. 高權限私鑰移存 pve24，CT260 需用時經既定流程短時借出、用畢即刪。
-    c. 各節點 authorized_keys 對 CT260 key 加限制，範例：
-       from="10.<ct260>/32",command="/usr/local/bin/ops-wrapper.sh" ssh-ed25519 AAAA...
-       wrapper 白名單化允許的命令模式，拒絕其餘。
-    執行時機：待辦 P0/P1 大建設收尾後，與使用者確認選型再動。
+◐22. CT260 金鑰收緊 —— 使用者自訂方案裁定(2026-07-09),全套備妥待互動執行
+    【裁定方案】取代原 a/b/c 三選:高價值金鑰檔靜態加密+6h 自動上鎖,解鎖需使用者
+    輸入密碼(密碼不落地,只進 KDF)。落地=雙軌:
+    · 自動軌 ct260_auto_ed25519(不加密):pve24(codex-admin,sudo 僅 pct/qm/pvesh/pvesm)
+      +openwrt/routerpve(root,僅夜間 ansible 設定備份);authorized_keys 一律
+      from="192.168.20.60"+no-*-forwarding=外流即失效。消費者切換:watchdog/
+      homelab-notify/ntfy-webhook/hl-run(pct hop)/hl-push/ansible inventory。
+    · 互動軌 ct260_ops_ed25519:passphrase 靜態加密+ssh-agent -t 6h(hl-unlock/hl-lock,
+      systemd --user 常駐 agent+IdentityAgent);鎖定=直 root 面(openwrt/routerpve/
+      dxp4800/pve24 直 ssh)全封,agent 碰鎖提醒使用者解鎖。
+    · 鎖線=直 root 面;pct 面常開(自動化命脈,受 codex-admin sudo 白名單束縛)。
+    · 已知取捨入檔:auto 鑰在 openwrt/routerpve=root 明文(夜備連續性;wazuh FIM
+      對 authorized_keys 變動 L10 兜底);github 部署鑰維持明文(單 repo 限權)。
+    ★ 待使用者(互動,終端跑):bash ~/workspace/monitoring/finish-22-keylock.sh
+      (agent 做金鑰/IAM 面被分類器攔+中途需你設密碼;跑完=上鎖態,幹活前 hl-unlock)。
+    ▶ 執行後補:V7 金鑰段+memory 更新(以實跑結果為準)。.env 面(age 公鑰加密+tmpfs)
+      =Phase 2,待鎖鑰跑順後評估(多數 .env 為 24/7 執行期需要,可鎖面小)。
 
 -------------------------------------------------------------------------------
 23. 用戶評估後刪除
@@ -787,4 +794,4 @@
 - 第 5 項相關：honeypot→WAN 出網規則收斂——先盤點 VM300 現況出站，
   再提收斂方案（原則：只放 Cowrie 必要出站，其餘 REJECT），經使用者同意後執行。
 - ✔ 第 3 項 Tailscale 導流：使用者 2026-07-04 裁決「CT203 唯一 subnet-router＋動態閘門」版並已上線（取代方案 A/B）。
-- 第 22 項金鑰收緊選型（a/b/c 疊加組合）屆時與使用者確認。
+- ✔ 第 22 項金鑰收緊:使用者 2026-07-09 裁定自訂「6h 自動上鎖」方案(見第 22 項),原 a/b/c 三選作廢。
