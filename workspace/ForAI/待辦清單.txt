@@ -729,8 +729,10 @@
     BFF live.power(nut_* 八指標+7 天 on_battery 轉換事件;缺席/upsc 失敗/>5min 過期
     =pending 誠實態);前端電力頁擴 6 tiles(+估計功耗/輸入電壓,battery_low 紅點);
     rules/power.yml 三告警已載入。mock 9/9 PASS、0.5.0 部署全綠。
-    ★ 待使用者:pve24 root 執行 portal/scripts/finish-ups-metrics.sh(codex-admin
-    sudo 僅 pct/qm/pvesh/pvesm 寫不了 host 檔)→電力頁自動亮。
+    【0.5.0 收尾 2026-07-08】使用者已於 pve24 root 執行 finish-ups-metrics.sh(首跑
+    nut_upsc_ok=1、8 指標齊);live 驗收全過:Prometheus 入庫(pve24-server:9100)、
+    /api/power 活數據(市電/充電 100%/負載 28%≈280W/輸入 114V)、首頁電力卡 ok
+    「市電·電池 100%」、三告警 inactive/ok、使用者截圖電力頁 6 tiles 實亮——電力模塊結案。
     ▶ 剩:Homepage 退役儀式(低優先級,使用者點名後開)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

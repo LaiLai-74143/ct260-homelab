@@ -155,7 +155,7 @@ VM300  honeypot                  stopped   # onboot=1 卻停機,原因未查;重
 電力保護(進行中):nut-client 2.8.1,NUT secondary 監看 ups0@192.168.100.2(VLAN100 帶外、匿名輪詢);
 斷電 180s → 優雅收 CT/VM → 關宿主(/etc/nut + /usr/local/sbin/nut-graceful-shutdown.sh;沿革見缺改記錄 2026-07-04)。
 BIOS 復電自動開機:待設。全鏈拔線實測:待做。
-監控面(待辦49 電力模塊,2026-07-08):/usr/local/bin/ups-metrics.sh(cron 每分鐘 upsc→
+監控面(待辦49 電力模塊,2026-07-08 上線):/usr/local/bin/ups-metrics.sh(cron 每分鐘 upsc→
 /var/lib/prometheus/node-exporter/ups.prom,比照 CT202 squid textfile 前例,零新埠零防火牆)
 → pve-node:9100 → portal 電力頁(nut_* 指標;缺席/過期=pending 誠實態)+
 CT201 rules/power.yml(UPSOnBattery/UPSLowBattery critical、UPSDataStale warning)。
@@ -897,7 +897,8 @@ portal        8088   portal:0.5.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               0.5.0(2026-07-08):電力模塊 live(BFF 查 nut_* 指標,6 tiles+7 天
               on_battery 轉換事件;指標缺席/upsc 失敗/>5min 過期=pending 誠實態)
               +遊戲頁 MCSM 面板入口卡;數據管線=pve24 ups-metrics.sh textfile
-              (見 §1.2 電力保護監控面;上線前電力頁維持 pending)
+              (見 §1.2 電力保護監控面;2026-07-08 使用者 root 跑
+              finish-ups-metrics.sh 後全鏈驗通,電力頁 live)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

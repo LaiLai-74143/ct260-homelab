@@ -2027,3 +2027,6 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   寫 host 檔(/usr/local/bin、/etc/cron.d)不行→收斂 finish-ups-metrics.sh 待使用者
   root 執行(冪等;回滾=rm 三檔)。跑完 60s 內 Prometheus 入庫,電力頁自動亮。
 - 回滾:portal 換回 0.4.2;rules/power.yml rm+HUP;pve24 三檔 rm。
+- 【收尾】使用者當晚已 root 執行(首跑 nut_upsc_ok=1、8 指標);live 驗收:
+  Prometheus nut_upsc_ok=1(pve24-server:9100)、/api/power 活數據(市電/100%/28%≈280W/114V)、
+  首頁電力卡 ok「市電·電池 100%」、三告警 inactive/ok、使用者截圖 6 tiles 實亮。電力模塊結案。
