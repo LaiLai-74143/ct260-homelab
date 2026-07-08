@@ -849,8 +849,14 @@ portal        8088   portal:0.2.2 本地 build(python:3.13.5-slim+pin;待辦49 M
               +服務目錄(可達性三態,Homepage 退役等使用者驗收後另案)+告警 24h 時間軸;
               電力=pending 誠實態(nut_exporter 未部署);Cowrie 卡=源停機誠實態;
               MCSM_API_KEY 已填(2026-07-08;MCSM 帳號 API-user permission-1 唯讀、
-              僅指派 Fabric-MC——/api/overview 等 admin 端點 403 屬預期;
-              玩家數待使用者把實例類型設 Minecraft Java 使 mcping 上線,即亮免重部署);
+              僅指派 Fabric-MC——/api/overview 等 admin 端點 403 屬預期);
+              玩家數 mcping 根因=實例 pingConfig.ip 誤為 127.0.0.1(MC server-ip 綁
+              10.70.70.20 不聽 loopback),且此版 MCSM 無 UI 欄位——已改 daemon 設定檔
+              /opt/mcsmanager/daemon/data/InstanceConfig/<uuid>.json 的 pingConfig.ip→
+              10.70.70.20(備份 CT100 /root/mcsm-instance-*.json.bak);CT100 nft 另加
+              iifname lo→10.70.70.20:25565 accept(loopback 放行,mc_backend_guard,
+              備份 /root/nftables.conf.before-mcping-*)。daemon 設定讀在記憶體,需
+              重啟 Fabric-MC 實例(非 daemon)重載才生效——待使用者按重啟即亮玩家數;
               Kuma 探活 /api/health 待 UI 加;
               M3(動作按鈕)/M4(kiosk)未做
 ```
@@ -929,7 +935,9 @@ RAM 16G   CPU 4 cores(cpuset 2-5)
   放行 Velocity 10.70.70.10 -> 25565 + icmp echo-request;CT201 10.70.70.11 -> tcp/23333 +
   tcp/9100(node_exporter)+ icmp(監控);PC40 192.168.40.4 -> tcp/23333 + 發證後手機
   (CT203 masq 10.60.60.10)-> tcp/23333(待辦49 2026-07-08,MCSM 人員面;
-  回滾備份 /root/nftables.conf.before-mcsm-20260708_075622 + CT260 ~/_backups)。
+  回滾備份 /root/nftables.conf.before-mcsm-20260708_075622 + CT260 ~/_backups);
+  iifname "lo" -> 10.70.70.20:25565(本機 MCSM daemon mcping 放行,兜底 drop 未限介面會誤丟;
+  待辦49 2026-07-08,回滾備份 /root/nftables.conf.before-mcping-*)。
 promtail 3.6.11(原生 systemd):journal + /root/minecraft/logs/latest.log +
   /var/log/mcsmanager/*.log → push CT201 eth1 10.70.70.11:3100(同 VLAN70 L2 直達)。
 ```

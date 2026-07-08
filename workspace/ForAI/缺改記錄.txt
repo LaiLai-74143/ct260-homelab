@@ -1828,3 +1828,18 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   風險低;使用者可自行重生 key 並更新 portal.env)。
 - 回滾:compose 蓋回 _backups/docker-compose.yml.before-portal022-*(最早一份)+
   up -d --force-recreate portal(0.2.1 image 仍在)。
+
+### 待辦49 入口大廳:MCSM 玩家數 mcping 根因修正(2026-07-08)
+- 症狀:遊戲頁玩家數不亮,mcPingOnline=false(誤判「伺服器沒人」)。
+- 根因(兩層):
+  1) CT100 mc_backend_guard 兜底 `tcp dport 25565 drop` 未限介面,連本機 loopback
+     的 MCSM daemon mcping 也被丟;
+  2) 實例 pingConfig.ip=127.0.0.1,但 MC server-ip=10.70.70.20 只綁該 IP 不聽 loopback。
+- 修正:
+  1) finish-mcping-fix.sh:CT100 nft 加 `iifname "lo" -> 10.70.70.20:25565 accept`
+     (僅新增,兜底 drop 與 Velocity/CT201 路徑不變;三項回歸 200/通過);
+  2) finish-mcping-ip.sh:改 daemon 設定檔 InstanceConfig/<uuid>.json 的 pingConfig.ip
+     →10.70.70.20(此版 MCSM 無 UI 欄位;只改一欄,備份 CT100 /root/mcsm-instance-*.json.bak)。
+- 卡點:daemon 設定讀在記憶體,API key 唯讀(PUT /api/instance 403「金鑰不正確」)無法
+  live 更新;需重啟 Fabric-MC 實例(非 daemon,不動其他)重載設定檔才生效——待使用者按重啟。
+- 回滾:nft 蓋回 before-mcping 備份;設定檔蓋回 mcsm-instance-*.json.bak(下次 ping 週期回舊值)。
