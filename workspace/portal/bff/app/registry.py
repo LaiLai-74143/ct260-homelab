@@ -2,7 +2,10 @@
 
 單一事實來源=拓樸 V7(2026-07-08 逐條核實);改顯示名/放行後同步這裡。
 reach 旗標:pc40=PC40 直達已放行(V7 §4.4);phone=手機(tailnet 發證後)可達
-——有 url_hl 者經 CT203 Caddy,其餘依 dmz 豁免規則。兩者皆 False 只列不連。
+——有 url_hl 者經 CT203 Caddy;其餘走發證直達:phone→CT203 masq 10.60.60.10→OpenWrt
+  TSGate 8 zone proto-all(V7 §4.4)+ router input 80/443/8080,手機 DNS=100.100.1.1(AGH)
+  故 home.arpa/hl 皆可解析(V7 §4.8,2026-07-08 逐條核實)。兩者皆 False 只列不連。
+  例外:MC 對外入口走公網 WAN DNAT,phone=True 與發證無關。
 """
 
 # ---- 主機(overview / L2 詳情共用) ----
@@ -43,7 +46,7 @@ GRAFANA_HL = "https://grafana.hl.lailai74143.com"
 DASH_OVERVIEW = "/d/homelab-overview"
 DASH_SECURITY = "/d/openwrt-portscan-autoban/openwrt-portscan-autoban"
 
-# ---- 服務目錄(M2 §5;kuma=Uptime Kuma monitor 名,與 UI 實際命名對齊後生效) ----
+# ---- 服務目錄(M2 §5;kuma=Kuma monitor 名 lower——2026-07-08 與 UI 實際命名逐一核過) ----
 #   host:掛載主機 slug(L2 詳情反查);pc40/phone 見檔頭。
 SERVICE_GROUPS: list[dict] = [
     {"group": "觀測", "items": [
@@ -68,32 +71,33 @@ SERVICE_GROUPS: list[dict] = [
          "pc40": False, "phone": True, "note": "PC40 未放行(僅手機,待辦49 決策6)"},
     ]},
     {"group": "虛擬化/網路", "items": [
-        {"name": "pve24 PVE", "url": "https://pve24.home.arpa:8006", "kuma": None,
-         "host": "pve24", "pc40": True, "phone": False},
-        {"name": "RouterPVE", "url": "https://router-pve.home.arpa:8006", "kuma": None,
-         "host": "router-pve", "pc40": True, "phone": False},
-        {"name": "OpenWrt LuCI", "url": "http://192.168.10.1", "kuma": None,
-         "host": "openwrt", "pc40": False, "phone": False, "note": "PC40/手機皆未放行(管理面)"},
+        {"name": "pve24 PVE", "url": "https://pve24.home.arpa:8006", "kuma": "pve 24bay nas",
+         "host": "pve24", "pc40": True, "phone": True},
+        {"name": "RouterPVE", "url": "https://router-pve.home.arpa:8006", "kuma": "pve router",
+         "host": "router-pve", "pc40": True, "phone": True},
+        {"name": "OpenWrt LuCI", "url": "http://192.168.10.1", "kuma": "openwrt",
+         "host": "openwrt", "pc40": False, "phone": True,
+         "note": "PC40 未放行(管理面);手機發證後經 router-web 80/443 可達"},
         {"name": "Switch3F", "url": "http://192.168.10.21", "kuma": None,
-         "host": "switch3f", "pc40": True, "phone": False},
-        {"name": "AP Main", "url": "http://192.168.50.2", "kuma": None,
-         "host": None, "pc40": True, "phone": False},
-        {"name": "NAS 管理 UI", "url": "https://nas.home.arpa:8243", "kuma": None,
-         "host": "dxp4800", "pc40": True, "phone": False},
+         "host": "switch3f", "pc40": True, "phone": True},
+        {"name": "AP Main", "url": "http://192.168.50.41", "kuma": "be3600 pro main",
+         "host": None, "pc40": True, "phone": True},
+        {"name": "NAS 管理 UI", "url": "https://nas.home.arpa:8243", "kuma": "ugreen nas",
+         "host": "dxp4800", "pc40": True, "phone": True},
     ]},
     {"group": "安全", "items": [
         {"name": "Wazuh", "url": "https://10.80.80.12", "kuma": "wazuh", "host": None,
-         "pc40": True, "phone": False},
-        {"name": "AdGuard Home", "url": "http://192.168.10.1:8080", "kuma": "agh", "host": "openwrt",
+         "pc40": True, "phone": True},
+        {"name": "AdGuard Home", "url": "http://192.168.10.1:8080", "kuma": "adguardhome", "host": "openwrt",
          "pc40": False, "phone": True, "note": "PC40 未放行(僅手機,待辦49 決策6)"},
     ]},
     {"group": "生活", "items": [
         {"name": "NocoDB", "url": "http://192.168.20.70:8080", "kuma": "nocodb", "host": "ct270",
-         "pc40": True, "phone": False},
+         "pc40": True, "phone": True},
         {"name": "Home Assistant", "url": "http://192.168.20.70:8123", "kuma": "ha", "host": "ct270",
-         "pc40": True, "phone": False},
-        {"name": "Paperless", "url": "http://192.168.20.70:8000", "kuma": "paperless", "host": "ct270",
-         "pc40": True, "phone": False},
+         "pc40": True, "phone": True},
+        {"name": "Paperless", "url": "http://192.168.20.70:8000", "kuma": "paperless-ngx", "host": "ct270",
+         "pc40": True, "phone": True},
         {"name": "Navidrome", "url": "http://192.168.20.70:4533", "kuma": "navidrome", "host": "ct270",
          "pc40": True, "phone": True, "note": "媒體豁免,手機免發證"},
     ]},
@@ -101,13 +105,17 @@ SERVICE_GROUPS: list[dict] = [
         {"name": "Jellyfin", "url": "http://192.168.30.3:8096", "kuma": "jellyfin", "host": "dxp4800",
          "pc40": False, "phone": True, "note": "媒體豁免;PC40 未放行(僅手機,待辦49 決策6)"},
         {"name": "qBittorrent", "url": "http://192.168.30.3:8080", "kuma": "qbittorrent",
-         "host": "dxp4800", "pc40": False, "phone": False, "note": "PC40/手機皆未放行(待辦49 決策6)"},
+         "host": "dxp4800", "pc40": False, "phone": True,
+         "note": "PC40 未放行(待辦49 決策6);手機發證後可達"},
     ]},
     {"group": "遊戲", "items": [
-        {"name": "MCSManager", "url": "http://10.70.70.20:23333", "kuma": None, "host": "ct100",
-         "pc40": False, "phone": False, "note": "PC40/手機皆未放行(僅 CT201 監控面)"},
-        {"name": "MC 對外入口", "url": "mc.lailai74143.com:49169", "kuma": None, "host": "ct100",
-         "pc40": True, "phone": True, "note": "Java 49169 / Bedrock 43915,公網 hairpin"},
+        {"name": "MCSManager", "url": "http://10.70.70.20:23333", "kuma": "mcsmanager", "host": "ct100",
+         "pc40": True, "phone": True,
+         "note": "PC40+發證後手機可達(OpenWrt 一條 + CT100 nft 點名,待辦49 2026-07-08)"},
+        {"name": "MC 對外入口", "url": "mc.lailai74143.com:49169", "kuma": "minecraft java public entry", "host": "ct100",
+         "pc40": True, "phone": True,
+         "note": "Java 49169 / Bedrock 43915;公網 WAN DNAT(蜂巢/外網直達,與發證無關);"
+                 "hairpin 僅 PC40,手機在家 Wi-Fi 用公網名不通"},
     ]},
     {"group": "基礎", "items": [
         # 威脅面緩解(M2 §7 決策8):Vaultwarden 只列名稱+綠燈,不附公網 URL

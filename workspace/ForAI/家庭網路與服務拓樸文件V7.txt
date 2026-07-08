@@ -546,6 +546,8 @@ PC40 -> CT270      192.168.20.70 tcp/4533         (Allow-PC40-To-CT270-Navidrome
 PC40 -> AP Main/Node web/ping
 PC40 -> CT201      10.80.80.11   tcp/3000,3001,3002,9090,9100, ping
 PC40 -> CT201      10.80.80.11   tcp/8088         (Allow-PC40-To-Monitor-Portal-8088,portal 待辦49)
+PC40 -> CT100      10.70.70.20   tcp/23333        (Allow-PC40-To-Game-MCSM-23333,待辦49 2026-07-08;
+  CT100 本機 nft 同步點名 192.168.40.4,見 §7 CT100)
 PC40 -> DXP4800    192.168.30.3  tcp/5243,8243(SNAT 192.168.30.1)
 PC40 -> Minecraft public hairpin 49169/tcp、43915/udp
 ★ 殘留:temp_allow_pc40_to_openwrt_ssh(PC40 -> 192.168.40.1:52438)temp 前綴仍在,待清理或轉正。
@@ -603,8 +605,10 @@ Allow-Monitor-To-OpenWrt-Infra-AGH-Web-8080            10.80.80.11 -> 192.168.10
 Allow/SNAT-Monitor-To-DXP4800-Storage-qBittorrent-8080 10.80.80.11 -> 192.168.30.3 tcp/8080(SNAT .30.1)
 Allow/SNAT-Monitor-To-DXP4800-Storage-Jellyfin-8096    10.80.80.11 -> 192.168.30.3 tcp/8096(SNAT .30.1)
 Allow/SNAT-Monitor-To-PC40-Health-18080                10.80.80.11 -> 192.168.40.4 tcp/18080(SNAT .40.1)
-(MCSManager 23333 與 backend 9100 不經 OpenWrt:CT201 由 game-obs 10.70.70.11 直連 10.70.70.20,
- 放行在 CT100 本機 nft。)
+(MCSManager 23333 與 backend 9100 監控面不經 OpenWrt:CT201 由 game-obs 10.70.70.11 直連
+ 10.70.70.20,放行在 CT100 本機 nft。2026-07-08 起人員面另開:PC40 經 OpenWrt
+ Allow-PC40-To-Game-MCSM-23333(§4.4)、發證後手機經 CT203 masq 走既有 dmz→game proto-all
+ ——兩者都還要過 CT100 本機 nft 點名,見 §7 CT100。)
 
 # Wazuh agent -> manager(各 zone 逐項點名)
 Allow-Servers-To-Wazuh-Agent   192.168.20.5/.60/.70 -> 10.80.80.12 tcp/1514-1515
@@ -826,10 +830,12 @@ ntfy          8091   binwiederhier/ntfy:v2.25.0(互動推播,待辦19,2026-07-07
 snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.30.1(待辦25,
               2026-07-07;auth=switch3f_v2 在 /opt/monitoring/snmp-auth.yml 600,同值存 CT260
               ~/.config/homelab/switch3f-snmp.env;★掛起:交換機側 SNMP 未開,job 靜默至 07-14)
-portal        8088   portal:0.2.0 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08)
+portal        8088   portal:0.2.1 本地 build(python:3.13.5-slim+pin;待辦49 M2,2026-07-08;
+              0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
-              +PC40 健檢;Kuma 經 extra_hosts host.docker.internal:3001,API key 待使用者
-              於 UI 生成後填 /opt/portal/portal.env(600)——未填=綠燈灰、誠實降級)
+              +PC40 健檢;Kuma 經 extra_hosts host.docker.internal:3001,KUMA_API_KEY
+              已填 /opt/portal/portal.env(600,2026-07-08)——綠燈上線,對映鍵=Kuma UI
+              monitor 名 lower,見 bff/app/registry.py)
               +Vite SPA 靜態檔;bind-mount /opt/portal/{static,data}(ro);
               晨報=CT260 homelab-notify.py --write-brief(cron 06:00 台北)→hl-push→
               /opt/portal/data/brief.json(日期副本保留 30 期);
@@ -917,7 +923,9 @@ RAM 16G   CPU 4 cores(cpuset 2-5)
   server-ip=10.70.70.20,25565 綁定生效)
 本機 nft(/etc/nftables.conf mc_backend_guard):
   放行 Velocity 10.70.70.10 -> 25565 + icmp echo-request;CT201 10.70.70.11 -> tcp/23333 +
-  tcp/9100(node_exporter)+ icmp(監控)。
+  tcp/9100(node_exporter)+ icmp(監控);PC40 192.168.40.4 -> tcp/23333 + 發證後手機
+  (CT203 masq 10.60.60.10)-> tcp/23333(待辦49 2026-07-08,MCSM 人員面;
+  回滾備份 /root/nftables.conf.before-mcsm-20260708_075622 + CT260 ~/_backups)。
 promtail 3.6.11(原生 systemd):journal + /root/minecraft/logs/latest.log +
   /var/log/mcsmanager/*.log → push CT201 eth1 10.70.70.11:3100(同 VLAN70 L2 直達)。
 ```

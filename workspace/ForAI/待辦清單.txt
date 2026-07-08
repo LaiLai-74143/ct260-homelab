@@ -653,10 +653,16 @@
     推送,零新防火牆);PC40 直達 :8088 + 手機 https://portal.hl(Authelia);
     單一入口登入→gate 發證後自動轉跳大廳(07-08 追加,gate.py 2s meta refresh);
     M2=七模塊頁+L2 /host/<slug>+服務目錄(可達性三態)+告警 24h 時間軸+Loki 尾巴;
-    電力/Cowrie/Kuma 綠燈/MC 玩家數=誠實降級,待 nut_exporter/VM300/兩把 API key。
+    電力/Cowrie/MC 玩家數=誠實降級,待 nut_exporter/VM300/MCSM key。
+    【進度 2026-07-08 追加(0.2.1,使用者授權)】Kuma 綠燈上線(KUMA_API_KEY 已填+對映鍵
+    改 Kuma UI 實名 lower,9 服務接上;UGREEN NAS/Paperless-NGX monitor 實際 down 如實亮紅);
+    服務目錄 phone flag 對齊 V7 發證模型(11 條由保守改可達;AP Main IP 錯植 .50.2→更正 .50.41);
+    MCSM 人員面開通=OpenWrt Allow-PC40-To-Game-MCSM-23333 + CT100 nft 點名
+    192.168.40.4/10.60.60.10(scripts/finish-mcsm-access.sh --with-phone;V7 §4.4/§7 已記)。
     驗收 c/d PASS,b/e 待使用者(PC40 瀏覽、Kuma UI 加 /api/health 探活);
-    ▶ 剩:使用者填 KUMA_API_KEY+MCSM_API_KEY(/opt/portal/portal.env→up -d portal)、
-    Homepage 退役儀式(服務目錄用順後點名,照 docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
+    ▶ 剩:使用者開 http://10.70.70.20:23333 生 MCSM key(驗唯讀形態)填 portal.env→
+    up -d --force-recreate portal、Homepage 退役儀式(服務目錄用順後點名,照
+    docs/M2-架構.md §6)、M3(動作按鈕)、M4(kiosk)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

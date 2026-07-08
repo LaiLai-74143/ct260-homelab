@@ -1792,3 +1792,26 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 現況：交換機 161/udp 拒連（使用者已加 community 但疑漏開全局開關/未按應用；手機不便，擇日）；
   TargetDown 靜默至 2026-07-14（silence 867811af→延長版 bf25d384）。
 - 收案待辦：交換機開通→驗數據→獨立驗證→AP「無法觀測」記拓樸→缺改補收案結論。
+
+### 待辦49 入口大廳 0.2.1：Kuma 綠燈上線＋可達性旗標修正＋MCSM 人員面開通（2026-07-08，使用者授權）
+- 起因：使用者填 KUMA_API_KEY 後綠燈未亮（env_file 只在容器建立時讀，改檔未重建）；
+  PC40 打不開 MCSM 23333（設計上僅 CT201 監控面）；大廳連結手機多數打不開
+  （registry phone flag 實作時標得過保守，V7 發證模型下本可直達）。
+- registry 0.2.0→0.2.1：11 條 phone flag 依 V7 §4.4（TSGate 8 zone proto-all + router
+  input 80/443/8080）＋ §4.8（手機 DNS=100.100.1.1，home.arpa/hl 皆解析）逐條核實翻正；
+  Kuma 對映鍵改 UI monitor 實名 lower（9 服務接上既有 monitor，無 monitor 者維持灰燈）。
+  對抗式審查（3 維度 14 agent）確認 9 缺陷全修：含 AP Main IP 錯植 192.168.50.2→50.41
+  （blocker，V7 實值）、MC 對外入口 note 誤稱 hairpin（實為 WAN DNAT）、
+  兩支 finish 腳本的 reload 補跑/參數驗證/備份污染/中斷自癒等 6 項。
+- MCSM 人員面（finish-mcsm-access.sh --with-phone，冪等雙備份）：
+  OpenWrt +Allow-PC40-To-Game-MCSM-23333（trusted/192.168.40.4→game/10.70.70.20:23333；
+  備份 firewall.before-mcsm-20260708_075622 router+CT260 雙份；running ruleset 驗證過）；
+  CT100 mc_backend_guard 點名 192.168.40.4 與 10.60.60.10（發證後手機，OpenWrt 側走既有
+  dmz proto-all 免加規則；備份 /root/nftables.conf.before-mcsm-20260708_075622）；
+  回歸：CT260→Loki 200、CT201→MCSM 200 皆過。
+- 部署 finish-portal-021.sh：bff-only 換版＋force-recreate（Kuma key 生效，容器內 len=44）；
+  十端點 200；綠燈 10 亮 2 誠實紅（UGREEN NAS/Paperless-NGX monitor 實際 down）。
+- 回滾：compose 蓋回 _backups/docker-compose.yml.before-portal021-*（最早一份）+
+  up -d --force-recreate portal（0.2.0 image 仍在）；MCSM=uci delete
+  firewall.allow_pc40_to_game_mcsm + CT100 蓋回 before-mcsm 備份。
+- 剩：使用者開 MCSM 面板生 key（驗唯讀形態）填 portal.env 後 force-recreate。
