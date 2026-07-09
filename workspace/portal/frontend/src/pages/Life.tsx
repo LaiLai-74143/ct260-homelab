@@ -3,7 +3,7 @@ import { useLife } from '../api'
 import Dot from '../components/Dot'
 import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
-import type { Life as LifeData } from '../types'
+import type { DebtTx, Life as LifeData } from '../types'
 
 function staleText(s?: number | null): string {
   if (s == null) return ''
@@ -14,6 +14,17 @@ function staleText(s?: number | null): string {
 
 function money(amount: number, currency: string): string {
   return currency === 'TWD' ? `NT$ ${amount.toLocaleString()}` : `${amount.toLocaleString()} ${currency}`
+}
+
+/** 交易描述:買了什麼(item)優先於助理自動生成的 summary;
+    「我借出 65」這類只複誦金額的樣板 summary 在有 item 時不重複顯示 */
+function txDesc(t: DebtTx): string {
+  const boiler = /^我?(借出|借入|欠)\s*[\d,.]+\s*(元|塊)?$/
+  return [
+    t.amount != null ? t.item : null, // amount==null 時金額欄位已顯示 item,不重複
+    t.summary && !(t.item && boiler.test(t.summary)) ? t.summary : null,
+    t.notes,
+  ].filter(Boolean).join(' · ')
 }
 
 /** 本地(裝置時區)日期字串——toISOString 是 UTC,UTC+8 凌晨會漏標逾期 */
@@ -119,7 +130,7 @@ function DebtsCard({ d }: { d: LifeData }) {
                           : t.kind === '金錢' ? '金額未填' : (t.item ?? '物品')}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-muted">
-                        {t.summary ?? t.item ?? ''}
+                        {txDesc(t)}
                         {t.due
                           ? ` · 到期 ${t.due.slice(0, 10)}${!t.settled && t.due.slice(0, 10) < today ? '(逾期)' : ''}`
                           : t.date ? ` · ${t.date.slice(0, 10)}` : ''}

@@ -11,7 +11,7 @@
  ],
  "debts_open": {
   "count": 4,
-  "total": 3700,
+  "total": 3765,
   "persons": [
    {
     "who": "小明",
@@ -48,7 +48,7 @@
    },
    {
     "who": "謝于翔",
-    "net": -500,
+    "net": -435,
     "count": 2,
     "due": null,
     "items": [],
@@ -63,6 +63,19 @@
       "date": "2026-07-09",
       "due": null,
       "summary": "飲料基金代收",
+      "notes": "已還 100,餘 400 待結",
+      "settled": false
+     },
+     {
+      "id": 14,
+      "dir": "待收",
+      "kind": "金錢",
+      "amount": 65,
+      "currency": "TWD",
+      "item": "COCO 粉角檸檬冬瓜(微糖微冰)",
+      "date": "2026-07-09",
+      "due": null,
+      "summary": "我借出 65",
       "settled": false
      }
     ]

@@ -11,6 +11,9 @@ ALL = 'order!=""'             # 全部 19 個有 device/order 的 target
 NETDEV = 'device!~"lo|veth.*|docker.*|br-.*|tap.*|fwbr.*|fwln.*|fwpr.*|vmbr.*|gvmbr.*"'  # 注意: 此 device 是網卡名, 非我們的 target label
 FSX = 'fstype!~"tmpfs|overlay|squashfs|ramfs|devtmpfs|fuse.*|iso9660"'
 
+# ★ panel id 是流水號(nid 依組裝順序遞增)。portal 0.7.0 起嵌入 d-solo
+#   panelId=3/4/5/6(四 bargauge)與 13/14(CPU/記憶體趨勢)——面板「順序或增刪」
+#   會重編號,必須同步 portal/frontend/src/pages/Devices.tsx 的 panelId。
 _id = [0]
 def nid():
     _id[0] += 1; return _id[0]

@@ -75,7 +75,7 @@ def _tx_of(x: dict, tag: str, settled: bool) -> dict:
             "amount": x.get("amount"), "currency": x.get("currency") or "TWD",
             "item": x.get("item") or None, "date": x.get("date") or None,
             "due": x.get("due_date") or None, "summary": x.get("summary") or None,
-            "settled": settled}
+            "notes": x.get("notes") or None, "settled": settled}
 
 
 # ---- NocoDB(唯讀 records list) ----

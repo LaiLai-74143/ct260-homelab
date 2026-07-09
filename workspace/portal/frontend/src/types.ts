@@ -135,6 +135,8 @@ export interface DebtTx {
   date?: string | null
   due?: string | null
   summary?: string | null
+  /** 追記(部分動支等 update_transaction 寫這裡) */
+  notes?: string | null
   settled: boolean
 }
 

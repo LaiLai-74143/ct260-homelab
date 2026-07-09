@@ -1,9 +1,12 @@
 import { grafanaUrl, useSecurity } from '../api'
 import Dot from '../components/Dot'
+import GrafanaPanel from '../components/GrafanaPanel'
 import PageHead from '../components/PageHead'
 import Spark from '../components/Spark'
 
 const SEC_DASH = 'http://10.80.80.11:3002/d/openwrt-portscan-autoban/openwrt-portscan-autoban'
+// d-solo 用 uid/slug;panelId 對照 grafana-edit/openwrt-portscan-autoban.json(部署腳本驗 id 存在)
+const SEC_SOLO = 'openwrt-portscan-autoban/openwrt-portscan-autoban'
 
 function Tile({ label, big, unit, state }: { label: string; big: string; unit?: string; state?: 'ok' | 'warn' | 'crit' | 'unk' }) {
   return (
@@ -18,7 +21,8 @@ function Tile({ label, big, unit, state }: { label: string; big: string; unit?: 
   )
 }
 
-export default function Security() {
+/** embeds=false:kiosk 輪播用——每輪 key remount 會全量重載 iframe,牆板也未必走得通兩條可達路 */
+export default function Security({ embeds = true }: { embeds?: boolean }) {
   const se = useSecurity()
   const d = se.data
 
@@ -70,14 +74,31 @@ export default function Security() {
             )}
           </section>
 
-          {/* 圖表入口:連結卡(待辦49 決策3——不 iframe,免改現役 grafana.ini)。
-              防火牆審計與攻擊地圖同屬 openwrt-portscan-autoban 一張 dashboard */}
-          <a href={grafanaUrl(SEC_DASH)} target="_blank" rel="noreferrer"
-             className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
-            防火牆審計、攻擊地圖與完整安全視圖 → <span className="font-mono text-[12px] text-muted">Grafana OpenWrt 防火牆審計與 Cowrie 蜜罐 ↗</span>
-          </a>
         </>
       )}
+
+      {/* 嵌入圖表(2026-07-09 使用者點名,翻掉決策3):攻擊地圖+防火牆審計雙趨勢。
+          不依賴 BFF,放 {d && …} 外——/api/security 掛掉時圖表照常(審查確認項)。
+          時間範圍拉 24h 與上方 AUTOBAN 24H 卡對齊(dashboard 本身預設 6h) */}
+      {embeds && (
+        <section className="mb-3.5">
+          <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">
+            GRAFANA 即時圖表(空白=SSO 未登入或連不到 Grafana)
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+            <GrafanaPanel dash={SEC_SOLO} panelId={10} title="攻擊來源世界地圖" from="now-24h"
+                          h={360} className="md:col-span-2" />
+            <GrafanaPanel dash={SEC_SOLO} panelId={7} title="封鎖中 IP 趨勢" from="now-24h" h={240} />
+            <GrafanaPanel dash={SEC_SOLO} panelId={6} title="防火牆誘捕記錄速率" from="now-24h" h={240} />
+          </div>
+        </section>
+      )}
+
+      {/* 完整視圖入口:防火牆審計與攻擊地圖同屬 openwrt-portscan-autoban 一張 dashboard */}
+      <a href={grafanaUrl(SEC_DASH)} target="_blank" rel="noreferrer"
+         className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+        防火牆審計、攻擊地圖與完整安全視圖 → <span className="font-mono text-[12px] text-muted">Grafana OpenWrt 防火牆審計與 Cowrie 蜜罐 ↗</span>
+      </a>
     </>
   )
 }

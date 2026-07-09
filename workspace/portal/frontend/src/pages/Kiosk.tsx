@@ -11,8 +11,10 @@ import Security from './Security'
  */
 const SCREENS = [
   { key: 'home', label: '大廳', el: <Home /> },
-  { key: 'devices', label: '設備', el: <Devices /> },
-  { key: 'security', label: '安全', el: <Security /> },
+  // embeds=false:輪播每輪 key remount 會全量重載 Grafana iframe(9 個),牆板裝置
+  // 也未必符合 grafana.hl(要 Authelia session)或 :3002(僅 PC40 放行)任一可達路
+  { key: 'devices', label: '設備', el: <Devices embeds={false} /> },
+  { key: 'security', label: '安全', el: <Security embeds={false} /> },
 ]
 
 const DEFAULT_INTERVAL_S = 20
