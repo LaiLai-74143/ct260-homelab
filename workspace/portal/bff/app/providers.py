@@ -153,16 +153,9 @@ def _redact_life(d: dict) -> dict:
         out["calendar_today"] = [{"time": e.get("time", ""), "title": None}
                                  for e in d["calendar_today"] if isinstance(e, dict)]
     if isinstance(d.get("debts_open"), dict):
-        do = d["debts_open"]
-
-        def _cnt(x):
-            return {"count": x.get("count", 0), "total": None} if isinstance(x, dict) else None
-
-        # 未認證只露件數:方向拆分保留 count、金額抹除、明細(對象/金額)整組不出
-        out["debts_open"] = {"count": do.get("count", 0), "total": None,
-                             "receivable": _cnt(do.get("receivable")),
-                             "payable": _cnt(do.get("payable")),
-                             "items": None}
+        # 未認證只露件數:淨額抹除、逐人明細(對象/金額)整組不出
+        out["debts_open"] = {"count": d["debts_open"].get("count", 0), "total": None,
+                             "persons": None}
     out["redacted"] = True
     return out
 

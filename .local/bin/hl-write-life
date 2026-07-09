@@ -102,50 +102,67 @@ def nocodb_debts() -> dict:
         if not batch or r.get("pageInfo", {}).get("isLastPage", True):
             break
 
-    def who_of(rid) -> str:
-        # 人名是裝飾性資料:單筆 links 查詢失敗(競態 404/瞬時逾時)降級成 "?",
+    def who_of(rid):
+        # 人名是裝飾性資料:單筆 links 查詢失敗(競態 404/瞬時逾時)降級 None,
         # 不得升級成整次投遞中斷(「任一數據源失敗=整次不投遞」不適用此路徑)
         if link_cid is None:
-            return "?"
+            return None
         try:
             ls = api(f"/api/v2/tables/{tid}/links/{link_cid}/records/{rid}?limit=1").get("list", [])
-            return (ls[0].get("name") or "?") if ls else "?"
+            return (ls[0].get("name") or None) if ls else None
         except Exception:  # noqa: BLE001
-            return "?"
+            return None
 
     open_rows = [x for x in rows if not x.get("settled")]
-    # 先排序再截斷:待還在前(要動作的先看到),組內到期日近的先——
-    # 明細封頂 50 時保留的才是最緊急的,而非 API 預設的建立順序
-    open_rows.sort(key=lambda x: (x.get("direction") == "我借出",
-                                  x.get("due_date") or "9999-12-31"))
-    recv = {"count": 0, "total": 0}  # 我借出 → 待收(他人欠我)
-    pay = {"count": 0, "total": 0}   # 我欠  → 待還(我欠他人)
+    # 穩定截斷順序:到期近的先、再按 Id——跨輪投遞取到同一子集,淨額不跳動
+    open_rows.sort(key=lambda x: (x.get("due_date") or "9999-12-31", x.get("Id") or 0))
+
+    # 使用者裁決(2026-07-09):同一人多筆互抵成一列、卡面只看全體淨額
+    # (同 life-ops balance_by_person 語意)。卡面淨額走全量(不吃 links API,
+    # 無截斷理由);只加 TWD,外幣以 foreign 告知「僅計 NT$」。
     foreign = False
-    # count/total 全量彙總(不吃 links API,無截斷理由);金額只加 TWD,
-    # 出現外幣以 foreign 旗標告知前端「小計僅含 NT$」
+    net_total = 0
     for x in open_rows:
-        bucket = recv if x.get("direction") == "我借出" else pay
-        bucket["count"] += 1
         if x.get("kind") == "金錢" and x.get("amount"):
             if (x.get("currency") or "TWD") == "TWD":
-                bucket["total"] += x["amount"]
+                net_total += x["amount"] if x.get("direction") == "我借出" else -x["amount"]
             else:
                 foreign = True
-    items = []
-    for x in open_rows[:50]:  # 僅明細封頂:逐筆查人名護 API
+
+    # 逐人明細(需逐筆查人名,封頂 100 護 API;個人帳規模遠低於此)。
+    # 不可互抵的筆(外幣/金額未填/物品/未分類)不得隱形——以 items 文字列出,
+    # 否則「淨額 0」會被誤讀成兩清。
+    persons: dict[str, dict] = {}
+    for x in open_rows[:100]:
         is_out = x.get("direction") == "我借出"
-        amt = x.get("amount") if x.get("kind") == "金錢" else None
-        items.append({
-            "id": x.get("Id"), "dir": "待收" if is_out else "待還",
-            "who": who_of(x.get("Id")), "kind": x.get("kind") or "金錢",
-            "amount": amt, "item": x.get("item") or None,
-            "currency": x.get("currency") or "TWD",
-            "due": x.get("due_date") or None, "date": x.get("date") or None,
-            "summary": x.get("summary") or None,
-        })
-    return {"count": len(open_rows), "total": recv["total"] - pay["total"],
-            "receivable": recv, "payable": pay, "items": items,
-            "foreign": foreign, "truncated": len(open_rows) > 50}
+        rid = x.get("Id")
+        name = who_of(rid)
+        # 不明對象各自成列(key 帶 rid):共用 "?" 桶會把不同人的帳跨人互抵
+        key = name if name else f"?#{rid}"
+        p = persons.setdefault(key, {"who": name or "?", "net": 0, "count": 0,
+                                     "due": None, "items": []})
+        p["count"] += 1
+        due = x.get("due_date") or None
+        if due and (p["due"] is None or due < p["due"]):
+            p["due"] = due  # 該人最近的到期日(前端據此標逾期)
+        tag = "待收" if is_out else "待還"
+        if x.get("kind") == "金錢":
+            amt, cur = x.get("amount"), x.get("currency") or "TWD"
+            if amt and cur == "TWD":
+                p["net"] += amt if is_out else -amt
+            elif amt:
+                p["items"].append(f"{tag} {amt:g} {cur}")  # 外幣不與 TWD 互抵,列出保可見
+            else:
+                p["items"].append(f"{tag} 金額未填")
+        elif x.get("kind") == "物品":
+            p["items"].append(f"{tag} {x.get('item') or '物品(未填名稱)'}")
+        else:
+            p["items"].append(f"{tag} {x.get('kind') or '未分類'}")
+    # 待還(net<0)在前、金額大的先;物品/外幣-only 殿後
+    plist = sorted(persons.values(),
+                   key=lambda p: (p["net"] >= 0, -abs(p["net"])))
+    return {"count": len(open_rows), "total": net_total, "persons": plist,
+            "foreign": foreign, "truncated": len(open_rows) > 100}
 
 
 def main() -> None:

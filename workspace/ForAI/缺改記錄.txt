@@ -2271,3 +2271,23 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   8. 金錢類 amount=null 誤顯示「物品」→依 kind 分流顯示「金額未填」。
 - 部署 finish-portal-061.sh 全綠:11 端點 200、/api/life 兩態新形狀斷言過
   (redacted 金額/明細全抹)、chat/M3 403 回歸;live 出數 待收65/待還500 正確。
+
+## 2026-07-09 portal 0.6.2:借貸卡改淨額視圖+依人合併(使用者裁決)
+- 使用者對 0.6.1 的修正:「只要待收/待還抵銷掉的總額」+「同一人要合併成一筆」。
+- 改版:卡面=count+全體互抵淨額(淨待收·他人欠我/淨待還·我欠他人;淨額 0 且無
+  其他往來=已互抵兩清);明細=逐人淨額列(badge 由正負、N 筆互抵、最近到期逾期
+  標註、物品/外幣文字);life.json 契約 items→persons[]={who,net,count,due,items[]}。
+- 審查 workflow 二輪(aggregation/ui-shape 2 鏡頭→對抗驗證,9 agents/175k tokens):
+  6 項確認全修——
+  1.(高)不可互抵筆(外幣/amount=null/物品/未分類 kind)計 count 但不入 net,
+    人列與卡面出「假兩清」→一律轉 items 文字保可見(「待收 100 USD」「待還 金額
+    未填」),卡面淨額 0 時有其他往來改示「金額已互抵·另有非現金往來」,badge
+    加「未結」態,foreign 註記脫離 net!==0 條件;
+  2. who_of 失敗共用 "?" 桶→跨人互抵錯淨額(link_cid 撈不到時全表塌縮一列)
+    →key 帶 rid("?#<id>")各自成列;
+  3. >100 筆時卡面淨額只算前 100 與 count 口徑不一→淨額改全量(不吃 links API),
+    僅逐人明細封頂 100,且先按到期日+Id 穩定排序再截斷(跨輪不跳動)。
+- 部署 finish-portal-062.sh 全綠(11 端點/redacted persons=None/authed 淨額 -435
+  謝于翔 2 筆互抵/chat+M3 403 回歸)。
+- 插曲:誤跑 061 腳本一次(tag 0.6.1 蓋入 0.6.2 內容+舊斷言 KeyError items),
+  062 腳本重錨+persons 斷言後收乾淨;image tag 以 compose 現役 portal:0.6.2 為準。

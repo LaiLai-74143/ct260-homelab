@@ -124,19 +124,17 @@ export interface Game {
   generated_at: string
 }
 
-/** 借貸明細一筆(redacted 時整組 items=null——含對象與金額,僅 portal.hl) */
-export interface DebtItem {
-  id: number
-  /** 待收=我借出(他人欠我);待還=我欠(我欠他人) */
-  dir: '待收' | '待還'
+/** 逐人淨額一列(同人多筆互抵;redacted 時整組 persons=null——含對象與金額,僅 portal.hl) */
+export interface DebtPerson {
   who: string
-  kind: string
-  amount: number | null
-  item?: string | null
-  currency: string
+  /** 簽名淨額(TWD):>0 待收(他人欠我)、<0 待還(我欠他人)、0=兩清或僅物品 */
+  net: number
+  /** 該人未結筆數(互抵來源筆數) */
+  count: number
+  /** 該人最近的到期日 */
   due?: string | null
-  date?: string | null
-  summary?: string | null
+  /** 物品往來(不能互抵),如「待收 電鑽」 */
+  items?: string[]
 }
 
 export interface Life {
@@ -146,11 +144,10 @@ export interface Life {
   calendar_today?: { time: string; title: string | null }[]
   debts_open?: {
     count: number
+    /** 全體互抵後淨額(TWD 簽名值);redacted 時 null */
     total: number | null
-    receivable?: { count: number; total: number | null } | null
-    payable?: { count: number; total: number | null } | null
-    items?: DebtItem[] | null
-    /** 有非 TWD 未結金錢借貸:方向小計僅含 NT$,前端須註明 */
+    persons?: DebtPerson[] | null
+    /** 有非 TWD 未結金錢借貸:淨額僅含 NT$,前端須註明 */
     foreign?: boolean
     truncated?: boolean
   }

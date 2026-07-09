@@ -22,43 +22,42 @@ function localToday(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
-/** 借貸未結卡:筆數+方向拆分金額(待收=他人欠我/待還=我欠他人),點開列未結明細 */
+/** 借貸未結卡:筆數+全體互抵後淨額,點開列逐人淨額(同人多筆合併成一列) */
 function DebtsCard({ d }: { d: LifeData }) {
   const [open, setOpen] = useState(false)
   const debts = d.debts_open
   const count = debts?.count ?? 0
+  const net = debts?.total
+  // 有不可互抵的往來(物品/外幣/金額未填):淨額 0 不代表兩清
+  const hasOther = debts?.persons?.some((p) => p.items?.length) ?? false
   const expandable = count > 0
   const today = localToday()
-
-  const bucket = (b: { count: number; total: number | null } | null | undefined,
-                  label: string, hint: string, warn: boolean) => {
-    if (!b || b.count === 0) return null
-    return (
-      <span className="whitespace-nowrap">
-        <span className={`font-mono text-[15px] font-semibold ${warn ? 'text-amber' : ''}`}>
-          {b.total != null ? money(b.total, 'TWD') : `${b.count} 筆`}
-        </span>
-        <span className="ml-1.5 text-[11.5px] text-muted">
-          {label}·{hint}{b.total != null && debts?.foreign ? '(僅計 NT$)' : ''}
-        </span>
-      </span>
-    )
-  }
 
   const head = (
     <>
       <div className="mb-2 flex items-baseline justify-between">
         <span className="font-mono text-[11px] tracking-[.12em] text-muted">借貸未結</span>
         {expandable && (
-          <span className="font-mono text-[11px] text-muted">{open ? '收合 ▴' : '明細 ▾'}</span>
+          <span className="font-mono text-[11px] text-muted">{open ? '收合 ▴' : '逐人明細 ▾'}</span>
         )}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         <span className="font-mono text-2xl font-semibold">
           {count}<span className="text-[13px] font-normal text-muted"> 筆</span>
         </span>
-        {bucket(debts?.receivable, '待收', '他人欠我', false)}
-        {bucket(debts?.payable, '待還', '我欠他人', true)}
+        {net != null && count > 0 && (
+          <span className="whitespace-nowrap">
+            <span className={`font-mono text-[17px] font-semibold ${net < 0 ? 'text-amber' : ''}`}>
+              {net === 0 ? (hasOther ? '金額已互抵' : '已互抵兩清') : money(Math.abs(net), 'TWD')}
+            </span>
+            {(net !== 0 || hasOther || debts?.foreign) && (
+              <span className="ml-1.5 text-[11.5px] text-muted">
+                {net > 0 ? '淨待收·他人欠我' : net < 0 ? '淨待還·我欠他人' : '另有非現金往來'}
+                {debts?.foreign ? '(僅計 NT$,外幣見明細)' : ''}
+              </span>
+            )}
+          </span>
+        )}
       </div>
     </>
   )
@@ -75,33 +74,29 @@ function DebtsCard({ d }: { d: LifeData }) {
       )}
       {open && (
         <div className="border-t border-line">
-          {(debts?.items ?? []).map((it) => (
-            <div key={it.id} className="flex items-start gap-3 border-b border-line/60 px-4 py-2.5 text-[13.5px] last:border-b-0">
+          {(debts?.persons ?? []).map((p) => (
+            <div key={p.who} className="flex items-start gap-3 border-b border-line/60 px-4 py-2.5 text-[13.5px] last:border-b-0">
               <span className={`mt-0.5 shrink-0 rounded-btn border px-1.5 py-0.5 font-mono text-[11px] ${
-                it.dir === '待還' ? 'border-amber/60 text-amber' : 'border-line text-muted'}`}>
-                {it.dir}
+                p.net < 0 ? 'border-amber/60 text-amber' : 'border-line text-muted'}`}>
+                {p.net < 0 ? '待還' : p.net > 0 ? '待收' : p.items?.length ? '未結' : '兩清'}
               </span>
               <div className="min-w-0 flex-1">
                 <div>
-                  {it.who}
+                  {p.who}
                   <span className="ml-2 font-mono">
-                    {it.amount != null ? money(it.amount, it.currency)
-                      : it.kind === '金錢' ? '金額未填' : (it.item ?? '物品')}
+                    {p.net !== 0 ? money(Math.abs(p.net), 'TWD') : (p.items?.length ? '' : 'NT$ 0')}
                   </span>
                 </div>
-                {(it.summary || it.item || it.due || it.date) && (
-                  <div className="truncate text-[12px] text-muted">
-                    {it.summary ?? it.item ?? ''}
-                    {it.due
-                      ? ` · 到期 ${it.due.slice(0, 10)}${it.due.slice(0, 10) < today ? '(逾期)' : ''}`
-                      : it.date ? ` · ${it.date.slice(0, 10)}` : ''}
-                  </div>
-                )}
+                <div className="truncate text-[12px] text-muted">
+                  {p.count > 1 ? `${p.count} 筆互抵` : `${p.count} 筆`}
+                  {p.due ? ` · 最近到期 ${p.due.slice(0, 10)}${p.due.slice(0, 10) < today ? '(逾期)' : ''}` : ''}
+                  {p.items?.length ? ` · ${p.items.join('、')}` : ''}
+                </div>
               </div>
             </div>
           ))}
-          {debts?.items == null && (
-            // items 缺席兩種來源要分開講:未認證=登入提示;已認證=舊格式檔還沒被新投遞蓋掉
+          {debts?.persons == null && (
+            // persons 缺席兩種來源要分開講:未認證=登入提示;已認證=舊格式檔還沒被新投遞蓋掉
             <div className="px-4 py-3 text-[12.5px] text-muted">
               {d.redacted
                 ? '明細(對象與金額)需經 portal.hl 登入後查看。'
@@ -109,7 +104,7 @@ function DebtsCard({ d }: { d: LifeData }) {
             </div>
           )}
           {debts?.truncated && (
-            <div className="px-4 py-2 text-[11.5px] text-muted">明細僅列最緊急前 50 筆(小計已含全部),完整資料見記帳(NocoDB)。</div>
+            <div className="px-4 py-2 text-[11.5px] text-muted">未結超過 100 筆:卡面淨額為全量,逐人明細僅含最近到期前 100 筆;完整資料見記帳(NocoDB)。</div>
           )}
         </div>
       )}

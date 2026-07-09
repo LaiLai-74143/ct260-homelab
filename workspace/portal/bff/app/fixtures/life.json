@@ -4,18 +4,14 @@
   {"time": "19:30", "title": "家庭聚餐"}
  ],
  "debts_open": {
-  "count": 3,
+  "count": 4,
   "total": 3700,
-  "receivable": {"count": 2, "total": 4200},
-  "payable": {"count": 1, "total": 500},
-  "items": [
-   {"id": 11, "dir": "待還", "who": "謝于翔", "kind": "金錢", "amount": 500, "item": null,
-    "currency": "TWD", "due": null, "date": "2026-07-09", "summary": "飲料基金代收"},
-   {"id": 12, "dir": "待收", "who": "小明", "kind": "金錢", "amount": 4200, "item": null,
-    "currency": "TWD", "due": "2026-07-01", "date": "2026-06-20", "summary": "代墊露營裝備"},
-   {"id": 13, "dir": "待收", "who": "小華", "kind": "物品", "amount": null, "item": "電鑽",
-    "currency": "TWD", "due": null, "date": "2026-06-28", "summary": null}
+  "persons": [
+   {"who": "小明", "net": 4200, "count": 1, "due": "2026-07-01", "items": []},
+   {"who": "謝于翔", "net": -500, "count": 2, "due": null, "items": []},
+   {"who": "小華", "net": 0, "count": 1, "due": null, "items": ["待收 電鑽"]}
   ],
+  "foreign": false,
   "truncated": false
  },
  "stale_seconds": 900,
