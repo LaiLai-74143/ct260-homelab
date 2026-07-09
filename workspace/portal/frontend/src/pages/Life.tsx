@@ -25,6 +25,7 @@ function localToday(): string {
 /** 借貸未結卡:筆數+全體互抵後淨額,點開列逐人淨額(同人多筆合併成一列) */
 function DebtsCard({ d }: { d: LifeData }) {
   const [open, setOpen] = useState(false)
+  const [openWho, setOpenWho] = useState<string | null>(null)
   const debts = d.debts_open
   const count = debts?.count ?? 0
   const net = debts?.total
@@ -74,27 +75,67 @@ function DebtsCard({ d }: { d: LifeData }) {
       )}
       {open && (
         <div className="border-t border-line">
-          {(debts?.persons ?? []).map((p) => (
-            <div key={p.who} className="flex items-start gap-3 border-b border-line/60 px-4 py-2.5 text-[13.5px] last:border-b-0">
-              <span className={`mt-0.5 shrink-0 rounded-btn border px-1.5 py-0.5 font-mono text-[11px] ${
-                p.net < 0 ? 'border-amber/60 text-amber' : 'border-line text-muted'}`}>
-                {p.net < 0 ? '待還' : p.net > 0 ? '待收' : p.items?.length ? '未結' : '兩清'}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div>
-                  {p.who}
-                  <span className="ml-2 font-mono">
-                    {p.net !== 0 ? money(Math.abs(p.net), 'TWD') : (p.items?.length ? '' : 'NT$ 0')}
-                  </span>
+          {(debts?.persons ?? []).map((p, i) => {
+            const rowKey = `${p.who}#${i}` // 多個不明對象 who 皆為 "?",不能拿 who 當鍵
+            return (
+            <div key={rowKey} className="border-b border-line/60 last:border-b-0">
+              {/* 第二層:點人列展開該人交易紀錄(未結全列+最近已結) */}
+              <button
+                onClick={() => setOpenWho((w) => (w === rowKey ? null : rowKey))}
+                aria-expanded={openWho === rowKey}
+                className="flex w-full items-start gap-3 px-4 py-2.5 text-left text-[13.5px]"
+              >
+                <span className={`mt-0.5 shrink-0 rounded-btn border px-1.5 py-0.5 font-mono text-[11px] ${
+                  p.net < 0 ? 'border-amber/60 text-amber' : 'border-line text-muted'}`}>
+                  {p.net < 0 ? '待還' : p.net > 0 ? '待收' : p.items?.length ? '未結' : '兩清'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div>
+                    {p.who}
+                    <span className="ml-2 font-mono">
+                      {p.net !== 0 ? money(Math.abs(p.net), 'TWD') : (p.items?.length ? '' : 'NT$ 0')}
+                    </span>
+                  </div>
+                  <div className="truncate text-[12px] text-muted">
+                    {p.count > 1 ? `${p.count} 筆互抵` : `${p.count} 筆`}
+                    {p.due ? ` · 最近到期 ${p.due.slice(0, 10)}${p.due.slice(0, 10) < today ? '(逾期)' : ''}` : ''}
+                    {p.items?.length ? ` · ${p.items.join('、')}` : ''}
+                  </div>
                 </div>
-                <div className="truncate text-[12px] text-muted">
-                  {p.count > 1 ? `${p.count} 筆互抵` : `${p.count} 筆`}
-                  {p.due ? ` · 最近到期 ${p.due.slice(0, 10)}${p.due.slice(0, 10) < today ? '(逾期)' : ''}` : ''}
-                  {p.items?.length ? ` · ${p.items.join('、')}` : ''}
+                <span className="mt-0.5 shrink-0 font-mono text-[11px] text-muted">
+                  {openWho === rowKey ? '▴' : '▾'}
+                </span>
+              </button>
+              {openWho === rowKey && (
+                <div className="pb-1.5">
+                  {(p.tx ?? []).map((t) => (
+                    <div key={t.id} className="flex items-baseline gap-2.5 py-1 pl-12 pr-4 text-[12.5px]">
+                      <span className={`shrink-0 font-mono text-[11px] ${
+                        t.settled ? 'text-muted/70' : t.dir === '待還' ? 'text-amber' : 'text-muted'}`}>
+                        {t.settled ? '已結' : t.dir}
+                      </span>
+                      <span className={`font-mono ${t.settled ? 'text-muted/70 line-through' : ''}`}>
+                        {t.amount != null ? money(t.amount, t.currency)
+                          : t.kind === '金錢' ? '金額未填' : (t.item ?? '物品')}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-muted">
+                        {t.summary ?? t.item ?? ''}
+                        {t.due
+                          ? ` · 到期 ${t.due.slice(0, 10)}${!t.settled && t.due.slice(0, 10) < today ? '(逾期)' : ''}`
+                          : t.date ? ` · ${t.date.slice(0, 10)}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                  {(p.tx ?? []).length === 0 && (
+                    <div className="py-1 pl-12 pr-4 text-[12px] text-muted">無交易明細(等 CT260 下一輪投遞)。</div>
+                  )}
+                  <div className="py-1 pl-12 pr-4 text-[11px] text-muted">
+                    已結僅列最近 10 筆;完整歷史見記帳(NocoDB)。
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          ))}
+          )})}
           {debts?.persons == null && (
             // persons 缺席兩種來源要分開講:未認證=登入提示;已認證=舊格式檔還沒被新投遞蓋掉
             <div className="px-4 py-3 text-[12.5px] text-muted">

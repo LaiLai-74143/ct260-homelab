@@ -69,6 +69,15 @@ def gcal_today() -> list[dict]:
     return out
 
 
+def _tx_of(x: dict, tag: str, settled: bool) -> dict:
+    """單筆交易 → 逐人列點開的明細條目(life.json persons[].tx)。"""
+    return {"id": x.get("Id"), "dir": tag, "kind": x.get("kind") or "金錢",
+            "amount": x.get("amount"), "currency": x.get("currency") or "TWD",
+            "item": x.get("item") or None, "date": x.get("date") or None,
+            "due": x.get("due_date") or None, "summary": x.get("summary") or None,
+            "settled": settled}
+
+
 # ---- NocoDB(唯讀 records list) ----
 
 def nocodb_debts() -> dict:
@@ -140,7 +149,7 @@ def nocodb_debts() -> dict:
         # 不明對象各自成列(key 帶 rid):共用 "?" 桶會把不同人的帳跨人互抵
         key = name if name else f"?#{rid}"
         p = persons.setdefault(key, {"who": name or "?", "net": 0, "count": 0,
-                                     "due": None, "items": []})
+                                     "due": None, "items": [], "tx": []})
         p["count"] += 1
         due = x.get("due_date") or None
         if due and (p["due"] is None or due < p["due"]):
@@ -158,6 +167,27 @@ def nocodb_debts() -> dict:
             p["items"].append(f"{tag} {x.get('item') or '物品(未填名稱)'}")
         else:
             p["items"].append(f"{tag} {x.get('kind') or '未分類'}")
+        p["tx"].append(_tx_of(x, tag, settled=False))
+
+    # 已結紀錄:只補「有未結往來的人」的近況(逐人列點開看完整脈絡),
+    # 每人最新 10 筆、全域 links 查詢加碼上限 60(人名解析也走 links API)
+    settled_rows = sorted((x for x in rows if x.get("settled")),
+                          key=lambda x: x.get("date") or "", reverse=True)
+    names = {p["who"] for p in persons.values()}
+    budget = 60
+    for x in settled_rows:
+        if budget <= 0:
+            break
+        budget -= 1
+        name = who_of(x.get("Id"))
+        if name is None or name not in names:
+            continue
+        p = persons.get(name)
+        if p is None or len([t for t in p["tx"] if t["settled"]]) >= 10:
+            continue
+        p["tx"].append(_tx_of(x, "待收" if x.get("direction") == "我借出" else "待還",
+                              settled=True))
+
     # 待還(net<0)在前、金額大的先;物品/外幣-only 殿後
     plist = sorted(persons.values(),
                    key=lambda p: (p["net"] >= 0, -abs(p["net"])))

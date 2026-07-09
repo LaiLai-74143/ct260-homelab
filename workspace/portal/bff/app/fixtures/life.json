@@ -1,15 +1,95 @@
 {
  "calendar_today": [
-  {"time": "14:00", "title": "牙醫回診"},
-  {"time": "19:30", "title": "家庭聚餐"}
+  {
+   "time": "14:00",
+   "title": "牙醫回診"
+  },
+  {
+   "time": "19:30",
+   "title": "家庭聚餐"
+  }
  ],
  "debts_open": {
   "count": 4,
   "total": 3700,
   "persons": [
-   {"who": "小明", "net": 4200, "count": 1, "due": "2026-07-01", "items": []},
-   {"who": "謝于翔", "net": -500, "count": 2, "due": null, "items": []},
-   {"who": "小華", "net": 0, "count": 1, "due": null, "items": ["待收 電鑽"]}
+   {
+    "who": "小明",
+    "net": 4200,
+    "count": 1,
+    "due": "2026-07-01",
+    "items": [],
+    "tx": [
+     {
+      "id": 12,
+      "dir": "待收",
+      "kind": "金錢",
+      "amount": 4200,
+      "currency": "TWD",
+      "item": null,
+      "date": "2026-06-20",
+      "due": "2026-07-01",
+      "summary": "代墊露營裝備",
+      "settled": false
+     },
+     {
+      "id": 5,
+      "dir": "待收",
+      "kind": "金錢",
+      "amount": 800,
+      "currency": "TWD",
+      "item": null,
+      "date": "2026-05-02",
+      "due": null,
+      "summary": "午餐代付",
+      "settled": true
+     }
+    ]
+   },
+   {
+    "who": "謝于翔",
+    "net": -500,
+    "count": 2,
+    "due": null,
+    "items": [],
+    "tx": [
+     {
+      "id": 11,
+      "dir": "待還",
+      "kind": "金錢",
+      "amount": 500,
+      "currency": "TWD",
+      "item": null,
+      "date": "2026-07-09",
+      "due": null,
+      "summary": "飲料基金代收",
+      "settled": false
+     }
+    ]
+   },
+   {
+    "who": "小華",
+    "net": 0,
+    "count": 1,
+    "due": null,
+    "items": [
+     "待收 電鑽"
+    ],
+    "tx": [
+     {
+      "id": 13,
+      "dir": "待收",
+      "kind": "物品",
+      "amount": null,
+      "currency": "TWD",
+      "item": "電鑽",
+      "date": "2026-06-28",
+      "due": null,
+      "summary": null,
+      "settled": false
+     }
+    ]
+   }
   ],
   "foreign": false,
   "truncated": false

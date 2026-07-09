@@ -2291,3 +2291,16 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   謝于翔 2 筆互抵/chat+M3 403 回歸)。
 - 插曲:誤跑 061 腳本一次(tag 0.6.1 蓋入 0.6.2 內容+舊斷言 KeyError items),
   062 腳本重錨+persons 斷言後收乾淨;image tag 以 compose 現役 portal:0.6.2 為準。
+
+## 2026-07-09 portal 0.6.3:逐人列第二層明細+助理同音字人名核對(使用者點名)
+- ①life-chat 系統提示詞加規則 7:記帳前先 find_person;查到同音/形近既有人物
+  (于/宇、翔/祥)先問使用者是否打錯,確認才提案——防 add_transaction 自動建出
+  同音重複人物。服務重啟生效。
+- ②hl-write-life persons[].tx:每人帶交易紀錄(未結全列=該列互抵的來源;已結按
+  date 倒序補最近 10 筆,人名解析 links API 全域加碼上限 60,只補「有未結往來的
+  人」)。前端逐人列變 button,點開第二層縮排列表(已結灰字劃線;逾期標註沿用
+  本地日期)。React key 改 who#index——多個不明對象 who 皆 "?" 會撞鍵+聯動展開
+  (自查抓到)。
+- 部署 finish-portal-063.sh(persons[].tx 斷言)全綠。
+- pkill 教訓三犯:pattern 加 [.] 也擋不住同條命令其他部分含明文路徑,
+  pkill 必須單獨一條命令跑(這次 install 先完成,僅自殺無實害)。

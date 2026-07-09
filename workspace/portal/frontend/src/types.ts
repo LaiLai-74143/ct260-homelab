@@ -124,6 +124,20 @@ export interface Game {
   generated_at: string
 }
 
+/** 單筆交易(逐人列點開的第二層明細) */
+export interface DebtTx {
+  id: number
+  dir: '待收' | '待還'
+  kind: string
+  amount: number | null
+  currency: string
+  item?: string | null
+  date?: string | null
+  due?: string | null
+  summary?: string | null
+  settled: boolean
+}
+
 /** 逐人淨額一列(同人多筆互抵;redacted 時整組 persons=null——含對象與金額,僅 portal.hl) */
 export interface DebtPerson {
   who: string
@@ -135,6 +149,8 @@ export interface DebtPerson {
   due?: string | null
   /** 物品往來(不能互抵),如「待收 電鑽」 */
   items?: string[]
+  /** 該人交易紀錄:未結全列+最近已結(≤10 筆,settled 標記) */
+  tx?: DebtTx[]
 }
 
 export interface Life {
