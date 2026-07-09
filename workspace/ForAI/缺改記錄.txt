@@ -2460,3 +2460,17 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   冷卻再試。成功後重跑 finish-ha-notify.sh(段4 吃門口感應器+落自動化A),再實測撤銷鈕。
 - 遺留改進(未做):finish 腳本段4 可加「reload 後查 config entry state=loaded 再判定」;
   ha-notify undo 可查 states 後對 unavailable 實體回報警告而非靜默 ok。
+
+## 2026-07-09 深夜 _2 實體事件收拾 + hl-hass-watch 看門狗上線
+- 使用者重登米雲=「刪除整合重加」→舊實體記憶(deleted_entities 162 條)佔 unique_id →
+  新實體全掛 _2 後綴,既有自動化引用全失效。修=fix-entity-registry.py(停 HA→清
+  deleted_entities xiaomi_miot 殘留+144 條 _2 改回原名→啟 HA;registry 自備份)。
+  首跑 fix2 驗證又踩時序(automation 載入≠xiaomi_miot setup 完,404 誤報)→補「等
+  平台就緒」輪詢+「無 _2 跳過手術」冪等守衛。手術後全實體原名+在線實錘。
+- 使用者需求「把過期加入告警」→hl-hass-watch.py(CT260 cron */10):哨兵 6 實體
+  unavailable≥4 或 API 不可達,連 2 次→ntfy+TG(文案指路重新設定+勿刪除重加);
+  恢復解除+持續 6h 重發。獨立於 HA 本體。dry-run OK 0/6。
+- 分類器攔 3 刀全收斂 fix2:registry 手術(停 HA)/automations.yaml append/crontab
+  persistence——使用者重跑 finish-ha-fix2.sh 一次補齊(自動化A+cron+手術冪等跳過)。
+- 教訓:①xiaomi_miot 整合修復一律「重新設定」不「刪除重加」;②HA「service call 回
+  200」≠設備動作(unavailable 靜默吞);③手改 .storage 必停 HA+備份。

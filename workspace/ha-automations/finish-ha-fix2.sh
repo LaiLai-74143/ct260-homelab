@@ -36,15 +36,22 @@ PYEOF
 }
 
 echo "== 1. registry 手術(停 HA→清孤兒+_2 改名→啟 HA) =="
-scp -q "$SELF_DIR/fix-entity-registry.py" pve24:/tmp/fix-er.py
-ssh pve24 "sudo pct push 270 /tmp/fix-er.py /tmp/fix-er.py && rm -f /tmp/fix-er.py"
-ssh pve24 "sudo pct exec 270 -- bash -c '
+if ssh pve24 "sudo pct exec 270 -- python3 -c \"
+import json
+er = json.load(open('$CONF/.storage/core.entity_registry'))['data']['entities']
+import sys; sys.exit(0 if any(e.get('platform')=='xiaomi_miot' and e['entity_id'].endswith('_2') for e in er) else 1)\""; then
+  scp -q "$SELF_DIR/fix-entity-registry.py" pve24:/tmp/fix-er.py
+  ssh pve24 "sudo pct push 270 /tmp/fix-er.py /tmp/fix-er.py && rm -f /tmp/fix-er.py"
+  ssh pve24 "sudo pct exec 270 -- bash -c '
 set -e
 mkdir -p /root/_backups
 docker stop homeassistant >/dev/null && echo HA-stopped
 python3 /tmp/fix-er.py
 docker start homeassistant >/dev/null && echo HA-started
 '"
+else
+  echo "registry 已無 _2 後綴,跳過手術(不停 HA)"
+fi
 
 echo "== 2. 等 HA 起來+automation 載入(最多 180s) =="
 for i in $(seq 1 36); do
@@ -64,7 +71,14 @@ sys.exit(0 if 'fire_alarm_notify_tg_ntfy' in ids else 1)"; then
   sleep 5
 done
 
-echo "== 3. 驗證關鍵實體回原名 =="
+echo "== 3. 驗證關鍵實體回原名(先等 xiaomi_miot 平台就緒,最多 120s) =="
+# automation 載入 ≠ xiaomi_miot 雲端 setup 完成(30-60s),查太早會 404 誤報(2026-07-09 實踩)
+for i in $(seq 1 24); do
+  ha_api GET /api/states/humidifier.xiaomi_13l_59e5_dehumidifier | head -1 | grep -q "^200$" \
+    && { echo "xiaomi_miot 平台就緒(${i}x5s)"; break; }
+  [ "$i" = 24 ] && { echo "120s 後 xiaomi_miot 實體仍 404——查 docker logs homeassistant 的 xiaomi_miot 錯誤"; exit 1; }
+  sleep 5
+done
 for eid in humidifier.xiaomi_13l_59e5_dehumidifier light.yeelink_colorb_7cbf_light \
            light.yeelink_colorb_9feb_light light.yeelink_colorb_f923_light \
            climate.miir_ir02_7842_ir_aircondition_control \
@@ -92,6 +106,17 @@ else
   ha_api POST /api/services/automation/reload '{}' >/dev/null
   echo "自動化A已落+reload ✓"
 fi
+
+echo "== 5. 安裝 HA 米家看門狗 cron(每 10 分;token 過期/整合離線→ntfy+TG 告警) =="
+if crontab -l 2>/dev/null | grep -q hl-hass-watch; then
+  echo "cron 已在,跳過"
+else
+  ( crontab -l 2>/dev/null; \
+    echo "# hl-hass-watch: HA 米家整合健康看門狗(待辦5, added 2026-07-09)"; \
+    echo "*/10 * * * * /usr/bin/flock -n /home/codex/.local/state/homelab-notify/.hasswatch.lock /usr/bin/python3 /home/codex/.local/bin/hl-hass-watch.py >/dev/null 2>&1" ) | crontab -
+  echo "cron 已裝(*/10)"
+fi
+python3 ~/.local/bin/hl-hass-watch.py
 
 echo ""
 echo "== 完成。驗收 =="
