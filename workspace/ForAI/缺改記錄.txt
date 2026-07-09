@@ -2442,3 +2442,21 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   token 高頻化——皆判「既有同級曝險或斷鏈」(portal/watchdog 先例同模式)。
 - 交付:finish-ha-notify.sh(CT260 跑,前置=hass.env 填權杖;E2E 真發測試通知 3 則);
   人體感應器進 HA 後腳本段4 自動落自動化A(嚴格單顆判準,多顆/零顆不動)。
+
+## 2026-07-09 晚間 xiaomi_miot 雲登入失效事件(火警偵測啞火,待使用者重登)
+- 症狀鏈:使用者實測撤銷鈕(經 Tailscale)→webhook/TG 回報三 turn_off 全 ok 但設備沒動。
+  診斷:主燈×3/除濕機/冷氣/兩顆煙感/門窗全 unavailable,時間戳=14:22:25(=finish 腳本
+  段4 reload 時刻)。HA 對 unavailable 實體的 service call 靜默回 200——「成功回報≠設備
+  動作」,撤銷鏈路本身(手機 Tailscale→CT260:5001→HA API)全通。
+- 根因:xiaomi_miot 小米雲登入失效(service_token 過期),HA 日誌「Setup xiaomi cloud
+  failed: Too many failures when login to Xiaomi」——14:22 HA 重啟+reload 觸發重登失敗,
+  反覆重試觸發小米風控鎖。★衝擊:全米家實體 unavailable 期間火警偵測無效(幸審查已修
+  from 含 unavailable→on,恢復瞬間若正在警報仍會觸發)。
+- 誤診插曲:先按 V7 既有註記判「舊快取卡 online」刪 devices-*-cn.json+reload——錯,快取
+  不是根因且刪掉反而失去 setup fallback;已從 /root/_backups/devices-*.before-20260709_143914
+  還原。教訓:設備級 unavailable 先看 docker logs 的整合層錯誤,再動快取。
+- 修復路徑(待使用者,Mi 帳密不經 Agent 戒律):HA UI→設定→裝置與服務→Xiaomi Miot Auto
+  →重新設定(重輸米家帳密,可能過滑塊/簡訊風控);「Too many failures」持續則等 30-60 分
+  冷卻再試。成功後重跑 finish-ha-notify.sh(段4 吃門口感應器+落自動化A),再實測撤銷鈕。
+- 遺留改進(未做):finish 腳本段4 可加「reload 後查 config entry state=loaded 再判定」;
+  ha-notify undo 可查 states 後對 unavailable 實體回報警告而非靜默 ok。
