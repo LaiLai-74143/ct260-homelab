@@ -2229,3 +2229,20 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   11 端點 200、chat 無 Remote-User 403、M3 回歸 403、容器內 LIFE_CHAT_ 鍵 2。
 - 版本:portal 0.5.2→0.6.0;防火牆新增 Allow-Monitor-To-CT260-LifeChat-5002(照 5001
   模板,無 SNAT);.gitignore 白名單加 !/workspace/life-chat。
+
+## 2026-07-09 life-ops 加 update_transaction(部分結清抽象問題,使用者點名)
+- 實戰暴露:使用者「謝于翔飲料基金 500,動用 65 買 coco」→助理因無改額工具,
+  只能提案「結清舊筆+開新筆 435」兩張卡,語感抽象。使用者裁決:加 update_transaction,
+  「這是基礎就該有的」。
+- 改動:life-ops server.py 加 t_update_transaction(id 必填;可改 amount/currency/item/
+  date/due_date/summary/notes;settled 仍歸 settle_transaction)+DISPATCH+TOOLS schema
+  (18→19 工具,Claude Code MCP 同步受益);life-chat.py WRITE_ACTIONS 6→7+系統提示
+  明示「部分動支=改 amount+notes 追記,勿結清+開新筆」;重裝重啟服務。
+- 驗證:RO 包裝回歸(仍 7 唯讀,update_transaction 未漏入);live 一輪「備註追記」
+  →單張 update_transaction 提案卡,args 精準(id=2, notes=...),未確認未寫入。
+  同時證實使用者先前兩張抽象卡未按確認(id=2 仍 500 未結),帳面乾淨。
+- 注意:update 的 notes 是「覆寫」非「追加」——模型有讀舊紀錄可自行併寫;
+  現況個人帳夠用,若日後要嚴格 append 再議。
+- ★pkill -f 二度自殺教訓:即使 pattern 用 'life-chat[.]py' 括號技巧,同一條命令的
+  其他部分(install 路徑等)含明文 life-chat.py 一樣會被匹配殺掉自己(exit 144)——
+  pkill 與含明文路徑的操作必須拆成兩條命令跑。

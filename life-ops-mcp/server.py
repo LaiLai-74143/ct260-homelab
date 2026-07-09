@@ -351,6 +351,14 @@ def t_add_transaction(a):
     link("Transactions", "counterparty", r["Id"], [hits[0]["Id"]])
     return f"已記錄 [{r['Id']}] {f['summary']} ↔ {hits[0].get('name', a['counterparty'])}。"
 
+def t_update_transaction(a):
+    f = {}
+    for k in ("amount", "currency", "item", "date", "due_date", "summary", "notes"):
+        if a.get(k) is not None: f[k] = a[k]
+    if not f: return "沒有要改的欄位。"
+    update("Transactions", a["id"], f)
+    return f"已更新借貸 [{a['id']}]:" + "、".join(f"{k}={v}" for k, v in f.items()) + "。"
+
 def t_settle_transaction(a):
     update("Transactions", a["id"], {"settled": True, "settled_date": a.get("settled_date") or today()})
     return f"借貸 [{a['id']}] 已結清。"
@@ -468,7 +476,8 @@ DISPATCH = {
     "calendar_conflicts": t_calendar_conflicts, "prep_check": t_prep_check,
     "find_person": t_find_person, "add_person": t_add_person,
     "list_debts": t_list_debts, "balance_by_person": t_balance_by_person,
-    "add_transaction": t_add_transaction, "settle_transaction": t_settle_transaction,
+    "add_transaction": t_add_transaction, "update_transaction": t_update_transaction,
+    "settle_transaction": t_settle_transaction,
     "overdue_debts": t_overdue_debts,
     "find_note": t_find_note, "add_note": t_add_note,
     "list_todos": t_list_todos, "daily_brief": t_daily_brief,
@@ -514,6 +523,10 @@ TOOLS = [
      "inputSchema": S({"counterparty": STR, "direction": STR, "kind": STR, "amount": {"type": "number"},
         "item": STR, "currency": STR, "date": STR, "due_date": STR, "summary": STR, "notes": STR},
         ["counterparty", "direction", "kind"])},
+    {"name": "update_transaction",
+     "description": "修改既有借貸紀錄(id 必填,只帶要改的欄位)。部分動支/餘額變動=改 amount 並在 notes 追記,勿用結清+開新筆。結清請用 settle_transaction。",
+     "inputSchema": S({"id": INT, "amount": {"type": "number"}, "currency": STR, "item": STR,
+        "date": STR, "due_date": STR, "summary": STR, "notes": STR}, ["id"])},
     {"name": "settle_transaction", "description": "把借貸標記結清。",
      "inputSchema": S({"id": INT, "settled_date": STR}, ["id"])},
     {"name": "overdue_debts", "description": "列出過了 due_date 仍未結清的借貸。", "inputSchema": S()},

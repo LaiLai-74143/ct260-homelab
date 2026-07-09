@@ -62,6 +62,9 @@ WRITE_ACTIONS = {
     "add_transaction": {"req": ("counterparty", "direction", "kind"),
                         "opt": ("amount", "item", "currency", "date", "due_date",
                                 "summary", "notes")},
+    "update_transaction": {"req": ("id",),
+                           "opt": ("amount", "currency", "item", "date", "due_date",
+                                   "summary", "notes")},
     "settle_transaction": {"req": ("id",), "opt": ("settled_date",)},
     "add_person": {"req": ("name",), "opt": ("aliases", "relation", "contact", "notes")},
 }
@@ -199,6 +202,7 @@ def _system_prompt() -> str:
    - calendar_update: id*, title, start, end, all_day, location, description, remind_min
    - calendar_delete: id*
    - add_transaction: counterparty*, direction*(我借出|我欠), kind*(金錢|物品), amount, item, currency, date, due_date, summary, notes
+   - update_transaction: id*(整數), amount, currency, item, date, due_date, summary, notes——部分動支/餘額變動用這個:改 amount 並在 notes 追記緣由,勿用「結清+開新筆」
    - settle_transaction: id*(整數), settled_date
    - add_person: name*, aliases, relation, contact, notes
 4. 提案塊外的正文要說清楚你「打算」做什麼,等使用者按確認;絕不聲稱已執行。
