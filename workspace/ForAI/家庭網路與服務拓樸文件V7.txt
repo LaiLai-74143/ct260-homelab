@@ -861,7 +861,9 @@ Docker services(/opt/monitoring):
 
 ```text
 homepage      3000   Up/healthy(:latest 刻意不 pin——退役在即,凍結不再投入;待辦21)
-grafana       3002   grafana/grafana-oss:13.0.2(2026-07-08 待辦21 脫 :latest,pin=現役 digest)
+grafana       3002   grafana/grafana-oss:13.0.2(2026-07-08 待辦21 脫 :latest,pin=現役 digest;
+              2026-07-09 portal 0.7.0 嵌入:開 allow_embedding+匿名 Viewer、snapshot 關死
+              ——匿名可任意唯讀查詢 datasource,曝險界定與回滾見監控告警 §7)
 prometheus    9090   prom/prometheus:v3.12.0(pin 同上)
 uptime-kuma   3001   louislam/uptime-kuma:1.23.17(浮動 :1→pin 同上;compose 在 /opt/uptime-kuma、
               獨立 docker 網路,非本表其餘服務所在的 /opt/monitoring——同 Homepage 模式)
@@ -889,7 +891,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.6.3 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.7.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -968,7 +970,19 @@ portal        8088   portal:0.6.3 本地 build(python:3.13.5-slim+pin;待辦49 M
               (persons[].tx:未結全列+最近已結≤10 筆劃線標已結;React key
               用 who#index 防多個 "?" 撞鍵);生活助理提示詞加規則 7
               (同音異字人名先 find_person 核對再提案,防打錯字建新人物);
-              部署 finish-portal-063.sh
+              部署 finish-portal-063.sh;
+              0.7.0(2026-07-09,使用者點名翻掉「不 iframe」決策):安全面板/
+              設備總覽嵌 Grafana d-solo 圖表(GrafanaPanel.tsx lazy iframe,
+              沿 grafanaUrl 雙路:portal.hl 嵌 grafana.hl same-site 帶 Authelia
+              session;LAN :8088 嵌 :3002 直達)。安全頁=攻擊地圖(panelId 10)
+              +封鎖趨勢(7)+誘捕速率(6,皆 24h);設備頁=CPU/記憶體/磁碟/溫度
+              bargauge(3/4/5/6)+CPU/記憶體趨勢(13/14)。前置=CT201 Grafana
+              開 allow_embedding+匿名 Viewer+snapshot 關死(finish-grafana-
+              embed.sh,曝險界定見監控告警 §7);kiosk 輪播不嵌(embeds=false,
+              防 20s remount 重載 9 iframe);嵌入區不依賴 BFF(API 掛掉圖表
+              照常);借貸明細行改 item(買了什麼)優先於樣板 summary、
+              notes 追記入列(hl-write-life _tx_of 加 notes 欄);
+              部署前 ultracode 審查 11 發現 10 確認全修;部署 finish-portal-070.sh
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

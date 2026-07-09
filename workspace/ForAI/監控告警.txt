@@ -489,6 +489,20 @@ selftest（分流後）：--selftest=warning（只 TG，驗敘事鏈）；--self
   ★ 直連 :3002/:9090/:3001/:3000（PC40 放行）保留為後備，未收（反代/SSO 故障時排障用）。
   ★ Homepage services.yaml 服務 href 已指 .hl（點擊走 SSO）；description 的 URL 文字仍標內網位置（後備參考）。
   ★ Grafana 的 Prometheus datasource 維持容器內直連（prometheus:9090），不走反代（API 走 SSO 會被擋）。
+
+portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 iframe」決策）：
+  compose grafana 服務加 6 個 env（finish-grafana-embed.sh 冪等落位，查值不只查鍵）：
+    GF_SECURITY_ALLOW_EMBEDDING=true（卸 X-Frame-Options）
+    GF_AUTH_ANONYMOUS_ENABLED=true + ORG_ROLE=Viewer + HIDE_VERSION=true
+    GF_SNAPSHOTS_ENABLED=false + GF_SNAPSHOTS_EXTERNAL_ENABLED=false（匿名開啟後關死 snapshot 面）
+  portal 安全面板嵌 openwrt-portscan-autoban panelId 10(攻擊地圖)/7(封鎖趨勢)/6(誘捕速率)，
+  設備總覽嵌 homelab-overview panelId 3/4/5/6(bargauge)/13/14(CPU/記憶體趨勢)——d-solo iframe。
+  ★ 曝險界定（審查確認後接受）：匿名=Main Org. Viewer，可 /api/ds/query 對 Prometheus/Loki
+    任意唯讀查詢、/api/search 列全部 dashboard；可達面=PC40/VLAN80 直達 :3002 + 過 Authelia
+    的 session（grafana.hl 外層不變）；admin/編輯面仍要登入。回滾=compose 蓋回
+    /opt/monitoring/_backups/docker-compose.yml.before-grafana-embed-<TS> + up -d grafana。
+  ★ homelab-overview 的 panelId 是生成器流水號：grafana-overview-gen.py 面板順序/增刪
+    會重編號，必須同步 portal/frontend/src/pages/Devices.tsx（生成器檔頭有同語警示）。
 ```
 
 ---

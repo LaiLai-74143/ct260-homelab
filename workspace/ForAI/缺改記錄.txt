@@ -2304,3 +2304,36 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 部署 finish-portal-063.sh(persons[].tx 斷言)全綠。
 - pkill 教訓三犯:pattern 加 [.] 也擋不住同條命令其他部分含明文路徑,
   pkill 必須單獨一條命令跑(這次 install 先完成,僅自殺無實害)。
+
+## 2026-07-09 portal 0.7.0:Grafana 圖表嵌入頁內(使用者點名,翻掉「不 iframe」決策)
+- 需求:安全面板「原資料與入口卡之間」嵌防火牆審計/攻擊地圖,設備總覽比照。
+  實作=Grafana d-solo 單面板 lazy iframe(GrafanaPanel.tsx),雙路沿 grafanaUrl():
+  portal.hl 嵌 grafana.hl(same-site,Authelia session cookie 直帶);LAN :8088 嵌
+  :3002(PC40 放行)。安全頁 panelId 10/7/6(24h);設備頁 3/4/5/6 bargauge+13/14 趨勢。
+- 前置(finish-grafana-embed.sh,分類器攔「安全鬆綁」類→使用者親跑,全綠):
+  compose grafana 加 6 env=allow_embedding+匿名 Viewer(HIDE_VERSION)+snapshot 雙關。
+  iframe 內無 Grafana 登入態,匿名不開只會渲染登入頁——此為嵌入的硬前提。
+- 審查 workflow(3 鏡頭 correctness/shell/sec-ux→逐項對抗驗證,14 agents/573k):
+  11 發現 10 確認 1 駁回,全處置——
+  1.(高)匿名=Main Org. Viewer 可 /api/ds/query 任意唯讀查詢 Prometheus/Loki、
+    /api/search 列全部 dashboard,grafana.hl 內層防線塌成匿名→收斂(snapshot 關死)
+    +曝險面明文(腳本檔頭/監控告警 §7/V7/Caddyfile 註記),可達面窄(PC40/VLAN80
+    直達+Authelia session)接受;
+  2.(中)Kiosk 輪播復用 Devices/Security 被動吃 9 iframe、每 20s remount 全量重載
+    →兩頁加 embeds prop,kiosk 傳 false;
+  3.(中)070 檔頭回滾宣稱不完整——前端是 bind mount,只蓋回 compose+force-recreate
+    仍是 0.7.0 bundle→回滾指引補「先解 portal-src-before-070 tgz 還原 static+bff」;
+  4. 安全頁嵌入區誤包進 {d && …},BFF 掛掉三面板陪葬→移出條件塊(與 BFF 解耦);
+  5. embed 腳本冪等判斷只查鍵不查值(鍵在值 false 時跳過編輯、重跑永不收斂、錯誤
+    訊息誤導 org 名)→改逐鍵查值 upsert;
+  6. 070 前置探測(d-solo 200)在部署後才驗→前移 step -1,漏跑前置時零副作用即停;
+  7. 空白框文案「連不到 Grafana」漏掉最常見因(SSO 未登入 302→auth.hl 被 XFO 拒繪)
+    →改「SSO 未登入或連不到 Grafana」;panelId 是生成器流水號→生成器+監控告警加
+    重編號必同步 portal 警語;手機 6 iframe 負載=lazy 緩解接受;駁回 1 項(Kuma
+    閃紅預告非既有慣例)仍加一行預告文案。
+- 順手二事:①借貸明細行 item(買了什麼)優先於樣板 summary(「我借出 65」不再蓋掉
+  「COCO 粉角檸檬冬瓜」),notes 追記入列(hl-write-life _tx_of 加 notes,fixtures 同步);
+  ②root 直打 hl-unlock/hl-lock:/usr/local/bin 包裝 su - codex 轉身(使用者親裝,
+  codex 無免密 sudo)。
+- 部署 finish-portal-070.sh 全綠(11 端點 200/static 含 d-solo/Grafana 前置 200/
+  chat+M3 403 回歸);live 驗 /api/life tx 帶 item/notes ✓。

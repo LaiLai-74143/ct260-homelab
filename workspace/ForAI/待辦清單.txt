@@ -801,6 +801,16 @@
     人名核對(先 find_person,疑似打錯字先問再提案);②逐人列可再點開第二層
     =該人交易紀錄(hl-write-life persons[].tx:未結全列+最近已結 10 筆,
     已結解析走 links API 全域加碼上限 60)。部署 finish-portal-063.sh 全綠。
+    【進度 2026-07-09(0.7.0)】使用者點名:Grafana 圖表嵌入頁內(翻掉 0.4.1
+    「只放連結卡」決策)。安全面板=攻擊地圖+封鎖趨勢+誘捕速率;設備總覽=
+    四 bargauge+CPU/記憶體趨勢(d-solo lazy iframe,雙路沿 grafanaUrl)。
+    前置=Grafana 開 allow_embedding+匿名 Viewer+snapshot 關死(finish-grafana-
+    embed.sh,分類器攔安全鬆綁類→使用者親跑,全綠);審查 workflow 三鏡頭
+    14 agents 確認 10/11 項全修(高危=匿名可任意唯讀查詢 datasource,收斂
+    +文件明文接受;Kiosk 關嵌入;腳本冪等查值/回滾兩層/前置前移)。
+    順手:借貸明細行 item 優先+notes 入列(「我借出 65」樣板不再蓋掉
+    「COCO 粉角檸檬冬瓜」);root 直打 hl-unlock 包裝(/usr/local/bin)。
+    部署 finish-portal-070.sh 全綠(11 端點+static 含 d-solo+chat/M3 403 回歸)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
