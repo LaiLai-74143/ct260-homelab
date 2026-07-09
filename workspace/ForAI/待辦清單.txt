@@ -637,7 +637,7 @@
     首次 push 前跑一次 grep 掃描確認無憑證入庫。
 
 -------------------------------------------------------------------------------
-◐37. DXP4800 備份盤點 —— 盤點+索引更新完成(2026-07-09 SSH 窗),收納一步待使用者腳本
+✔37. DXP4800 備份盤點 —— 全結(2026-07-09:盤點+索引+exporter 修復+散落檔歸位全落地)
     ✔ 盤點入《備份位置及策略索引.txt》§1/§5:Back_up 共享全結構(pve24 主 vzdump 58 份/
       VM101 15 份/MC 世界備份/Aegis/restore-lab);健檢 df 四卷(v3 64% 最高);
       SMART 未讀(SSH 帳號無 sudo,UGOS UI 可看)。
@@ -646,8 +646,9 @@
     ★ 順帶根治 dxp-node-exporter 慢性離線(觀察項收案):exporter 其實活著,
       病根=base unit 綁 legacy .31.3(開機時 IP 未就緒)+textfile collector 對不存在
       目錄每 15s 刷 ERROR 灌爆 user journal(=先前 dead-no-journal 假象)。
-    ★ 待使用者(窗開著時):bash ~/workspace/monitoring/finish-37-exporter.sh
-      (override 綁 0.0.0.0+關 textfile+修 644+重啟驗證+散落檔歸位——agent 寫入被分類器攔)。
+    【全結 2026-07-09】使用者解鎖後跑 finish-37-exporter.sh:active、重啟後 textfile
+      錯誤=0、綁 :::9100(CT201 與 VLAN100 兩路 200)、vzdump 歸位+頂層淨空。
+      使用者裁決入索引:database_cache.dat=VeraCrypt 類加密卷勿動;非備份內容原樣保留。
 
 ===============================================================================
 ## P3 低
