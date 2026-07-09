@@ -1,0 +1,50 @@
+groups:
+  - name: ctdmz-gate
+    rules:
+      # OpenWrt 對 10.60.60.10 靜態 proto-all 常開;tailnet->內網的唯一驗證把關在 CT203
+      # nft `table inet ctdmz`(forward policy accept + tailscale0 deny 兜底)。table 缺失或
+      # deny 兜底被移除 = fail-open:未驗證 tailnet 來源直穿內網,且 OpenWrt 無後手。
+      # metric 由 CT203 ctdmz-gate-metrics.timer 本地產出,搭 ct-dmz-proxy-node job scrape。
+      # 見 ForAI 家庭網路與服務拓樸文件V6 §4.8。
+      - alert: CtdmzGateDown
+        expr: ctdmz_gate_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          ai_analyze: "true"
+        annotations:
+          summary: "CT203 tailnet 動態閘門未在把關 (fail-open)"
+          description: "ctdmz_gate_up==0 for 2m:nft table inet ctdmz 缺失或 deny 兜底不齊 -> 未驗證 tailnet 來源可直穿內網(OpenWrt 對 10.60.60.10 proto-all 無後手)。查 CT203:systemctl status ctdmz-nft.service;nft list table inet ctdmz。"
+
+      # series 消失 = textfile collector / timer / node_exporter 故障或 CT203 離線。
+      # 用 absent():消失的 series 用 ==0 無法觸發,只有 absent() 抓得到盲區。
+      - alert: CtdmzGateMetricMissing
+        expr: absent(ctdmz_gate_up)
+        for: 5m
+        labels:
+          severity: warning
+          ai_analyze: "true"
+        annotations:
+          summary: "CT203 閘門健康 metric 消失 (監控盲區)"
+          description: "absent(ctdmz_gate_up) for 5m:CT203 textfile collector/timer/node_exporter 故障或 CT203 離線,閘門狀態進入盲區,需人工確認閘門仍在把關。"
+
+      # textfile 未刷新(timer 卡住) = 讀數過期,可能掩蓋真實變化。
+      - alert: CtdmzGateMetricStale
+        expr: time() - node_textfile_mtime_seconds{file=~".*ctdmz_gate.prom"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CT203 閘門 metric 逾期未刷新"
+          description: "ctdmz_gate.prom 逾 5m 未更新(ctdmz-gate-metrics.timer 卡住?),讀數可能失真,請核對 CT203 timer。"
+
+      # Jellyfin 唯一免驗證豁免須綁死 30.3:8096;放寬 = 免驗證面擴大。
+      - alert: CtdmzJellyfinExemptionDrift
+        expr: ctdmz_jellyfin_exemption_pinned == 0
+        for: 5m
+        labels:
+          severity: warning
+          ai_analyze: "true"
+        annotations:
+          summary: "CT203 Jellyfin 免驗證豁免綁定異動"
+          description: "ctdmz_jellyfin_exemption_pinned==0:綁死 192.168.30.3:8096 的唯一免驗證豁免規則不在預期狀態(被放寬/移除/改址?),請核對 CT203 ctdmz.nft。"

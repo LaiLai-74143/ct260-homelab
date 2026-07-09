@@ -1,0 +1,59 @@
+#!/bin/sh
+# ctdmz-gate-metrics — CT203 本地產出「tailnet 動態閘門健康」metric 供 CT201 scrape + 告警
+#
+# 背景（見 ForAI 家庭網路與服務拓樸文件V6 §4.8 / 注意事項.txt）：
+#   OpenWrt 對 10.60.60.10 是「靜態 proto-all 常開」——tailnet→內網的唯一驗證把關
+#   在本機 nft `table inet ctdmz` 的 forward 鏈（policy accept + tailscale0 deny 兜底）。
+#   若該表未載入/deny 兜底被移除 = fail-open：未驗證 tailnet 來源可直穿 8 個內網段，
+#   且 OpenWrt 無後手。本探針把「閘門是否真的在把關」變成可被 CT201 告警的訊號。
+#
+# 唯讀 nft，無副作用；由 ctdmz-gate-metrics.timer 每 30s 觸發，原子寫入 .prom。
+set -u
+
+OUTDIR=/var/lib/node_exporter/textfile_collector
+OUT="$OUTDIR/ctdmz_gate.prom"
+TMP="$OUT.$$"
+mkdir -p "$OUTDIR" 2>/dev/null
+
+dump=$(nft list table inet ctdmz 2>/dev/null)
+
+gate_up=0
+jelly=0
+authed=0
+if [ -n "$dump" ]; then
+    # forward 鏈須同時具備 authed-accept（@ts_authed_v4）與 ≥2 條 tailscale0 deny 兜底
+    # （tsgate-deny-tcp reject + tsgate-deny-other drop），才算真的在把關。
+    denies=$(printf '%s\n' "$dump" | grep -cE 'iifname "tailscale0".*(reject|drop)')
+    if printf '%s\n' "$dump" | grep -q '@ts_authed_v4' && [ "${denies:-0}" -ge 2 ]; then
+        gate_up=1
+    fi
+    # Jellyfin 唯一免驗證豁免必須綁死 30.3:8096（偵測有人放寬/移動/改址）
+    if printf '%s\n' "$dump" | grep -qE 'ip daddr 192\.168\.30\.3 tcp dport 8096'; then
+        jelly=1
+    fi
+    # 目前已通過 Authelia 的 tailnet 來源數（informational，可為 0）
+    authed=$(nft list set inet ctdmz ts_authed_v4 2>/dev/null \
+        | grep -oE '100\.100\.1\.[0-9]+' | wc -l | tr -d ' ')
+fi
+
+svc_nft=0;  systemctl is-active --quiet ctdmz-nft.service && svc_nft=1
+svc_gate=0; systemctl is-active --quiet ts-gate.service   && svc_gate=1
+
+{
+    echo '# HELP ctdmz_gate_up CT203 tailnet 動態閘門是否在把關(1=table 在且 deny 兜底齊備;0=fail-open 風險)'
+    echo '# TYPE ctdmz_gate_up gauge'
+    echo "ctdmz_gate_up ${gate_up}"
+    echo '# HELP ctdmz_jellyfin_exemption_pinned Jellyfin 免驗證豁免是否仍綁死 192.168.30.3:8096(1=是)'
+    echo '# TYPE ctdmz_jellyfin_exemption_pinned gauge'
+    echo "ctdmz_jellyfin_exemption_pinned ${jelly}"
+    echo '# HELP ctdmz_nft_service_active ctdmz-nft.service 是否 active(1=是)'
+    echo '# TYPE ctdmz_nft_service_active gauge'
+    echo "ctdmz_nft_service_active ${svc_nft}"
+    echo '# HELP ctdmz_tsgate_service_active ts-gate.service(Authelia 通行證寫入器)是否 active(1=是)'
+    echo '# TYPE ctdmz_tsgate_service_active gauge'
+    echo "ctdmz_tsgate_service_active ${svc_gate}"
+    echo '# HELP ctdmz_authed_v4_entries 目前已通過 Authelia 的 tailnet 來源數(informational)'
+    echo '# TYPE ctdmz_authed_v4_entries gauge'
+    echo "ctdmz_authed_v4_entries ${authed}"
+} > "$TMP" && mv "$TMP" "$OUT"
+chmod 644 "$OUT" 2>/dev/null

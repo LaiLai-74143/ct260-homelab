@@ -1,0 +1,87 @@
+# ct-dmz-proxy (CT203, VLAN60 10.60.60.10) — reverse proxy 入口
+# 待辦 #2 + #3。Caddy 2.6.2 (Debian pkg, apt-mark hold)。
+# 角色：cloudflared -> Caddy(:80) -> 後端；內部 SSO 站走 :443 tls internal。
+# auto_https disable_redirects：內部站要 tls internal 自動發證（auto_https off 會連
+#   憑證自動化一併關掉、TLS 握手失敗——2026-07-04 實測），只關 80->443 轉址；
+#   :80 站帶明確埠、本就不受 auto_https 影響，對外 pw.* 仍由 Cloudflare 邊緣終結 TLS。
+# ★ admin off + systemd reload 不相容（reload 走 admin API:2019）→ 改設定一律 systemctl restart caddy。
+# 編輯此源檔後以 pct push 覆蓋 /etc/caddy/Caddyfile，caddy validate 後 restart。
+{
+	admin off
+	auto_https disable_redirects
+}
+
+# ===== 對外（cloudflared -> :80，pw.* = Vaultwarden）=====
+:80 {
+	# 健康端點（Uptime Kuma / 內部探活）
+	@health path /health /healthz
+	respond @health "OK" 200
+
+	# Vaultwarden：cloudflared -> Caddy -> DXP（目前 :80 只有 pw.* 流量，維持 catch-all）
+	reverse_proxy 192.168.30.3:50303
+}
+
+# ===== 內部 SSO（待辦③）：hl.lailai74143.com 內部子域，AGH split-DNS -> 10.60.60.10 =====
+# home.arpa 是 public suffix，Authelia 4.38+ 拒作 cookie domain，故用自有網域內部子域。
+# TLS 為 Caddy internal CA（自簽）；根憑證在 CT203
+#   /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt（客戶端可安裝以消警告）。
+
+# Authelia 入口
+https://auth.hl.lailai74143.com {
+	tls internal
+	reverse_proxy 127.0.0.1:9091
+}
+
+# 內網通行證（待辦③ Phase 2 動態閘門）：過 Authelia 後把 tailnet 來源 IP
+# 寫入 nft ts_authed_v4（到台北當日 00:00）。後端 ts-gate.service（127.0.0.1:9092）。
+# X-Gate-Client 由此處覆寫，客戶端不可偽造。
+https://gate.hl.lailai74143.com {
+	tls internal
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+	reverse_proxy 127.0.0.1:9092 {
+		header_up X-Gate-Client {remote_host}
+	}
+}
+
+# 未驗證 tailnet 來源打內網 http(80/8080) 被 nft redirect 到這裡 → 帶去登入頁
+# （Authelia 登入後 default_redirection_url=gate.hl → 自動發通行證）
+http://:8082 {
+	redir https://auth.hl.lailai74143.com/ 302
+}
+
+# 受保護服務 #1：Prometheus（CT201，原生無認證 -> 首個收編對象）
+https://prometheus.hl.lailai74143.com {
+	tls internal
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+	reverse_proxy 10.80.80.11:9090
+}
+
+# 受保護服務 #2：Grafana（CT201 10.80.80.11:3002）。forward_auth 前置一層 SSO；
+#   Grafana 自身登入保留（雙層，零回歸；日後要免二次登入再配 grafana.ini [auth.proxy]）。
+https://grafana.hl.lailai74143.com {
+	tls internal
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+	reverse_proxy 10.80.80.11:3002
+}
+
+# 受保護服務 #3：Uptime Kuma（CT201 10.80.80.11:3001；SPA + websocket，Caddy 自動處理 Upgrade）。
+https://kuma.hl.lailai74143.com {
+	tls internal
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+	reverse_proxy 10.80.80.11:3001
+}
+
+# 之後逐一收編（待辦③f，每次一個服務）：複製上面模板改 host 與後端即可。
+#   （app 走 API token 的服務要對 app 路徑 bypass，在 Authelia access_control rules 處理）

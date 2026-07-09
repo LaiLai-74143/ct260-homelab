@@ -1,0 +1,9 @@
+[Unit]
+Description=ctdmz gate health metrics (textfile for node_exporter)
+Documentation=ForAI 家庭網路與服務拓樸文件V6 §4.8
+After=ctdmz-nft.service node_exporter.service
+Wants=ctdmz-nft.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ctdmz-gate-metrics

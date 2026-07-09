@@ -1,0 +1,64 @@
+# Homelab DNS source-of-truth on OpenWrt
+#
+# Role:
+# - Resolve home.arpa local device/module names.
+# - OpenWrt should become the primary DNS source-of-truth.
+#
+# Format:
+# IP    FQDN aliases...
+
+
+# ===== OpenWrt / Gateways =====
+192.168.10.1    openwrt.home.arpa openwrt infra-gw.home.arpa infra-gw vlan10-gw
+192.168.31.1    openwrt-legacy.home.arpa openwrt-legacy legacy-gw.home.arpa legacy-gw
+192.168.30.1    storage-gw.home.arpa storage-gw vlan30-gw
+192.168.40.1    trusted-gw.home.arpa trusted-gw vlan40-gw
+192.168.50.1    iot-gw.home.arpa iot-gw vlan50-gw
+10.60.60.1      dmz-gw.home.arpa dmz-gw vlan60-gw
+10.67.67.1      game-gw.home.arpa game-gw vlan67-gw
+10.80.80.1      service-gw.home.arpa service-gw monitor-gw.home.arpa vlan80-gw
+10.66.66.1      honeypot-gw.home.arpa honeypot-gw vlan666-gw
+
+# ===== Router PVE / N95 =====
+192.168.10.2    router-pve.home.arpa router-pve router-pve-infra.home.arpa router-pve-infra pve-router-infra
+192.168.31.2    router-pve-legacy.home.arpa router-pve-legacy
+
+# ===== DXP4800 / NAS =====
+192.168.30.3    nas.home.arpa dxp4800 nas nas-storage.home.arpa dxp4800-storage
+192.168.100.2   nas-fast.home.arpa dxp4800-fast nas-fast
+
+# ===== PC =====
+192.168.40.4    pc.home.arpa pc pc40.home.arpa pc40 pc-vlan40
+192.168.31.4    pc-legacy.home.arpa pc-legacy
+192.168.100.1   pc-fast.home.arpa pc-fast
+
+# ===== 24Bay PVE =====
+192.168.20.5    pve24.home.arpa pve24 pve24-server.home.arpa pve24-server
+192.168.31.5    pve24-legacy.home.arpa pve24-legacy
+192.168.100.3   pve24-fast.home.arpa pve24-fast
+
+# ===== CT201 Monitor / Service Edge =====
+10.80.80.11     monitor.home.arpa monitor monitor-edge.home.arpa monitor-edge kuma
+
+# ===== AP / IoT =====
+192.168.50.41   ap-main.home.arpa ap-main wifimain wifi-main
+192.168.50.42   ap-node.home.arpa ap-node wifisub wifi-sub rn01
+
+# ===== Switch3F =====
+192.168.10.21   switch3f.home.arpa switch3f switch3f-infra.home.arpa switch3f-infra
+192.168.31.21   switch3f-legacy.home.arpa switch3f-legacy
+
+# ===== Minecraft proxy/backend modules =====
+10.67.67.10     mc-proxy.home.arpa mc-proxy velocity mc.home.arpa mc mc-server
+10.67.67.20     mc-backend.home.arpa mc-backend
+
+# ===== DMZ / Public Services (VLAN60) =====
+10.60.60.10     ct-dmz-proxy.home.arpa ct-dmz-proxy dmz-proxy.home.arpa dmz-proxy caddy
+
+# ===== Honeypot / polluted zone =====
+10.66.66.10     honeypot.home.arpa honeypot cowrie
+
+# ===== Restore / Lab =====
+192.168.20.50   vaultwarden-restore-test.home.arpa restore-lab.home.arpa ct250.home.arpa
+192.168.20.60   codex-ops.home.arpa codex-ops ct260.home.arpa ct260
+192.168.20.70   life-ops.home.arpa life-ops ct270.home.arpa ct270

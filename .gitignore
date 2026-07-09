@@ -20,6 +20,7 @@
 # life-chat 生活助理(待辦49)
 !/workspace/life-chat
 !/workspace/ha-automations
+!/workspace/ct-dmz-proxy
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local
@@ -47,3 +48,4 @@ __pycache__/
 *.key
 id_ed25519*
 id_rsa*
+/workspace/ct-dmz-proxy/*.deb

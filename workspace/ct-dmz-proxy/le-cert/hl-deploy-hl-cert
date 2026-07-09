@@ -1,0 +1,107 @@
+#!/bin/bash
+# hl-deploy-hl-cert — 把 LE wildcard 憑證(*.hl.lailai74143.com)部署到 CT203 Caddy + restart + 驗證
+# 在哪跑:CT260(codex@codex-ops),常駐路徑 ~/.local/bin/hl-deploy-hl-cert
+#   (SoT=~/workspace/ct-dmz-proxy/le-cert/,由 finish-le-hl-cert.sh 複製落位)
+# 呼叫者:
+#   ① finish-le-hl-cert.sh 段4(--skip-verify:只推檔不 restart 不驗證——Caddyfile 尚未切換,
+#      restart 無意義、信任鏈驗證必失敗;restart 由段5 切換時做)
+#   ② acme.sh 續簽 reloadcmd(cron 時 ssh 金鑰多半上鎖 → 部署失敗降級成 TG 通知,
+#      使用者 hl-unlock 後手動重跑本腳本即可;憑證本體已續好,有 ~60 天緩衝)
+# 讀取:~/.local/state/le-hl/{hl-fullchain.pem,hl-privkey.pem}(acme.sh --install-cert 產出)
+# 安全設計(2026-07-09 審查後):私鑰過境 pve24:/tmp 先 install -m600 佔位再 scp(scp 覆蓋
+#   既有檔保留權限);pct push --perms 0600 → chown/chmod 收斂,CT203 端無 world-readable 窗口;
+#   舊憑證推前備份 .prev,restart 失敗自動回退;TG token 走 curl -K stdin 不經 argv。
+set -uo pipefail
+
+STAGE="$HOME/.local/state/le-hl"
+FULL="$STAGE/hl-fullchain.pem"
+KEY="$STAGE/hl-privkey.pem"
+LOG="$STAGE/deploy.log"
+DMZ_IP="10.60.60.10"
+CERTDIR="/etc/caddy/certs"
+HOSTS="auth gate prometheus grafana kuma homepage portal"
+SKIP_VERIFY=0
+[ "${1:-}" = "--skip-verify" ] && SKIP_VERIFY=1
+
+mkdir -p "$STAGE"
+log() { printf '[%s] %s\n' "$(date '+%F %T')" "$1" >> "$LOG"; }
+
+tg() {  # TG 通知;token 經 curl -K stdin 餵入,不進 argv(戒律:secrets 不經命令列)
+    local envf="$HOME/.config/homelab/notify-telegram.env" token chat
+    token=$(grep '^TELEGRAM_BOT_TOKEN=' "$envf" 2>/dev/null | cut -d= -f2-)
+    chat=$(grep '^TELEGRAM_CHAT_ID=' "$envf" 2>/dev/null | cut -d= -f2-)
+    [ -n "$token" ] && [ -n "$chat" ] || { log "TG 憑證缺失,通知未送"; return 1; }
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$token" | \
+        curl -sf -m 20 -K - \
+            --data-urlencode "chat_id=${chat}" \
+            --data-urlencode "text=$1" >/dev/null || log "TG send failed"
+}
+
+cleanup_tmp() {  # best-effort 清 pve24 /tmp 殘留(ssh 上鎖時靜默略過)
+    ssh -o ConnectTimeout=5 pve24 "rm -f /tmp/hl-fullchain.pem /tmp/hl-privkey.pem" 2>/dev/null || true
+}
+
+fail() {
+    log "FAIL: $1"; echo "FAIL: $1" >&2
+    cleanup_tmp
+    tg "⚠️ hl 憑證部署失敗:$1
+處置:hl-unlock 後執行 ~/.local/bin/hl-deploy-hl-cert(憑證已在 CT260,僅差推送)"
+    exit 1
+}
+
+[ -s "$FULL" ] && [ -s "$KEY" ] || fail "staging 檔缺失($STAGE)"
+
+# ── 推送:pve24 /tmp 先 600 佔位 → scp(覆蓋保留權限)→ 備份舊憑證 .prev → pct push --perms 0600 ──
+ssh pve24 "install -m 600 /dev/null /tmp/hl-fullchain.pem && install -m 600 /dev/null /tmp/hl-privkey.pem" \
+    || fail "pve24 佔位檔建立失敗(ssh 金鑰上鎖?)"
+scp -q "$FULL" "$KEY" pve24:/tmp/ || fail "scp 到 pve24 失敗"
+ssh pve24 "sudo pct exec 203 -- sh -c 'test -f $CERTDIR/hl-fullchain.pem && cp -af $CERTDIR/hl-fullchain.pem $CERTDIR/hl-fullchain.pem.prev; test -f $CERTDIR/hl-privkey.pem && cp -af $CERTDIR/hl-privkey.pem $CERTDIR/hl-privkey.pem.prev; true'" \
+    || fail "CT203 舊憑證備份失敗"
+ssh pve24 "sudo pct push 203 /tmp/hl-fullchain.pem $CERTDIR/hl-fullchain.pem --perms 0600 && \
+           sudo pct push 203 /tmp/hl-privkey.pem $CERTDIR/hl-privkey.pem --perms 0600" \
+    || fail "pct push 到 CT203 失敗"
+cleanup_tmp
+ssh pve24 "sudo pct exec 203 -- chown root:caddy $CERTDIR/hl-fullchain.pem $CERTDIR/hl-privkey.pem" \
+    || fail "chown 失敗"
+ssh pve24 "sudo pct exec 203 -- chmod 640 $CERTDIR/hl-fullchain.pem $CERTDIR/hl-privkey.pem" \
+    || fail "chmod 失敗"
+log "憑證已推送(舊版備份 .prev)"
+
+if [ "$SKIP_VERIFY" = "1" ]; then
+    log "skip-verify 模式:不 restart 不驗證(首次部署,restart 由 Caddyfile 切換段負責)"
+    echo "憑證已推送(未 restart/驗證——由 finish 腳本後續段負責)"
+    exit 0
+fi
+
+# ── restart + 存活檢查;失敗自動回退 .prev ──
+restart_ok=1
+ssh pve24 "sudo pct exec 203 -- systemctl restart caddy" || restart_ok=0
+sleep 2
+[ "$restart_ok" = "1" ] && ssh pve24 "sudo pct exec 203 -- systemctl is-active --quiet caddy" || restart_ok=0
+if [ "$restart_ok" != "1" ]; then
+    ssh pve24 "sudo pct exec 203 -- sh -c 'test -f $CERTDIR/hl-fullchain.pem.prev && cp -af $CERTDIR/hl-fullchain.pem.prev $CERTDIR/hl-fullchain.pem; test -f $CERTDIR/hl-privkey.pem.prev && cp -af $CERTDIR/hl-privkey.pem.prev $CERTDIR/hl-privkey.pem; systemctl restart caddy'" \
+        || log "回退舊憑證亦失敗,需人工介入"
+    fail "caddy restart 後未存活,已嘗試回退舊憑證(.prev)"
+fi
+log "caddy restart + 存活 OK"
+
+# ── 驗證:①服務端 leaf 指紋==本地 leaf ②信任鏈過系統 CA(不帶 -k)③各站 200/302 ──
+want=$(openssl x509 -in "$FULL" -noout -fingerprint -sha256 2>/dev/null)
+got=$(timeout 10 openssl s_client -connect "$DMZ_IP:443" -servername portal.hl.lailai74143.com \
+      </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null)
+[ -n "$want" ] && [ "$want" = "$got" ] || fail "服務端憑證指紋不符(want=$want got=$got)"
+
+bad=""
+for h in $HOSTS; do
+    fqdn="$h.hl.lailai74143.com"
+    code=$(curl -sS -o /dev/null -m 10 -w '%{http_code}' \
+           --resolve "$fqdn:443:$DMZ_IP" "https://$fqdn/" 2>>"$LOG") || { bad="$bad $fqdn(TLS)"; continue; }
+    case "$code" in 200|302) ;; *) bad="$bad $fqdn($code)";; esac
+done
+[ -z "$bad" ] || fail "站點驗證未過:$bad"
+
+expiry=$(openssl x509 -in "$FULL" -noout -enddate | cut -d= -f2)
+log "驗證全過;到期 $expiry"
+echo "部署+驗證完成;憑證到期:$expiry"
+tg "✅ hl 憑證已部署(*.hl.lailai74143.com,LE);到期 $expiry;7 站信任鏈驗證全過"
+exit 0

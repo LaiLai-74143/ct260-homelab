@@ -1,0 +1,29 @@
+# ct-dmz-proxy (CT203, VLAN60 10.60.60.10) — reverse proxy 入口
+# 待辦 #2。Caddy 2.6.2 (Debian pkg, apt-mark hold)。
+# 角色：cloudflared -> Caddy(:80) -> 後端。auto_https off（Cloudflare 邊緣終結 TLS，
+#       cloudflared->Caddy 為內部 http）。編輯此源檔後以 pct push 覆蓋 /etc/caddy/Caddyfile。
+{
+	admin off
+	auto_https off
+}
+
+# --- 健康端點（Uptime Kuma / 內部探活）：pre-cutover 期回 200 ---
+:80 {
+	@health path /health /healthz
+	respond @health "OK" 200
+	respond "ct-dmz-proxy caddy up" 200
+}
+
+# ================================================================
+# CUTOVER 模板（待辦 #2 step d）— 維護窗啟用，需先確認 Vaultwarden 後端埠
+#   + OpenWrt 加 dmz(10.60.60.10)->storage(192.168.30.3):<port> 單條放行
+#   + Cloudflare dashboard 把 public hostname service 改指 http://10.60.60.10
+# vault.lailai74143.com {
+#     reverse_proxy 192.168.30.3:<VAULTWARDEN_HTTP_PORT>
+#     # 待辦 #3 Authelia 上線後加：
+#     # forward_auth authelia:9091 {
+#     #     uri /api/verify?rd=https://auth.home.arpa
+#     #     copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+#     # }
+# }
+# ================================================================

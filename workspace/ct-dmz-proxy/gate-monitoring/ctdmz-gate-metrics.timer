@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ctdmz-gate-metrics every 30s (refresh gate-health textfile)
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=ctdmz-gate-metrics.service
+
+[Install]
+WantedBy=timers.target

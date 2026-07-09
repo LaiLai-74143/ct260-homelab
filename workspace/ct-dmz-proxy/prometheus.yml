@@ -1,0 +1,155 @@
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets:
+          - "prometheus:9090"
+        labels:
+          device: "Prometheus"
+          order: "10"
+
+  - job_name: "monitor-node"
+    static_configs:
+      - targets:
+          - "host.docker.internal:9100"
+        labels:
+          device: "CT201 監控"
+          order: "03"
+
+  - job_name: "pve-node"
+    static_configs:
+      - targets:
+          - "pve24-server.home.arpa:9100"
+        labels:
+          device: "24Bay PVE"
+          order: "06"
+  - job_name: "mc-server-node"
+    static_configs:
+      - targets:
+          - "mc.home.arpa:9100"
+        labels:
+          device: "CT100 MC伺服器"
+          order: "01"
+
+  - job_name: "openwrt-portscan-autoban"
+    scrape_interval: 30s
+    metrics_path: "/metrics.txt"
+    static_configs:
+      - targets:
+          - "10.80.80.1:9105"
+        labels:
+          device: "OpenWrt 自動封禁"
+          order: "12"
+
+  - job_name: "portscan-geoip"
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - "host.docker.internal:9115"
+        labels:
+          device: "Portscan GeoIP"
+          order: "16"
+
+  - job_name: "cowrie-exporter"
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - "10.66.66.10:9116"
+        labels:
+          device: "Cowrie 蜜罐exporter"
+          order: "14"
+
+  - job_name: "cowrie-geoip"
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - "10.80.80.11:9117"
+        labels:
+          device: "Cowrie GeoIP"
+          order: "15"
+
+  - job_name: "openwrt-cowrie-quarantine"
+    scrape_interval: 30s
+    metrics_path: "/cowrie-quarantine-metrics.txt"
+    static_configs:
+      - targets:
+          - "10.80.80.1:9105"
+        labels:
+          device: "OpenWrt 蜜罐隔離"
+          order: "13"
+
+  - job_name: "ct102-mc-proxy-node"
+    static_configs:
+      - targets:
+          - "10.67.67.10:9100"
+        labels:
+          device: "CT102 MC代理"
+          order: "02"
+
+  - job_name: "ct260-codex-ops-node"
+    static_configs:
+      - targets:
+          - "192.168.20.60:9100"
+        labels:
+          device: "CT260 維運"
+          order: "04"
+
+  - job_name: "n95-router-pve-node"
+    static_configs:
+      - targets:
+          - "router-pve.home.arpa:9100"
+        labels:
+          device: "N95 路由PVE"
+          order: "07"
+
+  - job_name: "openwrt-system"
+    scrape_interval: 30s
+    metrics_path: "/openwrt-system-metrics.txt"
+    static_configs:
+      - targets:
+          - "10.80.80.1:9105"
+        labels:
+          device: "OpenWrt 系統"
+          order: "11"
+
+  - job_name: "dxp4800-node"
+    static_configs:
+      - targets: ["nas.home.arpa:9100"]
+        labels:
+          device: "DXP4800 NAS"
+          order: "08"
+
+  - job_name: "vm300-honeypot-node"
+    static_configs:
+      - targets: ["10.66.66.10:9100"]
+        labels:
+          device: "VM300 蜜罐"
+          order: "05"
+
+  - job_name: "ct270-life-ops-node"
+    static_configs:
+      - targets:
+          - "192.168.20.70:9100"
+        labels:
+          device: "CT270 生活維運"
+          order: "09"
+
+  - job_name: "ct-dmz-proxy-node"
+    static_configs:
+      - targets:
+          - "10.60.60.10:9100"
+        labels:
+          device: "CT203 DMZ反代"
+          order: "10"
