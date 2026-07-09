@@ -891,7 +891,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.7.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.8.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -982,7 +982,19 @@ portal        8088   portal:0.7.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               防 20s remount 重載 9 iframe);嵌入區不依賴 BFF(API 掛掉圖表
               照常);借貸明細行改 item(買了什麼)優先於樣板 summary、
               notes 追記入列(hl-write-life _tx_of 加 notes 欄);
-              部署前 ultracode 審查 11 發現 10 確認全修;部署 finish-portal-070.sh
+              部署前 ultracode 審查 11 發現 10 確認全修;部署 finish-portal-070.sh;
+              0.8.0(2026-07-09,使用者點名):①設備總覽拔現況 bargauge 改六張
+              趨勢折線(CPU/記憶體/磁碟讀寫/網路收/溫度,panelId 13/14/17/18/15/20);
+              ②遊戲頁 MCSM 控制鍵(open/stop/restart 走 :23333 protected_instance
+              優雅開停,白名單不含 kill/檔案;uuid 由 BFF 嚴格認 Fabric-MC 自解析)
+              +LAN 網頁終端 iframe(#/instances/terminal;portal.hl 因 HTTPS 混合
+              內容改連結卡)。instance_state 權威=MCSM 實例狀態碼(-1busy/0stopped/
+              1stopping/2starting/3running),pve_up 僅作 MCSM 失聯 fallback——LXC
+              存活≠MC 進程在跑。控制 gate=Remote-User(portal.hl)∨來源 IP∈
+              PORTAL_GAME_ALLOW_IPS(預設 PC40 192.168.40.4)+必帶 X-Requested-With
+              (CSRF 防護);MCSM_CTRL_KEY 獨立於唯讀 key(finish-mcsm-control.sh,
+              源=CT260 ~/.config/homelab/mcsm-control.env),實例級單飛 409。
+              審查 11 確認項全修;部署 finish-portal-080.sh 全綠
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

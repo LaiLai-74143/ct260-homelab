@@ -811,6 +811,16 @@
     順手:借貸明細行 item 優先+notes 入列(「我借出 65」樣板不再蓋掉
     「COCO 粉角檸檬冬瓜」);root 直打 hl-unlock 包裝(/usr/local/bin)。
     部署 finish-portal-070.sh 全綠(11 端點+static 含 d-solo+chat/M3 403 回歸)。
+    【進度 2026-07-09(0.8.0)】使用者點名三項:①設備總覽拔現況 bargauge 改
+    六張趨勢折線;②遊戲頁 MCSM 控制鍵(啟動/停止/重啟走 protected_instance
+    優雅開停,非殺 Java;裁決=portal.hl+PC40 皆可按);③LAN 嵌 MCSM 網頁終端
+    (portal.hl HTTPS 混合內容限制改連結)。審查 workflow 三鏡頭 15 agents 確認
+    11 項全修,關鍵:instance_state 錯源(pve_up 只看 LXC 存活,停服後啟動鍵
+    永不出現)改 MCSM 實例狀態碼權威;/api/game/action 補 gate(Remote-User∨
+    PC40 IP+X-Requested-With 防 CSRF——:8088 可達面不只 PC40);部署腳本錨點
+    protected_instance 在 minify 後必 0(改 api/game/action)、E2E 去真開機副作用;
+    key 不進 argv(python 讀檔)+trap 清暫存。MCSM_CTRL_KEY 已落(len32,與唯讀
+    key 分開);finish-portal-080.sh+finish-mcsm-control.sh 全綠,control.enabled ✓。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

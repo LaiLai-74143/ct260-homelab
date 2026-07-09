@@ -2337,3 +2337,36 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   codex 無免密 sudo)。
 - 部署 finish-portal-070.sh 全綠(11 端點 200/static 含 d-solo/Grafana 前置 200/
   chat+M3 403 回歸);live 驗 /api/life tx 帶 item/notes ✓。
+
+## 2026-07-09 portal 0.8.0:設備頁趨勢化+遊戲頁 MCSM 控制/終端機(使用者點名)
+- ①設備總覽拔現況型 bargauge(與主機卡即時值重複),改六張趨勢折線
+  (panelId 13/14/17/18/15/20,6h)。②遊戲頁控制鍵:BFF game_ctrl.py 轉發 MCSM 9.x
+  protected_instance open/stop/restart(優雅開停;白名單不含 kill/檔案/設定;
+  uuid/daemonId 由 BFF 自解析不吃前端)。③MCSM 網頁終端:LAN iframe
+  #/instances/terminal;portal.hl(HTTPS)混合內容擋 http iframe→改連結卡。
+- 審查 workflow(correctness/shell/sec 三鏡頭→對抗驗證,15 agents/600k):
+  12 發現 11 確認 1 駁回,全處置——
+  1.(高)instance_state 取自 pve_up{lxc/100}=LXC 存活,MCSM stop 只停 Java 容器照跑
+    →停服後「啟動」鍵永不出現、狀態卡誤報運行中→改 MCSM 實例狀態碼權威
+    (-1busy/0stopped/1stopping/2starting/3running),pve 僅失聯 fallback;前端加
+    過渡態(啟動中…/停止中…收起按鍵)。
+  2.(高)/api/game/action 原無任何認證 gate,而「:8088 只 PC40 可達」不實(發證
+    手機經 CT203 masq、VLAN80 主機皆可達)→gate=Remote-User∨來源 IP∈
+    PORTAL_GAME_ALLOW_IPS(PC40 192.168.40.4)+必帶 X-Requested-With
+    (自訂 header 強制 CORS preflight=CSRF 防護);同款非硬邊界明文。
+  3.(高)部署腳本 E2E 錨 grep "protected_instance"——該字串只在源碼註解,minify
+    後必 0 命中,正確 build 反而 exit 1→錨改執行期字串 api/game/action。
+  4.(中)E2E 真打 open 會把停機中的伺服器拉起(違反重跑無害)→全改必被擋路徑
+    (無 XRW 403/kill 403),零 MCSM 副作用。
+  5.(中)finish-mcsm-control key 經 $ak 展開仍進 curl argv;失聯時 set -e 中止
+    遺留 /tmp/mcsmq 明文→python 讀檔組請求(key 全程不進 argv)+trap 清檔。
+  6. 跨動作競態(stop/restart 同時到終態不確定)→實例級全域單飛 409;
+    _resolve_instance 去掉 insts[0] fallback(嚴格認 Fabric-MC,防對非預期實例開停);
+    key 走 MCSM query 參數入其 access log=API 形制限制,CT100 root-only 接受註記。
+- 裁決記錄:控制權限=portal.hl+PC40 皆可(Q2);終端機=LAN 嵌入即可、手機開新
+  分頁(Q1,零新基建)。MCSM_CTRL_KEY 與唯讀 MCSM_API_KEY 分開可獨立輪替;
+  env 模板先落 ~/.config/homelab/mcsm-control.env 交使用者填(新交付規矩:
+  腳本註明在哪台/哪身份跑;金鑰檔先生成占位模板)。
+- 部署 finish-portal-080.sh+finish-mcsm-control.sh 全綠;live 驗 instance_state=
+  running(MCSM 權威)、control.enabled、雙 403 gate。使用者填 key 曾帶引號,
+  剝除後 32 字元純英數。
