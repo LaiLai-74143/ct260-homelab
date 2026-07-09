@@ -124,12 +124,36 @@ export interface Game {
   generated_at: string
 }
 
+/** 借貸明細一筆(redacted 時整組 items=null——含對象與金額,僅 portal.hl) */
+export interface DebtItem {
+  id: number
+  /** 待收=我借出(他人欠我);待還=我欠(我欠他人) */
+  dir: '待收' | '待還'
+  who: string
+  kind: string
+  amount: number | null
+  item?: string | null
+  currency: string
+  due?: string | null
+  date?: string | null
+  summary?: string | null
+}
+
 export interface Life {
   pending?: boolean
   hint?: string
   redacted?: boolean
   calendar_today?: { time: string; title: string | null }[]
-  debts_open?: { count: number; total: number | null }
+  debts_open?: {
+    count: number
+    total: number | null
+    receivable?: { count: number; total: number | null } | null
+    payable?: { count: number; total: number | null } | null
+    items?: DebtItem[] | null
+    /** 有非 TWD 未結金錢借貸:方向小計僅含 NT$,前端須註明 */
+    foreign?: boolean
+    truncated?: boolean
+  }
   stale_seconds?: number | null
   generated_at: string
 }

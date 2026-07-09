@@ -889,7 +889,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.6.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.6.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -899,7 +899,9 @@ portal        8088   portal:0.6.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               +Vite SPA 靜態檔;bind-mount /opt/portal/{static,data}(ro);
               晨報=CT260 homelab-notify.py --write-brief(cron 06:00 台北)→hl-push→
               /opt/portal/data/brief.json(日期副本保留 30 期);
-              生活=CT260 hl-write-life(cron */30;GCal 行事曆+NocoDB 借貸,憑證只在 CT260)
+              生活=CT260 hl-write-life(cron */30;GCal 行事曆+NocoDB 借貸,憑證只在 CT260;
+              2026-07-09 方向拆分 receivable/payable+items 明細——人名走 links API 逐筆查,
+              單筆失敗降級 "?" 不炸整次投遞;小計全量、明細先排序後封頂 50)
               →hl-push→/opt/portal/data/life.json——推不是拉,BFF 零新憑證零新防火牆;
               源檔 CT260 ~/workspace/portal(git,docs/M2-架構.md=設計稿);
               建置 CT260 vite build→tar+sha256→pve24 pct push,CT201 不裝 node;
@@ -951,7 +953,12 @@ portal        8088   portal:0.6.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               :5002(Sonnet 5,見 §4.4 Allow-Monitor-To-CT260-LifeChat-5002 與
               §10 life-chat 段);權限比照 M3 僅 portal.hl(Remote-User);
               portal.env 新鍵 LIFE_CHAT_URL/LIFE_CHAT_TOKEN;寫入=提案確認卡,
-              模型無寫入工具;部署 finish-portal-060.sh(live E2E:記帳線真對話過)
+              模型無寫入工具;部署 finish-portal-060.sh(live E2E:記帳線真對話過);
+              0.6.1(2026-07-09):借貸未結卡升級——筆數+方向拆分小計(待收=
+              他人欠我/待還=我欠他人,小計僅含 NT$,外幣以 foreign 旗標註明)
+              +點開列未結明細(待還在前、到期近先、逾期標註、明細封頂 50 但
+              小計全量);資料源=hl-write-life 方向拆分(見 §9 生活行);
+              redacted 面明細/金額全抹只留件數;部署 finish-portal-061.sh
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

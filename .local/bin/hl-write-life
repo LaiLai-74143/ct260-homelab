@@ -80,13 +80,18 @@ def nocodb_debts() -> dict:
         req = urllib.request.Request(url + path, headers={"xc-token": tok})
         return json.loads(urllib.request.urlopen(req, timeout=20).read())
 
-    tid = None
+    tid = link_cid = None
     for t in api(f"/api/v1/db/meta/projects/{base}/tables")["list"]:
         if t["title"] == "Transactions":
             tid = t["id"]
             break
     if tid is None:
         raise RuntimeError("NocoDB 無 Transactions 表")
+    # counterparty 連結欄:v2 records 只回連結數,人名要走 links API(同 life-ops linked())
+    for col in api(f"/api/v1/db/meta/tables/{tid}")["columns"]:
+        if col["title"] == "counterparty" and col["uidt"] in ("Links", "LinkToAnotherRecord"):
+            link_cid = col["id"]
+            break
 
     rows = []
     while True:
@@ -97,12 +102,50 @@ def nocodb_debts() -> dict:
         if not batch or r.get("pageInfo", {}).get("isLastPage", True):
             break
 
+    def who_of(rid) -> str:
+        # 人名是裝飾性資料:單筆 links 查詢失敗(競態 404/瞬時逾時)降級成 "?",
+        # 不得升級成整次投遞中斷(「任一數據源失敗=整次不投遞」不適用此路徑)
+        if link_cid is None:
+            return "?"
+        try:
+            ls = api(f"/api/v2/tables/{tid}/links/{link_cid}/records/{rid}?limit=1").get("list", [])
+            return (ls[0].get("name") or "?") if ls else "?"
+        except Exception:  # noqa: BLE001
+            return "?"
+
     open_rows = [x for x in rows if not x.get("settled")]
-    net = 0
+    # 先排序再截斷:待還在前(要動作的先看到),組內到期日近的先——
+    # 明細封頂 50 時保留的才是最緊急的,而非 API 預設的建立順序
+    open_rows.sort(key=lambda x: (x.get("direction") == "我借出",
+                                  x.get("due_date") or "9999-12-31"))
+    recv = {"count": 0, "total": 0}  # 我借出 → 待收(他人欠我)
+    pay = {"count": 0, "total": 0}   # 我欠  → 待還(我欠他人)
+    foreign = False
+    # count/total 全量彙總(不吃 links API,無截斷理由);金額只加 TWD,
+    # 出現外幣以 foreign 旗標告知前端「小計僅含 NT$」
     for x in open_rows:
+        bucket = recv if x.get("direction") == "我借出" else pay
+        bucket["count"] += 1
         if x.get("kind") == "金錢" and x.get("amount"):
-            net += x["amount"] if x.get("direction") == "我借出" else -x["amount"]
-    return {"count": len(open_rows), "total": net}
+            if (x.get("currency") or "TWD") == "TWD":
+                bucket["total"] += x["amount"]
+            else:
+                foreign = True
+    items = []
+    for x in open_rows[:50]:  # 僅明細封頂:逐筆查人名護 API
+        is_out = x.get("direction") == "我借出"
+        amt = x.get("amount") if x.get("kind") == "金錢" else None
+        items.append({
+            "id": x.get("Id"), "dir": "待收" if is_out else "待還",
+            "who": who_of(x.get("Id")), "kind": x.get("kind") or "金錢",
+            "amount": amt, "item": x.get("item") or None,
+            "currency": x.get("currency") or "TWD",
+            "due": x.get("due_date") or None, "date": x.get("date") or None,
+            "summary": x.get("summary") or None,
+        })
+    return {"count": len(open_rows), "total": recv["total"] - pay["total"],
+            "receivable": recv, "payable": pay, "items": items,
+            "foreign": foreign, "truncated": len(open_rows) > 50}
 
 
 def main() -> None:

@@ -1,13 +1,120 @@
+import { useState } from 'react'
 import { useLife } from '../api'
 import Dot from '../components/Dot'
 import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
+import type { Life as LifeData } from '../types'
 
 function staleText(s?: number | null): string {
   if (s == null) return ''
   if (s < 90) return '剛更新'
   if (s < 3600) return `${Math.round(s / 60)} 分前更新`
   return `${Math.round(s / 3600)} 小時前更新`
+}
+
+function money(amount: number, currency: string): string {
+  return currency === 'TWD' ? `NT$ ${amount.toLocaleString()}` : `${amount.toLocaleString()} ${currency}`
+}
+
+/** 本地(裝置時區)日期字串——toISOString 是 UTC,UTC+8 凌晨會漏標逾期 */
+function localToday(): string {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
+
+/** 借貸未結卡:筆數+方向拆分金額(待收=他人欠我/待還=我欠他人),點開列未結明細 */
+function DebtsCard({ d }: { d: LifeData }) {
+  const [open, setOpen] = useState(false)
+  const debts = d.debts_open
+  const count = debts?.count ?? 0
+  const expandable = count > 0
+  const today = localToday()
+
+  const bucket = (b: { count: number; total: number | null } | null | undefined,
+                  label: string, hint: string, warn: boolean) => {
+    if (!b || b.count === 0) return null
+    return (
+      <span className="whitespace-nowrap">
+        <span className={`font-mono text-[15px] font-semibold ${warn ? 'text-amber' : ''}`}>
+          {b.total != null ? money(b.total, 'TWD') : `${b.count} 筆`}
+        </span>
+        <span className="ml-1.5 text-[11.5px] text-muted">
+          {label}·{hint}{b.total != null && debts?.foreign ? '(僅計 NT$)' : ''}
+        </span>
+      </span>
+    )
+  }
+
+  const head = (
+    <>
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="font-mono text-[11px] tracking-[.12em] text-muted">借貸未結</span>
+        {expandable && (
+          <span className="font-mono text-[11px] text-muted">{open ? '收合 ▴' : '明細 ▾'}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <span className="font-mono text-2xl font-semibold">
+          {count}<span className="text-[13px] font-normal text-muted"> 筆</span>
+        </span>
+        {bucket(debts?.receivable, '待收', '他人欠我', false)}
+        {bucket(debts?.payable, '待還', '我欠他人', true)}
+      </div>
+    </>
+  )
+
+  return (
+    <section className="mb-3.5 rounded-card border border-line bg-panel">
+      {expandable ? (
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+                className="w-full px-4 py-3.5 text-left">
+          {head}
+        </button>
+      ) : (
+        <div className="px-4 py-3.5">{head}</div>
+      )}
+      {open && (
+        <div className="border-t border-line">
+          {(debts?.items ?? []).map((it) => (
+            <div key={it.id} className="flex items-start gap-3 border-b border-line/60 px-4 py-2.5 text-[13.5px] last:border-b-0">
+              <span className={`mt-0.5 shrink-0 rounded-btn border px-1.5 py-0.5 font-mono text-[11px] ${
+                it.dir === '待還' ? 'border-amber/60 text-amber' : 'border-line text-muted'}`}>
+                {it.dir}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div>
+                  {it.who}
+                  <span className="ml-2 font-mono">
+                    {it.amount != null ? money(it.amount, it.currency)
+                      : it.kind === '金錢' ? '金額未填' : (it.item ?? '物品')}
+                  </span>
+                </div>
+                {(it.summary || it.item || it.due || it.date) && (
+                  <div className="truncate text-[12px] text-muted">
+                    {it.summary ?? it.item ?? ''}
+                    {it.due
+                      ? ` · 到期 ${it.due.slice(0, 10)}${it.due.slice(0, 10) < today ? '(逾期)' : ''}`
+                      : it.date ? ` · ${it.date.slice(0, 10)}` : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {debts?.items == null && (
+            // items 缺席兩種來源要分開講:未認證=登入提示;已認證=舊格式檔還沒被新投遞蓋掉
+            <div className="px-4 py-3 text-[12.5px] text-muted">
+              {d.redacted
+                ? '明細(對象與金額)需經 portal.hl 登入後查看。'
+                : '來源資料尚無明細,等 CT260 下一輪投遞(每 30 分鐘)。'}
+            </div>
+          )}
+          {debts?.truncated && (
+            <div className="px-4 py-2 text-[11.5px] text-muted">明細僅列最緊急前 50 筆(小計已含全部),完整資料見記帳(NocoDB)。</div>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default function Life() {
@@ -55,15 +162,7 @@ export default function Life() {
               </div>
             ))}
           </section>
-          <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
-            <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">借貸未結</div>
-            <div className="font-mono text-2xl font-semibold">
-              {d.debts_open?.count ?? 0}<span className="text-[13px] font-normal text-muted"> 筆</span>
-              {d.debts_open?.total != null && d.debts_open.total > 0 && (
-                <span className="ml-3 text-[15px]">NT$ {d.debts_open.total.toLocaleString()}</span>
-              )}
-            </div>
-          </section>
+          <DebtsCard d={d} />
           <div className="rounded-card border border-dashed border-line px-4 py-3 text-[12.5px] text-muted">
             RSS 訊息:待辦 30 落地後接入,本期不留假位。
           </div>

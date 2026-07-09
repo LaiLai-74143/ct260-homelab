@@ -2246,3 +2246,28 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - ★pkill -f 二度自殺教訓:即使 pattern 用 'life-chat[.]py' 括號技巧,同一條命令的
   其他部分(install 路徑等)含明文 life-chat.py 一樣會被匹配殺掉自己(exit 144)——
   pkill 與含明文路徑的操作必須拆成兩條命令跑。
+
+## 2026-07-09 portal 0.6.1:借貸未結卡方向拆分+可展開明細(使用者點名)
+- 需求:筆數右邊加金額總數、注明方向(用詞裁定:待收=他人欠我/待還=我欠他人)、
+  點進去看所有未結清紀錄。
+- 三層改動:
+  ① hl-write-life:nocodb_debts() 方向拆分 receivable/payable(count/total)+items
+    明細。人名:v2 records 的 counterparty 連結欄只回連結數,須 links API 逐筆查
+    (meta 取 link col id,同 life-ops linked() 作法)。
+  ② BFF _redact_life:未認證留方向 count、total=None、items=None(明細含對象+金額)。
+  ③ 前端 DebtsCard:小計列(待還琥珀色)+點開明細(dir 徽章/對象/金額/到期/逾期);
+    items 缺席分兩態文案(redacted=登入提示/authed=舊格式檔等下輪投遞)。
+- ★部署前多視角審查 workflow(pipeline/privacy/frontend 3 鏡頭→逐項對抗驗證,
+  16 agents/307k tokens):9 項發現 8 項確認、1 項駁回(direction 二值由 SingleSelect
+  +MCP schema 保證)。確認項全修:
+  1.(高)who_of 單筆 links 失敗會炸整次投遞→try/except 降級 "?"(裝飾性資料
+    不適用「任一源失敗=不投遞」戒律);
+  2.(高)>50 筆時小計只加前 50 筆與 count 矛盾→count/total 全量彙總,僅 items 封頂;
+  3. 截斷在排序前→先排序(待還前、due 近先)再截斷,保留的是最緊急的;
+  4. 混幣別直加誤標 NT$→小計 TWD-only+foreign 旗標,前端註「僅計 NT$」;
+  5. 逾期判定用 UTC 日期(UTC+8 凌晨漏標)→本地日期組字串;
+  6. items==null 對已登入者誤示「需登入」→依 d.redacted 分兩態文案;
+  7. count=0 仍渲染可聚焦 no-op button→改非互動 div;
+  8. 金錢類 amount=null 誤顯示「物品」→依 kind 分流顯示「金額未填」。
+- 部署 finish-portal-061.sh 全綠:11 端點 200、/api/life 兩態新形狀斷言過
+  (redacted 金額/明細全抹)、chat/M3 403 回歸;live 出數 待收65/待還500 正確。

@@ -1,17 +1,22 @@
 {
  "calendar_today": [
-  {
-   "time": "14:00",
-   "title": "牙醫回診"
-  },
-  {
-   "time": "19:30",
-   "title": "家庭聚餐"
-  }
+  {"time": "14:00", "title": "牙醫回診"},
+  {"time": "19:30", "title": "家庭聚餐"}
  ],
  "debts_open": {
   "count": 3,
-  "total": 4200
+  "total": 3700,
+  "receivable": {"count": 2, "total": 4200},
+  "payable": {"count": 1, "total": 500},
+  "items": [
+   {"id": 11, "dir": "待還", "who": "謝于翔", "kind": "金錢", "amount": 500, "item": null,
+    "currency": "TWD", "due": null, "date": "2026-07-09", "summary": "飲料基金代收"},
+   {"id": 12, "dir": "待收", "who": "小明", "kind": "金錢", "amount": 4200, "item": null,
+    "currency": "TWD", "due": "2026-07-01", "date": "2026-06-20", "summary": "代墊露營裝備"},
+   {"id": 13, "dir": "待收", "who": "小華", "kind": "物品", "amount": null, "item": "電鑽",
+    "currency": "TWD", "due": null, "date": "2026-06-28", "summary": null}
+  ],
+  "truncated": false
  },
  "stale_seconds": 900,
  "generated_at": "fixture"

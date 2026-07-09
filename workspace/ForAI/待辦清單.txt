@@ -786,6 +786,12 @@
     全綠(11 端點+chat 兩態 403+M3 回歸+記帳線真對話 E2E)。
     順手修:GCal refresh token invalid_grant(既有故障)→使用者重跑 get_gcal_token.py
     換發,行事曆線復活(V7 §10.5 gcal 段已註記診斷路徑)。
+    【進度 2026-07-09(0.6.1)】借貸未結卡升級(使用者點名):筆數旁加方向拆分
+    小計(用詞裁定:待收=他人欠我/待還=我欠他人),卡片點開列未結明細(待還前、
+    到期近先、逾期標註);hl-write-life 方向拆分+items(人名 links API 逐筆,
+    單筆失敗降級不炸投遞;小計全量、明細封頂 50、TWD-only+foreign 旗標)。
+    部署前跑多視角審查 workflow(3 鏡頭+對抗驗證,16 agents):確認 8 缺陷
+    (2 高危:who_of 失敗炸投遞、>50 筆小計少算)全數修復後才部署,全綠。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
