@@ -886,7 +886,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.5.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.5.2 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -939,7 +939,10 @@ portal        8088   portal:0.5.1 本地 build(python:3.13.5-slim+pin;待辦49 M
               (見 §1.2 電力保護監控面;2026-07-08 使用者 root 跑
               finish-ups-metrics.sh 後全鏈驗通,電力頁 live);
               0.5.1(2026-07-08):大廳新增「常用網站」板塊(Homepage bookmarks
-              5 組 14 站搬遷,src/sites.ts=站點 SoT;Homepage 退役前置)
+              5 組 14 站搬遷,src/sites.ts=站點 SoT;Homepage 退役前置);
+              0.5.2(2026-07-09):生活頁底部新增跳轉入口兩張卡——行事曆→
+              calendar.google.com、記帳→NocoDB 192.168.20.70:8080(純前端,
+              零新 env 零防火牆;部署 finish-portal-052.sh)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

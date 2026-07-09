@@ -2186,3 +2186,15 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   打 :22→絆線 drop(=使用者看到的 timeout)+SSH22TripwireHit 誤報,silence 1h
   (eb5b65ba)註記收場。教訓:root 無 codex 的 ssh config;phone 端指令一律
   su - codex -c 包裝。
+
+## 2026-07-09 portal 0.5.2:生活頁跳轉入口(行事曆/記帳)
+- 使用者點名:入口大廳生活頁新增行事曆/記帳跳轉。生活頁底部加兩張入口卡
+  (沿用遊戲頁 MCSM 入口卡樣式,md 以上並排、手機直排,常駐顯示不依賴 life 數據):
+  行事曆→https://calendar.google.com/(行程 SoT=GCal,NocoDB Events 表已刪);
+  記帳→http://192.168.20.70:8080(NocoDB 借貸;PC40 有 Allow-PC40-To-CT270-LifeOps-NocoDB,
+  手機經 TSGate 發證後全內網轉發可達——直 IP 不走 home.arpa,避免 tailnet 端 DNS 不解析)。
+- 純前端+版本字串,零新 env 零防火牆。版本 0.5.1→0.5.2(package.json+bff main.py)。
+- 部署 finish-portal-052.sh(照 051 模式:build→tar+sha256→pve24 pct push→CT201
+  docker build+compose 換 tag→force-recreate):11 端點 200、/life SPA fallback 200、
+  static 含 calendar.google.com、M3 無 Remote-User→403 回歸過。
+- 金鑰面:適逢使用者解鎖窗(ssh-add -l 有 ops 指紋),walk 全程走 ops 別名,未動 -auto。

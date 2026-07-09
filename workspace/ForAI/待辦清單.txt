@@ -775,6 +775,9 @@
     【進度 2026-07-08(0.5.1)】Homepage 退役前置(使用者點名):底部 bookmarks
     (AI/Social/Video/Private Tracker/Network 5 組 14 站)搬入大廳「常用網站」板塊
     (src/sites.ts=站點 SoT,日後加站直接改檔);mock 6/6 PASS、部署全綠。
+    【進度 2026-07-09(0.5.2)】生活頁底部新增跳轉入口兩張卡(使用者點名):
+    行事曆→calendar.google.com、記帳→NocoDB 192.168.20.70:8080(純前端,
+    finish-portal-052.sh 部署全綠:11 端點 200+/life 200+M3 403 回歸)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

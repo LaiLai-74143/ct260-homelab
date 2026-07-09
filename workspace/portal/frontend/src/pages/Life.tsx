@@ -68,6 +68,18 @@ export default function Life() {
           </div>
         </>
       )}
+
+      {/* 跳轉入口:portal 唯讀,新增/編輯去源頭(行事曆=Google Calendar;記帳=NocoDB 借貸) */}
+      <div className="mt-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2">
+        <a href="https://calendar.google.com/" target="_blank" rel="noreferrer"
+           className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+          行事曆(Google Calendar)→ <span className="font-mono text-[12px] text-muted">calendar.google.com ↗</span>
+        </a>
+        <a href="http://192.168.20.70:8080" target="_blank" rel="noreferrer"
+           className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+          記帳(NocoDB)→ <span className="font-mono text-[12px] text-muted">192.168.20.70:8080 ↗</span>
+        </a>
+      </div>
     </>
   )
 }
