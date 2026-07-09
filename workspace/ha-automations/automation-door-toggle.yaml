@@ -1,0 +1,21 @@
+
+- id: door_closed_toggle_lights
+  alias: 關門切換主燈
+  description: >-
+    門窗感應器 on→off(關門)→ 主燈整組切換(以 7cbf 現態為基準全開/全關,避免三顆
+    各自 toggle 不一致)。2026-07-09 使用者裁決:取代「門窗+人體5秒互鎖」(雲端輪詢下
+    時間窗量化失真,實測不觸發)。from 限 "on" 擋 unavailable→off 的恢復誤觸。
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.isa_dw2hl_4226_magnet_sensor
+      from: "on"
+      to: "off"
+  condition: []
+  action:
+    - service: "light.turn_{{ 'off' if is_state('light.yeelink_colorb_7cbf_light', 'on') else 'on' }}"
+      target:
+        entity_id:
+          - light.yeelink_colorb_7cbf_light
+          - light.yeelink_colorb_9feb_light
+          - light.yeelink_colorb_f923_light
