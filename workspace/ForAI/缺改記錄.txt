@@ -2498,3 +2498,20 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   updateTime=判「輪詢死活」與「事件是否進雲」的鐵證;看完調回 warning。
 - 教訓:HA 觸發器測不過,分三層驗——①動作鏈(手動 automation.trigger)②實體輪詢
   (debug log fetch success)③事件到雲(prop updateTime)。三層各有獨立死法。
+
+## 2026-07-10 關門切燈退役交棒米家中樞網關 + HA 干擾源清除
+- 使用者在米家 App 建「胤樺房間開關門自動切換燈」本地場景(BE3600 Pro 中樞網關,
+  「本地」標籤=本地執行)實測穩定——事件驅動 vs HA 雲端 30 秒抽樣,天生勝出。
+- HA door_closed_toggle_lights 遂成干擾源(門開>30 秒時米家先切、HA 半分鐘後再切回)
+  →agent 即時 automation.turn_off 止血(service call 過分類器,off 態跨重啟保存),
+  永久移除收斂 finish-ha-remove-door-toggle.sh:CT270 yaml 移除塊(自備份)→reload→
+  websocket 清幽靈×2(互鎖版+toggle 版;REST 無 registry 端點,借容器內 aiohttp,
+  token 暫存檔 600 不經 argv)→驗證餘 3 條。finish-ha-ghost-clean.sh 併入後刪除。
+- 架構定調:反射動作(感測→設備)=米家中樞本地;通知鏈/跨生態/複雜條件=HA。
+  火警雙推留 HA(App「烟雾超标提醒」響喇叭為本地互補,兩路並行不衝突)。
+- 中樞網關×HA:無正規整合路——中樞是米家封閉生態的本地執行引擎,無 API/MQTT,
+  xiaomi_miot 只見其雲端投影,拿不到本地事件流。HA 本地即時收 BLE 正解=ESP32 刷
+  ESPHome Bluetooth Proxy(WiFi 回傳,免 USB 直通,可放感應器附近)+HA Xiaomi BLE
+  整合+每設備 bindkey(Xiaomi Cloud Tokens Extractor 自米雲抓;Mi 帳密不經 Agent
+  戒律=使用者自跑);BLE 廣播是一對多,HA 旁聽不影響米家。覆蓋 BLE 廣播類
+  (門窗 dw2hl/人體 pir1),Zigbee(煙感)/BLE Mesh 不在此路徑。記待辦5 候選。

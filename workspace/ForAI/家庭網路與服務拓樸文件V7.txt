@@ -1310,15 +1310,19 @@ Home Assistant(HA Container 形態;LXC 內不能 HAOS/Supervised,無官方 Add-o
   出站繞代理:容器 NO_PROXY 含 .mi.com/.xiaomi.com/.miot-spec.org/.miot-spec.com → 小米流量
     直連、由 scoped-WAN 接住。Mi 帳密/service_token 只在 HA .storage,不經 Agent、不入本文件。
   miio 規則收窄(pin dest_ip)暫緩:iot 多為動態 IP,pin 死易破控;現況已 src+單埠+單目的區。
-  ★ 2026-07-09 家用自動化(待辦5,ha-automations/):automations.yaml 四條——到家(開主燈×3+
+  ★ 2026-07-09 家用自動化(待辦5,ha-automations/):automations.yaml 三條——到家(開主燈×3+
     除濕機+>30°C冷氣,尾掛 rest_command.ct260_notify_arrival→ntfy+撤銷鈕)/平日0550/火警雙推
-    (兩顆 lumi 煙感 from 含 unavailable|unknown→on,漏接防護)/關門切換主燈;rest_command 打
-    CT260:5001(secrets.yaml ct260_webhook_auth,NO_PROXY 含 192.168/16 不繞代理)。
-    關門切換主燈(door_closed_toggle_lights)=門窗 on→off 時三主燈以 7cbf 現態為基準整組
-    開/關(取代 5 秒互鎖版——實測不觸發,詳缺改記錄 2026-07-09 深夜二段)。
+    (兩顆 lumi 煙感 from 含 unavailable|unknown→on,漏接防護);rest_command 打 CT260:5001
+    (secrets.yaml ct260_webhook_auth,NO_PROXY 含 192.168/16 不繞代理)。
+    關門切換主燈已退役(2026-07-10):door_closed_toggle_lights(前身=5 秒互鎖版,皆敗於
+    抽樣限制)改由米家 App 本地場景接手(BE3600 Pro 中樞網關本地執行,「本地」標籤,
+    實測穩定);HA 版留著=門開>30 秒時二次切換干擾,已移除。★分工定調:反射動作
+    (感測→設備)=米家中樞本地;通知鏈/跨生態/複雜條件=HA。
     ★BLE 雲端輪詢=每 30 秒「抽樣現值」非事件流:門開<30 秒可能整段漏掉(雲端有收到事件、
-    HA 抽樣踩不到「開」的窗口→off→off 無轉換→觸發器不點火);HA 版只保證「門開≥30-60 秒
-    後關」場景,要即時/不漏=米家 App 雲端場景(事件驅動)。勿為此調短輪詢——已兩度風控鎖。
+    HA 抽樣踩不到「開」的窗口→off→off 無轉換→觸發器不點火)。勿調短輪詢——已兩度風控鎖。
+    中樞網關×HA 無正規整合路(封閉生態無 API/MQTT;xiaomi_miot 只見雲端投影)。HA 本地
+    即時收 BLE 的正解(候選未做)=ESP32 刷 ESPHome Bluetooth Proxy+HA Xiaomi BLE 整合+
+    每設備 bindkey(米雲抓,Mi 帳密不經 Agent);覆蓋 BLE 廣播類(門窗/人體),Zigbee 煙感不在此路徑。
     xiaomi_miot 匯入=did_list[] exclude(全量),新設備進 HA 只需 reload 整合(雲清單快取
     devices-*-cn.json 不自動重抓,V7 既有排錯註記)。
 
