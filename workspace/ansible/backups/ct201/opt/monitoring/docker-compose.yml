@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.12.0
     container_name: prometheus
     restart: unless-stopped
     ports:
@@ -20,7 +20,7 @@ services:
       - "--web.external-url=https://prometheus.hl.lailai74143.com"
 
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:13.0.2
     container_name: grafana
     restart: unless-stopped
     ports:
@@ -34,9 +34,15 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SERVER_ROOT_URL=https://grafana.hl.lailai74143.com
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
+      - GF_SNAPSHOTS_ENABLED=false
+      - GF_SNAPSHOTS_EXTERNAL_ENABLED=false
 
   gotify:
-    image: gotify/server:latest
+    image: gotify/server:2.9.1
     container_name: gotify
     restart: unless-stopped
     ports:
@@ -47,7 +53,7 @@ services:
       - gotify_data:/app/data
 
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.33.0
     container_name: alertmanager
     restart: unless-stopped
     ports:
@@ -60,7 +66,7 @@ services:
       - "--storage.path=/alertmanager"
 
   alertmanager-gotify-bridge:
-    image: ghcr.io/druggeri/alertmanager_gotify_bridge:latest
+    image: ghcr.io/druggeri/alertmanager_gotify_bridge:2.3.2
     container_name: alertmanager-gotify-bridge
     restart: unless-stopped
     env_file:
@@ -90,7 +96,7 @@ services:
     # 無 host port:僅 prometheus 經 compose 內網 scrape(snmp-exporter:9116),比照 pve-exporter
 
   portal:
-    image: portal:0.5.0
+    image: portal:0.8.2
     container_name: portal
     restart: unless-stopped
     ports:
@@ -150,6 +156,22 @@ services:
       - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
       - ntfy_cache:/var/cache/ntfy
       - ntfy_auth:/var/lib/ntfy
+
+  diun:
+    image: crazymax/diun:4.30.0
+    container_name: diun
+    restart: unless-stopped
+    command: serve
+    volumes:
+      - ./diun-data:/data
+      - ./diun.yml:/diun.yml:ro
+      - ./diun-images.yml:/etc/diun/images.yml:ro
+      - ./secrets/diun-ntfy-token:/run/secrets/ntfy-token:ro
+    environment:
+      - TZ=Asia/Taipei
+      - LOG_LEVEL=info
+    # 版本更新監看(待辦21):file provider 全站 pin 清單→本機 ntfy topic homelab-updates
+    # (TG egress 維持集中 CT260,diun 無對外通知通道);設定檔改動後 docker restart diun
 
 volumes:
   prometheus_data:

@@ -17,3 +17,24 @@ recorder:
   commit_interval: 30
   purge_keep_days: 7
   auto_purge: true
+
+# --- HA 家用通知鏈(2026-07-09,finish-ha-notify.sh 部署) ---
+# 打 CT260 ntfy-webhook(:5001,同 VLAN20 直達;NO_PROXY 含 192.168.0.0/16 不繞代理)。
+# token=WEBHOOK_TOKEN_HA(第三把,secrets.yaml ct260_webhook_auth),與 ntfy 按鈕/portal 分開。
+rest_command:
+  ct260_notify_fire:
+    url: "http://192.168.20.60:5001/run"
+    method: post
+    headers:
+      Authorization: !secret ct260_webhook_auth
+    content_type: "application/json"
+    payload: '{"action":"notify-fire","param":"{{ room }}"}'
+    timeout: 30
+  ct260_notify_arrival:
+    url: "http://192.168.20.60:5001/run"
+    method: post
+    headers:
+      Authorization: !secret ct260_webhook_auth
+    content_type: "application/json"
+    payload: '{"action":"notify-arrival"}'
+    timeout: 30

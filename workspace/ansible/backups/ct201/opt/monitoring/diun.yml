@@ -1,0 +1,28 @@
+# diun 4.30.0(待辦21,2026-07-08):全站映像新版偵測
+# 通知=本機 ntfy topic homelab-updates(pub token 寫入,phone 使用者可讀訂閱)——
+# TG egress 維持集中 CT260 戒律,diun 不直發 TG;registry 查詢走 CT201 既有 docker egress。
+# ★ 本檔與 diun-images.yml 為單檔 bind-mount:改檔後須 docker restart diun(sed -i 換 inode,HUP 不夠)。
+db:
+  path: /data/diun.db
+
+watch:
+  workers: 4
+  schedule: "15 8 * * *"
+  firstCheckNotif: false
+
+providers:
+  file:
+    filename: /etc/diun/images.yml
+
+notif:
+  ntfy:
+    endpoint: http://ntfy
+    topic: homelab-updates
+    tokenFile: /run/secrets/ntfy-token
+    priority: 2
+    tags:
+      - whale
+    templateTitle: "diun: {{ .Entry.Image }}"
+    templateBody: |
+      監看到新版:{{ .Entry.Image }}({{ .Entry.Provider }})
+      升級流程:查 changelog → 維護窗改 pin → up -d → 驗證 → 缺改記錄。

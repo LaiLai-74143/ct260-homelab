@@ -83,16 +83,6 @@ ACTIONS = {
     "restart-ctdmz-nft": {"desc": "重啟 CT203 ctdmz-nft（會清空 tailnet 通行證=需重驗）",
                           "cmd": ["ssh", "pve24-auto", "sudo", "pct", "exec", "203", "--",
                                   "systemctl", "restart", "ctdmz-nft"]},
-    # HA 家用通知鏈(2026-07-09):CT270 HA rest_command 打進來(WEBHOOK_TOKEN_HA);
-    # 實作在 ha-notify.py(fire=TG+ntfy 雙推、arrival=ntfy+撤銷鈕、undo=HA API 關燈)。
-    # quiet=成功不再回發 TG(fire 本身就發 TG、arrival 只需 ntfy;失敗仍回報)。
-    "notify-fire":     {"desc": "火災警報通知（TG+ntfy）", "param": True, "quiet": True,
-                        "cmd": (lambda p: [sys.executable,
-                                           str(HOME / ".local/bin/ha-notify.py"), "fire", p])},
-    "notify-arrival":  {"desc": "到家通知（ntfy+撤銷鈕）", "quiet": True,
-                        "cmd": [sys.executable, str(HOME / ".local/bin/ha-notify.py"), "arrival"]},
-    "ha-undo-arrival": {"desc": "撤銷到家（關主燈/除濕機/冷氣）",
-                        "cmd": [sys.executable, str(HOME / ".local/bin/ha-notify.py"), "undo-arrival"]},
 }
 
 # 全域簡易限速：每 60s 最多 N 次動作執行（診斷/誤按保護；被拒請求不計）
@@ -200,11 +190,8 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         # 雙 token(待辦49 M3):WEBHOOK_TOKEN_PORTAL 供 portal BFF,與 ntfy 按鈕 token 分開輪替(報告 §9)
         via = None
-        # 三 token(待辦49 M3 + HA 通知鏈 2026-07-09):ntfy 按鈕/portal BFF/HA rest_command
-        # 各自獨立輪替;via 進 log+TG 文案供稽核
         for kind, tok in (("ntfy", CFG.get("WEBHOOK_TOKEN", "")),
-                          ("portal", CFG.get("WEBHOOK_TOKEN_PORTAL", "")),
-                          ("ha", CFG.get("WEBHOOK_TOKEN_HA", ""))):
+                          ("portal", CFG.get("WEBHOOK_TOKEN_PORTAL", ""))):
             if tok and hmac.compare_digest(auth, "Bearer " + tok):
                 via = kind
                 break
@@ -245,10 +232,8 @@ class Handler(BaseHTTPRequestHandler):
         ok = rc == 0
         log(f"DONE {label} rc={rc} {dt:.1f}s out={out[:160]!r}")
         emoji = "✅" if ok else "❌"
-        if not spec.get("quiet") or not ok:
-            via_label = {"portal": "portal", "ha": "HA 自動化"}.get(via, "ntfy 按鈕")
-            tg_send(f"🔘 {via_label}：已執行 {label} — {spec['desc']}\n"
-                    f"{emoji} 結果 rc={rc}（{dt:.1f}s）" + (f"\n{out[-300:]}" if out else ""))
+        tg_send(f"🔘 {'portal' if via == 'portal' else 'ntfy 按鈕'}：已執行 {label} — {spec['desc']}\n"
+                f"{emoji} 結果 rc={rc}（{dt:.1f}s）" + (f"\n{out[-300:]}" if out else ""))
         self._reply(200 if ok else 500,
                     {"ok": ok, "action": action, "rc": rc, "out": out[-200:]})
 

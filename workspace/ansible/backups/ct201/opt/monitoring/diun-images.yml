@@ -1,0 +1,113 @@
+# diun 監看清單(待辦21)——全站 pin 映像的新 tag 偵測;新開服務時同步加條目。
+# 條目=現役 pin;watch_repo 偵測新 tag(include_tags 過濾 rc/beta/latest 雜訊)。
+# 本地 build(portal、paperless-ocr)與退役中 homepage 不列。
+
+# --- CT201 /opt/monitoring ---
+- name: prom/prometheus:v3.12.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^v\\d+\\.\\d+\\.\\d+$"]
+- name: prom/alertmanager:v0.33.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^v\\d+\\.\\d+\\.\\d+$"]
+- name: grafana/grafana-oss:13.0.2
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: gotify/server:2.9.1
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: ghcr.io/druggeri/alertmanager_gotify_bridge:2.3.2
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: grafana/loki:3.7.3
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: grafana/promtail:3.6.11
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: binwiederhier/ntfy:v2.25.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^v\\d+\\.\\d+\\.\\d+$"]
+- name: prom/snmp-exporter:v0.30.1
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^v\\d+\\.\\d+\\.\\d+$"]
+- name: prompve/prometheus-pve-exporter:3.9.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: crazymax/diun:4.30.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+
+# --- CT201 /opt/uptime-kuma ---
+- name: louislam/uptime-kuma:1.23.17
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^1\\.\\d+\\.\\d+$"]
+
+# --- CT270 ---
+- name: ghcr.io/home-assistant/home-assistant:2026.7.0
+  watch_repo: true
+  max_tags: 5
+  include_tags: ["^\\d{4}\\.\\d+\\.\\d+$"]
+- name: nocodb/nocodb:2026.06.2
+  watch_repo: true
+  max_tags: 5
+  include_tags: ["^\\d{4}\\.\\d{2}\\.\\d+$"]
+- name: postgres:16
+  # 主版 pin(16.x 小版滾動屬安全更新);只看 tag 16 的 digest 變化,不掃新 tag
+  watch_repo: false
+- name: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: redis:8.6.4
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: ghcr.io/navidrome/navidrome:0.62.0
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+
+# --- CT203 ---
+- name: authelia/authelia:4.39.20
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+- name: redis:7.4.9-alpine
+  watch_repo: true
+  max_tags: 5
+  include_tags: ["^7\\.\\d+\\.\\d+-alpine$"]
+
+# --- CT204(wazuh 三件同版,看 manager 代表) ---
+- name: wazuh/wazuh-manager:4.14.6
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\\d+\\.\\d+\\.\\d+$"]

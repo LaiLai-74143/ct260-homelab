@@ -106,3 +106,15 @@ config interface 'wan6'
 	option device '@wan'
 	option proto 'dhcpv6'
 
+config interface 'wg0'
+	option proto 'wireguard'
+	option private_key '**REDACTED**'
+	option listen_port '44873'
+	list addresses '10.66.0.1/24'
+
+config wireguard_wg0 'wgpeer_phone'
+	option description 'phone break-glass(待辦24)'
+	option public_key 'nZodw2OZvsUVnvZfvn/PvEB4FMwIt882sQTExvrrKi4='
+	option preshared_key '**REDACTED**'
+	list allowed_ips '10.66.0.2/32'
+

@@ -15,3 +15,9 @@ config dropbear
 	option PasswordAuth 'off'
 	option RootPasswordAuth 'off'
 
+config dropbear
+	option Port '52438'
+	option Interface 'wg0'
+	option PasswordAuth 'off'
+	option RootPasswordAuth 'off'
+
