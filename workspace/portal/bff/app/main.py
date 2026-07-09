@@ -15,13 +15,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, life_chat, providers
+from . import actions, game_ctrl, life_chat, providers
 
 BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.7.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.8.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -85,11 +85,35 @@ async def power():
 
 
 @app.get("/api/game")
-async def game():
+async def game(request: Request):
     try:
-        return await providers.get_game()
+        data = await providers.get_game()
+        # control 能力(env-static,零上游)併入;不污染 get_game 快取本體
+        return {**data, "control": game_ctrl.control_info(
+            request.headers.get("Remote-User"),
+            request.client.host if request.client else None)}
     except providers.UpstreamError as e:
         return _err(502, "上游查詢失敗", str(e))
+
+
+@app.post("/api/game/action")
+async def game_action(request: Request):
+    # 走 MCSM protected_instance 優雅開/停/重啟(非殺 Java 進程);uuid 由 BFF 自解析
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"action": "open|stop|restart"}')
+    try:
+        status, payload = await game_ctrl.run(
+            body,
+            request.headers.get("Remote-User"),
+            request.client.host if request.client else None,
+            request.headers.get("X-Requested-With"))
+        return JSONResponse(payload, status_code=status)
+    except game_ctrl.GameCtrlError as e:
+        return _err(e.status, e.error, e.hint)
 
 
 @app.get("/api/life")

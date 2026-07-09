@@ -46,7 +46,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.7</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.8</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {

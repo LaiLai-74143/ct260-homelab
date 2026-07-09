@@ -114,12 +114,35 @@ export interface Power {
   generated_at: string
 }
 
+/** MCSM 控制能力(併入 /api/game;走 protected_instance 優雅開停,非殺 Java 進程) */
+export interface GameControl {
+  /** MCSM_CTRL_KEY 已配置(mock 恆 true) */
+  enabled: boolean
+  /** 本請求可否操作(裁決:portal.hl+PC40 皆可,故 == enabled) */
+  allowed: boolean
+  /** 白名單三動作 open/stop/restart 的描述+danger */
+  actions: Record<string, { desc: string; danger?: string }>
+  generated_at: string
+}
+
+export interface GameActionResult {
+  ok: boolean
+  action: string
+  desc?: string
+  mock?: boolean
+  generated_at: string
+}
+
 export interface Game {
   server_up: boolean
   instance_state: string
   players_online: number | null
   player_names: string[] | null
+  /** MCSM 實例定位(網頁終端 URL 用;控制由 BFF 自解析不吃前端) */
+  instance_uuid?: string | null
+  daemon_id?: string | null
   hosts: { name: string; up: boolean; cpu: number | null; mem: number | null }[]
+  control?: GameControl
   note?: string | null
   generated_at: string
 }

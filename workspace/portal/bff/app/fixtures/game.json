@@ -1,8 +1,10 @@
 {
  "server_up": true,
  "instance_state": "running",
- "players_online": null,
+ "players_online": 3,
  "player_names": null,
+ "instance_uuid": "mockuuid1234567890abcdef",
+ "daemon_id": "mockdaemon0987654321fedcba",
  "hosts": [
   {
    "name": "ct100 · backend",
@@ -17,6 +19,6 @@
    "mem": 29
   }
  ],
- "note": "MCSM API key 未設定——玩家數待接(待辦49 決策4)",
+ "note": null,
  "generated_at": "fixture"
 }

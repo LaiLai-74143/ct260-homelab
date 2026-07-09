@@ -397,6 +397,12 @@ async def game() -> dict:
     running = (_scalar(pve) or 0) >= 1
 
     players, names, note = None, None, None
+    instance_uuid, daemon_id = None, None  # 網頁終端 URL 與控制解析用(待辦49 0.8.0)
+    # MCSM 實例狀態碼 → portal 語彙。instance_state 的權威來源是這個,不是 pve_up:
+    # LXC 容器存活 ≠ MC 進程在跑——MCSM stop 只停 Java,容器照常,pve_up 永遠 1,
+    # 「stopped→啟動鍵」路徑會不可達(審查確認項 2026-07-09)
+    _MCSM_STATE = {-1: "busy", 0: "stopped", 1: "stopping", 2: "starting", 3: "running"}
+    mcsm_state = None
     if MCSM_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
@@ -414,6 +420,10 @@ async def game() -> dict:
                 if inst is None:
                     note = "MCSM key 可用但無實例指派——面板把 Fabric-MC 指派給 API-user 即接通"
                 else:
+                    # 終端機/控制都靠這兩個 id 定位實例(前端組終端 URL;控制由 BFF 自解析)
+                    instance_uuid = inst.get("instanceUuid") or None
+                    daemon_id = inst.get("daemonId") or None
+                    mcsm_state = _MCSM_STATE.get(inst.get("status"))
                     info = inst.get("info") or {}
                     if info.get("mcPingOnline"):
                         players = int(info.get("currentPlayers") or 0)
@@ -434,9 +444,12 @@ async def game() -> dict:
 
     return {
         "server_up": up.get("mc-server-node", 0) >= 1,
-        "instance_state": "running" if running else "stopped",
+        # MCSM 權威狀態優先;拿不到(key 未設/失聯)才退回 LXC 存活的粗略推定
+        "instance_state": mcsm_state or ("running" if running else "stopped"),
         "players_online": players,
         "player_names": names,
+        "instance_uuid": instance_uuid,
+        "daemon_id": daemon_id,
         "hosts": [_host("mc-server-node", "ct100 · backend"),
                   _host("ct102-mc-proxy-node", "ct102 · velocity")],
         "note": note,

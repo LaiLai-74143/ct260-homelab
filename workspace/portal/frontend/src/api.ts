@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, GameActionResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -88,6 +88,19 @@ export function useGame() {
   })
 }
 
+/** MCSM 控制:open/stop/restart → BFF /api/game/action → MCSM protected_instance。
+    retry 0(開/停/重啟不可自動重試);成功後刷新 /api/game 讓狀態卡跟上。
+    X-Requested-With=自訂 header 強制 CORS preflight,跨站惡意頁帶不了(CSRF 防護) */
+export function useGameActionMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: GameActionResult }, ActionHttpError, { action: string }>({
+    retry: 0,
+    mutationFn: ({ action }) => postJson('/api/game/action', { action },
+      { 'X-Requested-With': 'XMLHttpRequest' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['game'] }) },
+  })
+}
+
 /** 生活:進頁時拉(§2),不設輪詢——資料由 CT260 每 30 分推一次 */
 export function useLife() {
   return useQuery<Life>({
@@ -116,11 +129,11 @@ export interface ActionHttpError {
   hint?: string
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<{ status: number; data: T }> {
+async function postJson<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<{ status: number; data: T }> {
   // webhook 同步執行最長 120s → 前端上限 130s,與 BFF httpx timeout 對齊
   const r = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(130_000),
   })
