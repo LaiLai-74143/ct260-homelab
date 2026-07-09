@@ -2370,3 +2370,31 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 部署 finish-portal-080.sh+finish-mcsm-control.sh 全綠;live 驗 instance_state=
   running(MCSM 權威)、control.enabled、雙 403 gate。使用者填 key 曾帶引號,
   剝除後 32 字元純英數。
+
+## 2026-07-09 portal 0.8.1:Grafana 嵌入改同源反代(修使用者回報「圖表加載失敗」)
+- 症狀:0.7.0/0.8.0 的 Grafana d-solo iframe 在 portal.hl 顯示瀏覽器灰色錯誤頁;PC 端
+  終端機也沒內嵌、兩個 MCSM 入口看起來一樣。
+- 根因蒐證:①Grafana :3002 直連 d-solo 回 200、無 XFO、無 CSP(本體 OK);②iframe
+  直指 grafana.hl,而 portal.hl 嵌 grafana.hl 是跨子網域,Authelia session
+  (same_site=lax、cookie 綁 hl.lailai74143.com)在 iframe 子請求被瀏覽器擋 → 導 auth.hl
+  失敗;:3002 LAN 版無 Authelia 故 0.7 只在 LAN 驗綠、誤判 portal.hl 也行。③終端機:
+  PC 也走 portal.hl(HTTPS),MCSM :23333 是 HTTP → 混合內容無法內嵌(Q1「LAN 嵌入」的
+  必然);兩連結都指 :23333 故看似重複。
+- 修法:①BFF 同源反代 grafana_proxy.py:/grafana/*→:3002(匿名 Viewer,伺服器對伺服器),
+  iframe 改同源相對路徑 → 無混合內容/跨網域 cookie/iframe 內 Authelia。d-solo HTML 只
+  改寫 <base href="/">→/grafana/ 與 bootData appSubUrl ""→/grafana(等同 serve_from_sub_path
+  但只在 proxy 層,不動 Grafana 設定/grafana.hl 直連);其餘 public/api/ds 透明轉發。
+  ②終端連結去重:portal.hl 不再列終端連結,只留一個 MCSM 面板入口+一行「內嵌僅區網
+  :8088」提示;LAN 版照舊 iframe。
+- 審查 workflow(反代安全/正確性 2 鏡頭→對抗驗證,8 agents/363k):6 發現 1 確認 5 駁回——
+  1.(高)反代擋了 cookie 卻漏擋 Authorization → 任何能到 :8088/portal.hl 者
+    `curl -u admin:admin /grafana/api/admin/settings` 以 Grafana 預設弱密(admin/admin)
+    接管(改儀表板/新增 datasource 做 SSRF)→ _DROP_REQ 加 authorization/proxy-authorization
+    /x-webauth-*(冒名防護)+管理路徑前綴(api/admin|datasources|users|orgs|serviceaccounts
+    |auth/keys)一律 403(縱深防禦,匿名 Viewer 本就無權)。駁回 5 項(判準準確):曝險界定
+    (grafana.hl 本就同權可達,非新增)、auth.proxy 冒名(未啟)、appUrl/301 逃逸(依 repo 外
+    執行期行為且部署煙測會大聲失敗)、Live ws(ASGI scope 分流,GET 反代吃不到 ws 握手)。
+- 部署 finish-portal-081.sh:引號 bug(python -c 單引號撞 bash -c)炸在 step5 驗證區但
+  部署本體已成;改 grep 版(pattern 用 . 代字面雙引號)後重跑全綠——反代 d-solo 改寫✓/
+  資產 runtime.js 200/api/health 200/admin:admin→403 高危回歸/管理 datasources→403。
+- 遺留註記入監控告警 §7:Grafana admin 仍 admin/admin 弱密,反代已擋但直連可登,宜擇期改強密。

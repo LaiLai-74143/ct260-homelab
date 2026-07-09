@@ -105,13 +105,13 @@ code=\$(curl -s -o /dev/null -w %{http_code} -m 8 -X POST -H \"Content-Type: app
 echo \"game/action kill(帶齊 header)→ 403 ✓\"
 grep -rql \"api/game/action\" /opt/portal/static/assets/*.js || { echo static 無 api/game/action; exit 1; }
 # Grafana 同源反代:d-solo HTML 經 /grafana 出來、base/appSubUrl 已改寫、資產可代出
-curl -s -m 10 \"http://127.0.0.1:8088/grafana/d-solo/homelab-overview/homelab-overview?orgId=1&panelId=13&theme=dark\" | python3 -c \"
-import sys
-h=sys.stdin.read()
-assert '<base href=\\\"/grafana/\\\"' in h, 'base href 未改寫成 /grafana/'
-assert '\\\"appSubUrl\\\":\\\"/grafana\\\"' in h, 'appSubUrl 未改寫'
-assert 'public/build/' in h, 'd-solo 資產缺(非 Grafana 頁?)'
-print('Grafana 反代 d-solo 改寫 ✓')\"
+# (grep 版避免 python -c 單引號撞外層 bash -c;pattern 用 . 代替字面雙引號免逃脫地獄)
+curl -s -m 10 \"http://127.0.0.1:8088/grafana/d-solo/homelab-overview/homelab-overview?orgId=1&panelId=13&theme=dark\" > /tmp/dsolo.chk
+grep -qE \"base href=./grafana/\" /tmp/dsolo.chk || { echo \"base href 未改寫成 /grafana/\"; rm -f /tmp/dsolo.chk; exit 1; }
+grep -qE \"appSubUrl.{1,4}/grafana\" /tmp/dsolo.chk || { echo \"appSubUrl 未改寫\"; rm -f /tmp/dsolo.chk; exit 1; }
+grep -q \"public/build/\" /tmp/dsolo.chk || { echo \"d-solo 資產缺(非 Grafana 頁)\"; rm -f /tmp/dsolo.chk; exit 1; }
+rm -f /tmp/dsolo.chk
+echo \"Grafana 反代 d-solo 改寫 OK\"
 code=\$(curl -s -o /dev/null -w %{http_code} -m 10 http://127.0.0.1:8088/grafana/public/build/app.b5c3fa1a9a2d09a31940.js)
 { [ \"\$code\" = 200 ] || [ \"\$code\" = 404 ]; } || { echo \"反代資產路徑異常:\$code(非 200/404)\"; exit 1; }
 echo \"Grafana 反代資產路徑 → \$code(200=命中/404=hash 已滾動,路徑通即可)\"

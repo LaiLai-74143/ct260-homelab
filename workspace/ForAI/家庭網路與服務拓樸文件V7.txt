@@ -891,7 +891,7 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.8.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.8.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -994,7 +994,20 @@ portal        8088   portal:0.8.0 本地 build(python:3.13.5-slim+pin;待辦49 M
               PORTAL_GAME_ALLOW_IPS(預設 PC40 192.168.40.4)+必帶 X-Requested-With
               (CSRF 防護);MCSM_CTRL_KEY 獨立於唯讀 key(finish-mcsm-control.sh,
               源=CT260 ~/.config/homelab/mcsm-control.env),實例級單飛 409。
-              審查 11 確認項全修;部署 finish-portal-080.sh 全綠
+              審查 11 確認項全修;部署 finish-portal-080.sh 全綠;
+              0.8.1(2026-07-09):修 0.7/0.8 的 Grafana 嵌入——portal.hl(HTTPS)嵌
+              grafana.hl 的 d-solo iframe 因跨子網域+Authelia SameSite=lax cookie 在
+              iframe 子請求被瀏覽器擋而失敗(:3002 LAN 版能渲染故 0.7 誤判綠)。改
+              BFF 同源反代 grafana_proxy.py:/grafana/*→GRAFANA_UPSTREAM(:3002 匿名),
+              iframe 走同源相對路徑→無混合內容/跨網域 cookie/iframe 內 Authelia,
+              portal.hl 與 :8088 一致。d-solo HTML 只改寫 <base href> 與 bootData
+              appSubUrl 成 /grafana(等同 serve_from_sub_path,不動 Grafana 設定/
+              grafana.hl 直連)。安全(審查高危):反代不透傳 client Authorization/
+              proxy-authorization/x-webauth-*(否則 admin:admin 弱密可經反代接管
+              Grafana)+管理路徑前綴(api/admin|datasources|users|orgs…)一律 403。
+              曝險同既有匿名 :3002(監控告警 §7)。遊戲頁終端連結去重(portal.hl 只留
+              一個 MCSM 面板入口)。部署 finish-portal-081.sh 全綠(反代 d-solo 改寫/
+              資產 200/api/health 200/admin:admin→403 高危回歸)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測
