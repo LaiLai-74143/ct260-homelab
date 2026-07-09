@@ -2415,3 +2415,30 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   與密碼強弱無關),0.8.1 該修正不回退,僅文件的「弱密」動機描述勘正。
 - 部署:finish-portal-082.sh(照 081 模式;新增反斷言=bundle 不得含提示行字串)。
   分類器攔 force-recreate 現役容器 → 收斂交使用者跑(CT260 本機 build 已預驗全綠)。
+
+## 2026-07-09 HA 家用通知鏈(待辦5):三自動化+CT260 webhook 第三把 token
+- 需求:①門窗+人體5秒互鎖關燈②火警 TG+ntfy 雙推③到家通知+撤銷鈕。偵查:新米家設備
+  (人體感應器)未進 HA——xiaomi_miot 雲清單快取(07-09 00:31 更新)22 台全入但無此設備,
+  即設備是其後才配對(或未配對);匯入設定 did_list[] exclude=全量,進 HA 只差 reload。
+- 架構:HA(CT270)rest_command→CT260:5001(同 VLAN20 L2 直達,零 OpenWrt 改動;HA 容器
+  NO_PROXY 含 192.168/16 不繞 fwdproxy)→ntfy-webhook 第三把 WEBHOOK_TOKEN_HA+三動作
+  (notify-fire/notify-arrival/ha-undo-arrival,quiet 旗標)→ha-notify.py(TG/ntfy/HA API)。
+  撤銷=HA 長期權杖(hass.env,占位模板先落=交付規矩)關主燈×3+除濕機+冷氣。
+- 審查 workflow 17 agents(finder×3 鏡頭+對抗驗證;插曲:首輪 13 agents 未指定 model
+  全繼承 Fable 5 打爆 session limit,11/13 死——已立子代理模型規則入記憶,resume 改
+  Opus 4.8 跑完):5 確認全修/9 駁回——
+  1.(高)finish 腳本 ha_api 成功回應截 4000 字元:/api/states json.loads 必炸(step3
+    每跑必中止)+/api/services grep 恆 miss(冪等重跑也硬重啟 HA)→成功分支不截斷。
+  2.(中)火警 trigger from:"off" 漏接「雲斷線期間起火→恢復即 unavailable→on」的真火警
+    (生命安全)→from 加 unavailable|unknown。
+  3.(中)5秒窗用 last_changed=HA 觀測時刻,雲端輪詢下量化失真(同批到達≈0s 誤觸發、
+    跨批≥輪詢間隔永不觸發,調秒數無解)→條件加門窗合法態檢查+description 明示結構
+    限制,根治=感應器本地路徑,設備進 HA 後實測定奪。
+  4.(中)撤銷鈕 url=內網 :5001,誤觸發場景(人不在家=LTE)必按不動→文案明示「在家
+    WiFi 直按/不在家先開 WireGuard」;長期選項=portal 轉發+一次性簽名(未做)。
+  5.(低×2 順手修)ntfy-webhook.py 備份改「未補丁才備份」(重跑不蓋);openssl 生 token
+    先驗長度再落檔(防空值+冪等守衛卡死)。
+  駁回代表:token 無動作級隔離/HASS 權杖全權/限速共用/toKen 經 /tmp 中轉/按鈕內嵌
+  token 高頻化——皆判「既有同級曝險或斷鏈」(portal/watchdog 先例同模式)。
+- 交付:finish-ha-notify.sh(CT260 跑,前置=hass.env 填權杖;E2E 真發測試通知 3 則);
+  人體感應器進 HA 後腳本段4 自動落自動化A(嚴格單顆判準,多顆/零顆不動)。

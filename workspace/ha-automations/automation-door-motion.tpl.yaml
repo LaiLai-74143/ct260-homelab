@@ -1,0 +1,53 @@
+
+- id: door_motion_5s_lights_off
+  alias: 門窗+人體5秒內先後觸發：關主燈
+  description: >-
+    門窗感應器變動後5秒內人體感應器觸發(或反序)→關胤樺房間主燈。
+    ★結構限制(審查確認):兩感應器若走小米雲輪詢,last_changed 是「HA 看到」的時刻
+    非物理時刻——同一輪詢批到達會誤判為「5秒內」,跨批則永不成立;調整秒數無法解決,
+    根治=感應器走本地路徑(BLE proxy/本地 miio)。設備進 HA 後先實測:若為本地即時
+    推播則此窗語義正確,若走雲端輪詢則此自動化實際退化為「同批到達才動作」。
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: __MOTION_ENTITY__
+      from: "off"
+      to: "on"
+      id: motion-after-door
+    - platform: state
+      entity_id: binary_sensor.isa_dw2hl_4226_magnet_sensor
+      from:
+        - "on"
+        - "off"
+      to:
+        - "on"
+        - "off"
+      id: door-after-motion
+  condition:
+    - condition: or
+      conditions:
+        # 門窗先動,5秒內人體觸發(本次 trigger=人體);門須處於合法開關態
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: motion-after-door
+            - condition: template
+              value_template: >-
+                {{ states('binary_sensor.isa_dw2hl_4226_magnet_sensor') in ['on', 'off']
+                   and (now() - states.binary_sensor.isa_dw2hl_4226_magnet_sensor.last_changed).total_seconds() < 5 }}
+        # 人體先觸發,5秒內門窗變動(本次 trigger=門窗);人體須仍為 on
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: door-after-motion
+            - condition: template
+              value_template: >-
+                {{ is_state('__MOTION_ENTITY__', 'on')
+                   and (now() - states.__MOTION_ENTITY__.last_changed).total_seconds() < 5 }}
+  action:
+    - service: light.turn_off
+      target:
+        entity_id:
+          - light.yeelink_colorb_7cbf_light
+          - light.yeelink_colorb_9feb_light
+          - light.yeelink_colorb_f923_light

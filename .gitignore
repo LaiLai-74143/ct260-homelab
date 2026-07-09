@@ -19,6 +19,7 @@
 !/workspace/monitoring
 # life-chat 生活助理(待辦49)
 !/workspace/life-chat
+!/workspace/ha-automations
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local

@@ -1,0 +1,99 @@
+# HA automations v2(2026-07-09,由 finish-ha-notify.sh 部署)
+# 變更:①到家自動化尾加 ntfy 通知(帶撤銷鈕);②新增火災警報 TG+ntfy 雙推。
+# 前兩條由 HA UI 建立後搬入,改動時保持 UI 相容格式(id 不變)。
+- id: arrive_home_main_lights_derh_ac
+  alias: 到家：開主燈+除濕機（房間>30°C加開冷氣）
+  description: 進入 Home 範圍(半徑300m)時開主燈與除濕機；若房間溫度>30°C 額外開冷氣(cool)。觸發後經 CT260 發 ntfy(附撤銷鈕)。
+  mode: single
+  trigger:
+    - platform: zone
+      entity_id: person.ken
+      zone: zone.home
+      event: enter
+  condition: []
+  action:
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.yeelink_colorb_7cbf_light
+          - light.yeelink_colorb_9feb_light
+          - light.yeelink_colorb_f923_light
+    - service: humidifier.turn_on
+      target:
+        entity_id: humidifier.xiaomi_13l_59e5_dehumidifier
+    - if:
+        - condition: numeric_state
+          entity_id: sensor.xiaomi_13l_59e5_temperature
+          above: 30
+      then:
+        - service: climate.set_hvac_mode
+          target:
+            entity_id: climate.miir_ir02_7842_ir_aircondition_control
+          data:
+            hvac_mode: cool
+    # 通知放最後:失敗不影響開燈本體(CT260 ha-notify.py arrival→ntfy+撤銷鈕)
+    - service: rest_command.ct260_notify_arrival
+      data: {}
+
+- id: weekday_0550_home_lights
+  alias: 平日05:50在家開主燈+小愛語音（假日不操作）
+  description: 平日(binary_sensor.workday_sensor=on，含台灣國定假日排除) 每天 05:50，若手機(person.ken)在家則開主燈並讓兩顆小愛同步語音播報。假日不動作。
+  mode: single
+  trigger:
+    - platform: time
+      at: "05:50:00"
+  condition:
+    - condition: state
+      entity_id: person.ken
+      state: home
+    - condition: state
+      entity_id: binary_sensor.workday_sensor
+      state: "on"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id:
+          - light.yeelink_colorb_7cbf_light
+          - light.yeelink_colorb_9feb_light
+          - light.yeelink_colorb_f923_light
+    - parallel:
+        - service: xiaomi_miot.intelligent_speaker
+          data:
+            entity_id: media_player.xiaomi_oh2p_e257_play_control
+            text: 早安，該起床了
+            execute: false
+        - service: xiaomi_miot.intelligent_speaker
+          data:
+            entity_id: media_player.xiaomi_oh2p_dfcd_play_control
+            text: 早安，該起床了
+            execute: false
+
+- id: fire_alarm_notify_tg_ntfy
+  alias: 火災警報：TG+ntfy 雙推
+  description: 任一 lumi 煙感觸發→CT260 webhook notify-fire→同時 Telegram 與 ntfy(max)。煙感走 Zigbee 閘道→小米雲，到達延遲受雲端影響。
+  mode: parallel
+  max: 4
+  trigger:
+    # from 含 unavailable/unknown(審查確認項):煙感經雲,斷線期間起火→恢復後直接
+    # unavailable→on,寫死 from:"off" 會漏接真火警;仍擋 on→on 重觸。
+    - platform: state
+      entity_id: binary_sensor.lumi_mcn02_600a_smoke_status
+      from:
+        - "off"
+        - unavailable
+        - unknown
+      to: "on"
+      id: dad
+    - platform: state
+      entity_id: binary_sensor.lumi_mcn02_61d2_smoke_status
+      from:
+        - "off"
+        - unavailable
+        - unknown
+      to: "on"
+      id: ken
+  condition: []
+  action:
+    - service: rest_command.ct260_notify_fire
+      data:
+        room: "{{ trigger.id }}"
