@@ -169,12 +169,19 @@ else
     echo "HA 重啟 180s 未回 200,人工查 docker logs homeassistant"; exit 1
   done
 fi
-ha_api GET /api/states | python3 -c "
+# 重啟後 /api/ 回 200 ≠ automation 元件載完(慢盤 HA 實測 20s 時 states 還是空)——輪詢等
+echo "等待 automation 實體載入(最多 120s)…"
+for i in $(seq 1 24); do
+  if ha_api GET /api/states | python3 -c "
 import json, sys
 data = sys.stdin.read(); data = data[data.index('['):]
 ids = [s['attributes'].get('id') for s in json.loads(data) if s['entity_id'].startswith('automation.')]
-assert 'fire_alarm_notify_tg_ntfy' in ids, f'火警自動化未載入: {ids}'
-print('火警自動化已載入 ✓;現有自動化 id:', ids)"
+sys.exit(0 if 'fire_alarm_notify_tg_ntfy' in ids else 1)"; then
+    echo "火警自動化已載入 ✓(第 $i 次輪詢)"; break
+  fi
+  [ "$i" = 24 ] && { echo "120s 後火警自動化仍未載入——人工查:pct exec 270 docker logs --tail 50 homeassistant"; exit 1; }
+  sleep 5
+done
 
 echo "== 4. xiaomi_miot reload(吃新設備)+ 人體感應器偵測 =="
 EID=$(ssh pve24 "sudo pct exec 270 -- python3 /tmp/ct270-helper.py entry-id")
