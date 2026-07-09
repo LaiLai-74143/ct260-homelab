@@ -2474,3 +2474,27 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   persistence——使用者重跑 finish-ha-fix2.sh 一次補齊(自動化A+cron+手術冪等跳過)。
 - 教訓:①xiaomi_miot 整合修復一律「重新設定」不「刪除重加」;②HA「service call 回
   200」≠設備動作(unavailable 靜默吞);③手改 .storage 必停 HA+備份。
+
+## 2026-07-09 深夜二段:互鎖改「關門切換」+ 米雲第二波風控鎖 + 30 秒抽樣限制實錘
+- 使用者實測互鎖版不觸發(審查 5 秒窗量化失真預警實證)→裁決改「偵測到門關閉就切換
+  電燈狀態」。換裝=swap-door-automation.py(CT270 上移除 door_motion_5s_lights_off、
+  append door_closed_toggle_lights;自備份 .before-toggle-<TS>)+finish-ha-door-toggle.sh
+  (CT260 跑:scp→pct push→exec→reload→驗證)。動作=light.turn_{{on/off 依 7cbf 現態}}
+  ×三主燈(整組一致,避免各自 toggle 漂移)。手動 automation.trigger×2 實測全關→全開 ✓。
+- finish 驗證斷言「互鎖舊條仍在?」誤炸:yaml 已乾淨,炸的是 entity registry 幽靈
+  (restored=True 的 unavailable 殘影)。清除=websocket config/entity_registry/remove
+  (REST 無此端點;HA 容器內有 aiohttp,token 走暫存檔不進 argv)→分類器攔(容器內寫入
+  +credential 落檔)→收斂 finish-ha-ghost-clean.sh 交使用者(冪等:幽靈 404 即跳過)。
+- 米雲第二波風控鎖:22:15–23:01(容器本地時)「Too many failures when login」,部分實體
+  unavailable;23:00 整合自動重登成功,毋須人工。看門狗 cron 有跑但當波僅 1–3 哨兵
+  unavailable(各設備失敗計數/輪詢節奏不同步),未達 ≥4 門檻——屬設計內取捨,不調。
+- ★30 秒抽樣限制實錘(本輪最重要發現):xiaomi_miot BLE 雲端路徑=每 30 秒抽樣
+  contact_state「現值」,非事件流。使用者 23:28 關門,雲端 prop updateTime=23:28:47 證實
+  事件有進雲,但 HA 抽樣沒踩到「開」的窗口→off→off 無狀態轉換→任何 HA 觸發器都不點火。
+  推論:互鎖版當初不觸發同根因。門開≥30–60 秒才保證被抓到;要即時/不漏=米家 App 雲端
+  場景(事件驅動,BLE 事件直達);勿調短輪詢(已兩度風控鎖)。
+- debug 手段備忘:logger.set_level custom_components.xiaomi_miot=debug(HA 重啟自動回
+  預設)→docker logs 看「Finished fetching …success: True」+coordinator 內 prop
+  updateTime=判「輪詢死活」與「事件是否進雲」的鐵證;看完調回 warning。
+- 教訓:HA 觸發器測不過,分三層驗——①動作鏈(手動 automation.trigger)②實體輪詢
+  (debug log fetch success)③事件到雲(prop updateTime)。三層各有獨立死法。
