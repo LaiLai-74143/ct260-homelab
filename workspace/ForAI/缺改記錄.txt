@@ -2160,6 +2160,9 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   openwrt 改用其支援的 no-port/agent/X11-forwarding,來源面靠防火牆拓樸把關。
 - ★踩坑6:CT260→routerpve 路徑有 SNAT,對端 SSH_CLIENT=192.168.10.1——
   routerpve 的 from= 須寫 SNAT 後位址,寫 20.60 必拒。
+- 觀察註記:dropbear wg0 實例在 netifd 未接管期間解析不到介面位址,落成 :::52438
+  wildcard listener(任一路由器 IP 皆應答;auth 仍 key-only,input 面靠 zone 規則)。
+  重開機 netifd 接管 wg0 後應收斂為 10.66.0.1 綁定,屆時複查。
 - 執行 22b 後補:V7 金鑰段。memory 已更新(-auto 別名+鎖行為)。.env 面=Phase 2。
 - 【全案結 2026-07-09】使用者跑 22b:設密→首解→鎖定態演示全過(直連面封+watchdog 活);
   隨後 finish-37 立即因鎖被拒(dxp4800=ops 鑰)=上鎖實戰印證。V7 §10 金鑰段已補。
