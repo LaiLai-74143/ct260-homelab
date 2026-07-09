@@ -96,19 +96,11 @@ function GameControls({ d }: { d: GameData }) {
 }
 
 /** MCSM 網頁終端機:LAN/PC40(http)直接 iframe;portal.hl(HTTPS)無法內嵌 http 終端
-    (混合內容),改由頁尾單一 MCSM 面板連結進入,並在此列一行提示避免與面板連結重複。 */
+    (混合內容),不顯示任何東西,由頁尾單一 MCSM 面板連結進入(0.8.2 拔提示行)。 */
 function GameTerminal({ d }: { d: GameData }) {
-  if (!d.instance_uuid || !d.daemon_id) return null
+  if (IS_HL || !d.instance_uuid || !d.daemon_id) return null
   const termUrl = `${MCSM_BASE}/#/instances/terminal?daemonId=${d.daemon_id}&instanceId=${d.instance_uuid}`
 
-  if (IS_HL) {
-    return (
-      <div className="mt-3.5 rounded-card border border-dashed border-line px-4 py-3 text-[12.5px] text-muted">
-        網頁終端機內嵌僅於區網 <span className="font-mono">http://10.80.80.11:8088</span> 提供
-        (portal.hl 為 HTTPS,無法內嵌 HTTP 終端);於此網域請用下方面板進入。
-      </div>
-    )
-  }
   return (
     <section className="mt-3.5">
       <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">

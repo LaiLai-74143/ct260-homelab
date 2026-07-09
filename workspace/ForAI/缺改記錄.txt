@@ -2398,3 +2398,20 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   部署本體已成;改 grep 版(pattern 用 . 代字面雙引號)後重跑全綠——反代 d-solo 改寫✓/
   資產 runtime.js 200/api/health 200/admin:admin→403 高危回歸/管理 datasources→403。
 - 遺留註記入監控告警 §7:Grafana admin 仍 admin/admin 弱密,反代已擋但直連可登,宜擇期改強密。
+
+## 2026-07-09 portal 0.8.2:拔終端提示行 + Grafana admin 弱密「勘誤」
+- 使用者裁決:portal.hl 遊戲頁那行「網頁終端機內嵌僅於區網 :8088…」提示移除——
+  Game.tsx GameTerminal 於 IS_HL 直接 return null,MCSM 入口只剩頁尾面板連結;
+  LAN(:8088)終端 iframe 照舊。BFF 僅 version 字串 0.8.1→0.8.2。
+- ★勘誤(0.8.1 誤記):「Grafana admin/admin 弱密遺留」不成立。使用者指出密碼早已
+  更改;實測(CT201 內)POST /login admin/admin → 401 Invalid username or password、
+  Basic Auth 打 api/admin/settings → 403(驗證失敗 fallback 匿名 Viewer 無權)。
+  誤判根源:compose env GF_SECURITY_ADMIN_PASSWORD=admin——該 env 只在 Grafana 首次
+  初始化建 DB 時生效,之後以 DB 內密碼為準,看 env 值下結論是錯的。且監控告警.txt
+  本就記載「Grafana admin 密碼非預設 admin」(§API 操作註記),0.8.1 寫遺留時未核對
+  既有記載,與之自相矛盾。§7 已勘正。教訓:下「弱密遺留」類結論前先實測登入,
+  並 grep 全文有無既有相反記載。
+- 反代擋 Authorization 的高危修正本身仍然成立(縱深防禦:不透傳憑證+管理路徑 403,
+  與密碼強弱無關),0.8.1 該修正不回退,僅文件的「弱密」動機描述勘正。
+- 部署:finish-portal-082.sh(照 081 模式;新增反斷言=bundle 不得含提示行字串)。
+  分類器攔 force-recreate 現役容器 → 收斂交使用者跑(CT260 本機 build 已預驗全綠)。

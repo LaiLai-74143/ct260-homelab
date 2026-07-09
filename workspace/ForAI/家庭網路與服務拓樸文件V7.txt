@@ -1008,6 +1008,11 @@ portal        8088   portal:0.8.1 本地 build(python:3.13.5-slim+pin;待辦49 M
               曝險同既有匿名 :3002(監控告警 §7)。遊戲頁終端連結去重(portal.hl 只留
               一個 MCSM 面板入口)。部署 finish-portal-081.sh 全綠(反代 d-solo 改寫/
               資產 200/api/health 200/admin:admin→403 高危回歸)
+              0.8.2(2026-07-09):使用者裁決拔掉 portal.hl 遊戲頁「內嵌僅區網 :8088」
+              終端提示行(HL 網域終端區塊直接不渲染,只留頁尾 MCSM 面板入口);BFF 僅
+              version 字串。同輪勘誤:Grafana admin 非弱密(實測 admin/admin login 401,
+              env ADMIN_PASSWORD 只在首次初始化生效,詳監控告警 §7)。部署
+              finish-portal-082.sh(分類器攔 force-recreate→交使用者跑)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

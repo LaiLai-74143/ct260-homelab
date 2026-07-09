@@ -507,10 +507,12 @@ portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 if
     portal.hl（HTTPS）因跨子網域+Authelia SameSite=lax cookie 於 iframe 子請求被擋而
     失敗；改 BFF grafana_proxy.py 反代 /grafana/*→:3002（GRAFANA_UPSTREAM 可覆寫），
     d-solo HTML 改寫 <base>/appSubUrl 成 /grafana（等同 serve_from_sub_path，但不動
-    Grafana 設定與 grafana.hl 直連）。反代硬性擋 Authorization/x-webauth-*（否則
-    admin/admin 弱密經反代可接管）+管理路徑（api/admin|datasources|users|orgs…）403。
-    ★遺留：GF_SECURITY_ADMIN_PASSWORD 仍是 admin（弱密）——反代已擋，但 :3002/
-    grafana.hl 直連仍可 admin:admin 登入，宜擇期改強密（不在本輪範圍）。
+    Grafana 設定與 grafana.hl 直連）。反代硬性擋 Authorization/x-webauth-*（防經反代
+    帶 Basic Auth 打管理面）+管理路徑（api/admin|datasources|users|orgs…）403。
+    ★勘誤（2026-07-09）：0.8.1 曾誤記「admin/admin 弱密遺留」——錯。compose env 的
+    GF_SECURITY_ADMIN_PASSWORD=admin 只在首次初始化生效，實際密碼早已改於 DB（見上
+    §「Grafana admin 密碼非預設 admin」行）；實測 POST /login admin/admin → 401、
+    Basic Auth 打 api/admin → 403（fallback 匿名 Viewer 無權）。無弱密風險。
 ```
 
 ---

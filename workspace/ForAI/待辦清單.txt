@@ -821,6 +821,10 @@
     protected_instance 在 minify 後必 0(改 api/game/action)、E2E 去真開機副作用;
     key 不進 argv(python 讀檔)+trap 清暫存。MCSM_CTRL_KEY 已落(len32,與唯讀
     key 分開);finish-portal-080.sh+finish-mcsm-control.sh 全綠,control.enabled ✓。
+    【進度 2026-07-09(0.8.1→0.8.2)】0.8.1 修 Grafana 嵌入(改 BFF 同源反代
+    /grafana/*→:3002,詳 V7 §5)+終端連結去重,部署全綠。0.8.2 使用者裁決再拔
+    portal.hl 終端提示行;同輪勘誤 Grafana admin 非弱密(admin/admin 實測 401,
+    0.8.1 誤記遺留已於監控告警 §7 勘正)。finish-portal-082.sh 備妥待使用者跑。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
