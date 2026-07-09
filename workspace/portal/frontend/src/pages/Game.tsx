@@ -95,18 +95,18 @@ function GameControls({ d }: { d: GameData }) {
   )
 }
 
-/** MCSM 網頁終端機:LAN/PC40 直接 iframe;portal.hl(HTTPS)因混合內容改連結卡 */
+/** MCSM 網頁終端機:LAN/PC40(http)直接 iframe;portal.hl(HTTPS)無法內嵌 http 終端
+    (混合內容),改由頁尾單一 MCSM 面板連結進入,並在此列一行提示避免與面板連結重複。 */
 function GameTerminal({ d }: { d: GameData }) {
   if (!d.instance_uuid || !d.daemon_id) return null
   const termUrl = `${MCSM_BASE}/#/instances/terminal?daemonId=${d.daemon_id}&instanceId=${d.instance_uuid}`
 
   if (IS_HL) {
-    // portal.hl 是 HTTPS,iframe 純 HTTP 的 :23333 會被擋成混合內容 → 改開新分頁
     return (
-      <a href={termUrl} target="_blank" rel="noreferrer"
-         className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
-        MCSM 網頁終端機(手機經 HTTPS 無法內嵌,開新分頁)→ <span className="font-mono text-[12px] text-muted">{MCSM_BASE} ↗</span>
-      </a>
+      <div className="mt-3.5 rounded-card border border-dashed border-line px-4 py-3 text-[12.5px] text-muted">
+        網頁終端機內嵌僅於區網 <span className="font-mono">http://10.80.80.11:8088</span> 提供
+        (portal.hl 為 HTTPS,無法內嵌 HTTP 終端);於此網域請用下方面板進入。
+      </div>
     )
   }
   return (
@@ -187,10 +187,10 @@ export default function Game() {
           {/* MCSM 網頁終端機(2026-07-09 使用者點名):LAN 嵌入,portal.hl 連結 */}
           <GameTerminal d={d} />
 
-          {/* 管理入口:MCSM 面板(PC40 直達;手機發證後可達,見服務目錄) */}
+          {/* 唯一 MCSM 入口:面板(實例管理+網頁終端都在裡面);PC40 直達,手機發證後可達 */}
           <a href={MCSM_BASE} target="_blank" rel="noreferrer"
              className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
-            MCSManager 面板(實例管理/完整終端)→ <span className="font-mono text-[12px] text-muted">10.70.70.20:23333 ↗</span>
+            MCSManager 面板(實例管理／網頁終端)→ <span className="font-mono text-[12px] text-muted">10.70.70.20:23333 ↗</span>
           </a>
         </>
       )}

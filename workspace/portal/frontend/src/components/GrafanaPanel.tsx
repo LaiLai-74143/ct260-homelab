@@ -1,10 +1,8 @@
-import { grafanaUrl } from '../api'
-
-/** Grafana d-solo 單面板嵌入(2026-07-09 使用者點名,翻掉待辦49 決策3「不 iframe」)。
-    前提:CT201 Grafana 開 GF_SECURITY_ALLOW_EMBEDDING+匿名 Viewer(finish-grafana-embed.sh)
-    ——iframe 內沒有 Grafana 登入態,匿名沒開只會渲染出登入頁。
-    雙路同 grafanaUrl:portal.hl 頁嵌 grafana.hl(同站,Authelia session cookie 直帶);
-    LAN :8088 頁嵌 :3002 直連(PC40 已放行)。空白框=瀏覽器連不到 Grafana(非 BFF 問題)。 */
+/** Grafana d-solo 單面板嵌入(0.8.1 改走 BFF 同源反代)。
+    src=/grafana/d-solo/...(portal 自己的網域)→ BFF 反代到 Grafana :3002 匿名讀。
+    同源=無混合內容、無跨網域 cookie、iframe 裡不碰 Authelia,portal.hl 與 :8088 一致。
+    (0.7.0 曾直指 grafana.hl,portal.hl 因跨子網域 SameSite cookie 被擋而失敗;見 grafana_proxy.py)
+    空白框=BFF 連不到 Grafana,或 Grafana 匿名 Viewer 未開(finish-grafana-embed.sh)。 */
 export default function GrafanaPanel({ dash, panelId, title, h = 280, from = 'now-6h', className = '' }: {
   dash: string
   panelId: number
@@ -14,9 +12,7 @@ export default function GrafanaPanel({ dash, panelId, title, h = 280, from = 'no
   from?: string
   className?: string
 }) {
-  const src = grafanaUrl(
-    `http://10.80.80.11:3002/d-solo/${dash}?orgId=1&panelId=${panelId}&from=${from}&to=now&theme=dark&refresh=1m`,
-  )
+  const src = `/grafana/d-solo/${dash}?orgId=1&panelId=${panelId}&from=${from}&to=now&theme=dark&refresh=1m`
   return (
     <iframe
       src={src}

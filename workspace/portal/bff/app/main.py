@@ -15,13 +15,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, game_ctrl, life_chat, providers
+from . import actions, game_ctrl, grafana_proxy, life_chat, providers
 
 BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.8.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.8.1", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -221,6 +221,13 @@ async def life_confirm(request: Request):
 @app.get("/api/{rest:path}")
 async def api_404(rest: str):
     return _err(404, f"無此端點:/api/{rest}")
+
+
+# ---- Grafana 同源反代(0.8.1;圖表嵌入走 portal 網域,見 grafana_proxy.py) ----
+#      放在 /api 之後、SPA 靜態之前;GET(頁面/資產)+POST(/api/ds/query 面板查詢)
+@app.api_route("/grafana/{path:path}", methods=["GET", "POST"])
+async def grafana(request: Request, path: str):
+    return await grafana_proxy.proxy(request, path)
 
 
 # ---- SPA 靜態檔(必須放在 /api 之後註冊) ----
