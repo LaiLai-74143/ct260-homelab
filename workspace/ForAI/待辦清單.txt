@@ -142,9 +142,11 @@
    審查 workflow(17 agents):5 確認全修(高危=finish 腳本 ha_api 4000 字元截斷必炸;
    火警 from:"off" 漏接 unavailable→on 真火警;5秒窗量化;撤銷鈕內網不可達=文案導 WG;
    備份/openssl 守衛)、9 駁回(既有同級曝險/斷鏈)。
-   ▶ 待使用者:①hass.env 填 HA 長期權杖(模板已落 CT260,取法見檔內說明);
-   ②跑 ~/workspace/ha-automations/finish-ha-notify.sh(CT260,先 hl-unlock);
-   ③米家 app 確認人體感應器已配對(腳本段4 自動吃進 HA+落自動化A)。
+   【2026-07-09 部署】使用者跑 finish-ha-notify.sh 全綠(第二次;首跑卡 automation
+   載入驗證查太早=審查條件式缺陷浮現,改 120s 輪詢後過):火警雙推+到家通知/撤銷鈕
+   上線,E2E 測試通知 TG/ntfy 實收。插曲=HA 重啟一次(rest_command 域首載)。
+   ▶ 剩:人體感應器仍未進米家雲清單(22 台無它)——使用者於米家 app 確認配對同一
+   家庭且在線後重跑 finish-ha-notify.sh(冪等,段4 自動吃進 HA+落自動化A 5秒互鎖)。
 
 ===============================================================================
 ## P1 高
