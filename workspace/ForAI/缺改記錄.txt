@@ -2515,3 +2515,40 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   整合+每設備 bindkey(Xiaomi Cloud Tokens Extractor 自米雲抓;Mi 帳密不經 Agent
   戒律=使用者自跑);BLE 廣播是一對多,HA 旁聽不影響米家。覆蓋 BLE 廣播類
   (門窗 dw2hl/人體 pir1),Zigbee(煙感)/BLE Mesh 不在此路徑。記待辦5 候選。
+
+### hl.* 換 LE wildcard 正式憑證(2026-07-10;方案 B2 上線,待辦③ 憑證遺留項收束)
+動機:使用者「每次訪問單一入口都跳連線不安全,從源頭解決」。舊解=逐機裝 CT203 Caddy
+  root.crt(2026-07-04 方案(a)),本質治標:每台新裝置/新瀏覽器再痛一次,且自建 root CA
+  可簽任意網域、root key 躺 DMZ host=曝險外溢。
+方案(2026-07-09 裁決 B2):acme 客戶端放 CT260(非換 Caddy 自訂建置版——保住「裸 apt
+  釘版最小攻擊面」既有決策;CT203 零新套件、CF token 不落 DMZ)。
+  CT260 acme.sh 3.1.1(使用者級,AUTO_UPGRADE=0)DNS-01 簽 *.hl.lailai74143.com
+  → staging ~/.local/state/le-hl/ → hl-deploy-hl-cert 推 CT203 /etc/caddy/certs/
+  (root:caddy 640,.prev 一代備份,restart+存活失敗自動回退,成敗 TG)
+  → Caddyfile 7 站 tls internal→import hl_tls(validate+存活,失敗自動回滾,備份
+  /root/_backups/Caddyfile.before-le-20260709_234030)。續簽=acme.sh cron 約 30 天
+  一續(緩衝 ~60 天),reloadcmd 自動部署;cron 時 ssh 上鎖=TG 降級通知人工補跑。
+  CF token:使用者自開(acme-dns01-hl-CT260;Zone:Read+DNS:Edit 限單 zone、No expiration、
+  IP 不限=WAN 浮動),存 ~/.config/homelab/cloudflare-dns.env 600。
+執行:finish-le-hl-cert.sh 使用者跑全綠(簽發 07-09 23:37 UTC,notAfter=2026-10-07);
+  兩輪 ultracode 審查(3 視角+Opus 復核)先行,修:restart 無回滾、私鑰 /tmp 過境權限
+  (600 佔位再 scp+cleanup)、TG token 進 argv(改 curl -K stdin)、冪等繞過 validate、
+  憑證無 .prev、三重部署收斂為 2 次 restart。
+★ 坑1(段7 回歸視角錯)::80/health、:8082 從 CT260 打=code 000——servers→dmz 放行
+  僅 :443,本來就到不了;改 CT203 本機(pct exec curl 127.0.0.1)視角=OK/302。教訓:
+  回歸檢查的「打點位置」要跟防火牆拓樸對齊,別把拓樸限制誤判成服務故障。
+★ 坑2(hl-unlock command not found 三個門):①pct enter 260 的 root shell PATH=最小集
+  (無 /usr/local/bin)②su codex 不帶 - 不讀 ~/.profile(無 ~/.local/bin)③codex bashrc
+  首修 PATH 順序寫反,/usr/local/bin 排前→打到 root 專用 wrapper(su - codex 要 codex
+  帳號密碼=必失敗);且舊 shell 有 bash hash 快取+防重複守衛,re-source 不重排,需
+  hash -r+顯式 export。已修:codex ~/.bashrc 頂部補雙 PATH(本尊優先);root 側兩門
+  (root .bashrc+wrapper 已是 codex 時直跑本尊)=ops/finish-hl-path-fix.sh 待 root 跑
+  (agent 直改被分類器攔=容器內寫入)。
+驗證:7 站 curl --resolve 不帶 -k(信任鏈過系統 CA)200/302 全過+服務端 leaf 指紋==
+  staging;CT260 抽查 auth 200/portal 302/grafana 302;:80/health OK、:8082 302
+  (CT203 本機);TG ✅ 實收。
+回滾:Caddyfile 蓋回 /root/_backups/Caddyfile.before-le-<TS>+restart;憑證 .prev 蓋回。
+斷網語意(使用者確認過才動工):驗證純本地+解析純內部→CF/外網掛內網照常綠鎖;唯續簽
+  依賴外網,>60 天過期後=警告可點過(刻意不開 HSTS 留 break-glass)。
+遺留(使用者):①手機開 https://portal.hl 確認綠鎖 ②Kuma 加 HTTPS monitor(portal.hl)
+  開憑證到期通知=續簽斷鏈備援 ③各裝置移除舊 root.crt ④root 跑 ops/finish-hl-path-fix.sh。

@@ -21,6 +21,7 @@
 !/workspace/life-chat
 !/workspace/ha-automations
 !/workspace/ct-dmz-proxy
+!/workspace/ops
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local

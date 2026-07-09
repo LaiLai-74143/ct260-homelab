@@ -84,7 +84,9 @@
       未驗證 http 自動跳登入頁；OpenWrt 路由已卸任（保留 DNS/救援節點）。
       ★ hl.* 由 dnsmasq 回答（非 AGH rewrite）→ 100.100.1.2（CT203 tailscale IP，非 subnet IP）：
         兩坑已解＝Tailscale 連不到 subnet-router 自身 subnet IP、AGH per-client filtering-off 跳過 rewrite（見缺改記錄）。
-      ★ 手機/PC 已裝 CT203 Caddy 根憑證消 tls internal 警告；新裝置需各裝一次（或日後改 LE DNS-01）。
+      ★✔ 2026-07-10 憑證遺留項收束:換 LE DNS-01 wildcard 正式憑證(*.hl,CT260 acme.sh
+        →pct push CT203,自動續簽+TG 降級通知;詳 V7 §10.7+缺改記錄)。全裝置免裝憑證即綠鎖,
+        「逐機裝 root.crt」退役(各裝置可移除);餘使用者:手機綠鎖確認+Kuma 憑證到期 monitor。
    f◐ 逐服務收緊進行中：prometheus.hl✔ grafana.hl✔ kuma.hl✔ homepage.hl✔（forward_auth 前置，2026-07-04；
       homepage=gethomepage 現成牆面 CT201:3000，非第 49 項「自建入口大廳」勿混）；續收 app-token 類（Vaultwarden/Navidrome 需 app 路徑 bypass）。
       ★ Grafana/Prometheus 已改實際走反代（GF_SERVER_ROOT_URL / --web.external-url 指 .hl；Homepage href 改 .hl；

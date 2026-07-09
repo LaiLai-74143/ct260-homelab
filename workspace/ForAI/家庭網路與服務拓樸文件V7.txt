@@ -1423,8 +1423,22 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
     實際無登入途徑;但 listener 存在,與「DMZ 最小面」不符 → 待辦:disable ssh.service+socket
     或文件定案接受。
   Caddy:Debian pkg 2.6.2(apt-mark hold 釘版)。auto_https disable_redirects(cloudflared→Caddy
-    內部 http,Cloudflare 邊緣終結 TLS;內部站 tls internal 自簽,根憑證
-    /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt)。
+    內部 http,Cloudflare 邊緣終結 TLS)。
+    ★ 內部站 TLS(2026-07-10 起)=LE wildcard *.hl.lailai74143.com(DNS-01/Cloudflare,方案 B2):
+      CT260 acme.sh 3.1.1(使用者級 ~/.acme.sh,AUTO_UPGRADE=0 釘版,cron 每日檢查、
+      約 30 天一續=緩衝 ~60 天)→ reloadcmd ~/.local/bin/hl-deploy-hl-cert(scp pve24 →
+      pct push 203 → /etc/caddy/certs/{hl-fullchain,hl-privkey}.pem root:caddy 640,
+      舊版 .prev 一代備份,restart+存活檢查失敗自動回退,成敗皆 TG;cron 時 ssh 上鎖
+      =TG 降級通知,人工 hl-unlock 後補跑 hl-deploy-hl-cert 即可)。
+      CF token=CT260 ~/.config/homelab/cloudflare-dns.env(600;Zone:Read+DNS:Edit 限
+      lailai74143.com 單 zone,No expiration;acme.sh 另存 ~/.acme.sh/account.conf 600)。
+      hl.* 維持零公網 record(DNS-01 純出站,CT log 只見 wildcard 不枚舉主機名)。
+      Caddyfile=7 站 import hl_tls snippet(指 /etc/caddy/certs/ 檔案式)。
+      舊 tls internal 自簽已退役(裝置端 root.crt 可移除=信任面收縮;該自建 CA 可簽任意
+      網域,root key 在 DMZ host 上,屬前架構已知曝險);Kuma 憑證到期 monitor=續簽斷鏈
+      備援哨兵(待使用者 UI 加)。腳本 SoT=CT260 ~/workspace/ct-dmz-proxy/le-cert/。
+      ★ 斷網影響:憑證驗證純本地(ISRG root 內建),解析純內部 dnsmasq——CF/外網全斷內網照常;
+      唯續簽依賴外網,斷 >60 天過期後=瀏覽器警告可點過(刻意不開 HSTS 保留 break-glass)。
     源檔 CT260 ~/workspace/ct-dmz-proxy/Caddyfile → pct push → caddy validate → restart
     (★admin off 與 reload 不相容,一律 systemctl restart caddy,斷 ~1s)。
     站點::80 /health→200(Kuma 探活)+ Vaultwarden 反代(→192.168.30.3:50303)+
