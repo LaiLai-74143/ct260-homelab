@@ -17,6 +17,8 @@
 
 # --- 納管:監控棧維運腳本(待辦21 起;finish-21-nocodb.sh 等) ---
 !/workspace/monitoring
+# life-chat 生活助理(待辦49)
+!/workspace/life-chat
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local

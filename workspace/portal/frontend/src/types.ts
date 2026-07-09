@@ -182,3 +182,39 @@ export interface HostDetail {
   grafana_url: string
   generated_at: string
 }
+
+// ---- 生活助理(待辦49 生活對話框;BFF /api/life/chat|confirm → CT260 life-chat :5002) ----
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** 提案單:五欄位原樣帶回 /api/life/confirm,sig 由 CT260 端 HMAC 簽發 */
+export interface ChatProposal {
+  action: string
+  args: Record<string, string | number | boolean>
+  summary: string
+  ts: number
+  sig: string
+}
+
+export interface ChatReply {
+  ok: boolean
+  reply: string
+  proposals: ChatProposal[]
+  rejected: string[]
+  meta?: { turns?: number; secs?: number }
+}
+
+export interface ChatConfirmResult {
+  ok: boolean
+  result: string
+}
+
+export interface LifeChatInfo {
+  enabled: boolean
+  allowed: boolean
+  scope: string
+  generated_at: string
+}

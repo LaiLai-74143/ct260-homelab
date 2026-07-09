@@ -2198,3 +2198,34 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   docker build+compose 換 tag→force-recreate):11 端點 200、/life SPA fallback 200、
   static 含 calendar.google.com、M3 無 Remote-User→403 回歸過。
 - 金鑰面:適逢使用者解鎖窗(ssh-add -l 有 ops 指紋),walk 全程走 ops 別名,未動 -auto。
+
+## 2026-07-09 portal 0.6.0:生活頁「生活助理」對話框(Sonnet 5,只管行事曆/記帳)
+- 使用者點名:生活頁加對話框接 Sonnet 5,只負責讀取/修改行事曆與記帳。裁決:
+  訂閱已有→不開 API key(走 CT260 已登入 Claude Code 的訂閱,claude -p headless);
+  2a 寫入須確認卡;3 對話無 session(前端每輪帶全史,關頁即忘)。
+- 架構三件:
+  ① CT260 life-chat 服務(:5002,stdlib http.server 照 ntfy-webhook 模式;
+    源 ~/workspace/life-chat/,裝 ~/.local/bin/,cron @reboot+*/5 flock 自癒):
+    /chat=起 claude -p --model claude-sonnet-5 --strict-mcp-config(只掛 life-ro MCP)
+    --allowedTools 唯讀7工具 --disallowedTools 全內建;寫入=模型回覆末尾 ```proposal
+    JSON 塊→服務端驗白名單 6 動作 schema→HMAC-SHA256 簽名(15min TTL)→/confirm 驗簽
+    後 import life-ops server.py DISPATCH 確定性執行→TG 留痕。單飛+6/分限速。
+  ② BFF life_chat.py:GET/POST /api/life/chat + POST /api/life/confirm,權限比照 M3
+    (Remote-User,僅 portal.hl);mock 模式含提案卡走查。
+  ③ 前端 LifeChat.tsx:氣泡對話+提案確認卡(確認/取消)+誠實三態(未配置不顯示/
+    直達 :8088 灰字/錯誤行);掛生活頁跳轉卡下方。
+- 安全邊界(硬):模型物理上無寫入工具(life-ro-mcp.py 只註冊 7 唯讀);寫入唯一通道
+  =使用者按確認卡;提案 HMAC 防竄改(單元測試:改 args 簽名必不符);白名單外動作/
+  多餘欄位/缺必填一律拒(add_note 等瑣事工具刻意不開)。
+- 踩坑:①此版 claude CLI(2.1.204)-p 無 --max-turns,110s timeout 兜底;
+  ②pkill -f 'life-chat.py' 會匹配到自己 shell 的命令列把自己殺掉(exit 144),
+  改 pkill -f 'life-chat[.]py' 括號技巧;③分類器攔 finish-life-chat-infra.sh
+  (cron+防火牆+env 落位)→使用者跑,輸出全綠。
+- 順手破案(既有故障,與本次無關):GCal refresh token invalid_grant——生活頁今日
+  行程/晨報行程段/MCP 行事曆工具啞火多時,借貸線正常掩蓋。使用者重跑
+  get_gcal_token.py 換發即癒(行事曆讀到真行程)。教訓:OAuth 同意畫面「測試」模式
+  refresh token 會被 Google 收走;行事曆 400 先驗 gtoken()。
+- live E2E:CT201→BFF→CT260:5002→Sonnet 5→NocoDB 全鏈 10.3s 回「目前沒有人欠你錢」;
+  11 端點 200、chat 無 Remote-User 403、M3 回歸 403、容器內 LIFE_CHAT_ 鍵 2。
+- 版本:portal 0.5.2→0.6.0;防火牆新增 Allow-Monitor-To-CT260-LifeChat-5002(照 5001
+  模板,無 SNAT);.gitignore 白名單加 !/workspace/life-chat。

@@ -778,6 +778,14 @@
     【進度 2026-07-09(0.5.2)】生活頁底部新增跳轉入口兩張卡(使用者點名):
     行事曆→calendar.google.com、記帳→NocoDB 192.168.20.70:8080(純前端,
     finish-portal-052.sh 部署全綠:11 端點 200+/life 200+M3 403 回歸)。
+    【進度 2026-07-09(0.6.0)】生活頁「生活助理」對話框(使用者點名):Sonnet 5
+    只管行事曆/記帳——CT260 life-chat :5002(claude -p 吃訂閱零 API key;模型僅
+    唯讀 7 工具,寫入=白名單 6 動作 HMAC 提案單→前端確認卡→服務端確定性執行
+    →TG 留痕;使用者裁決 2a 確認卡+3 無 session)。基建=OpenWrt 5002 一條+
+    portal.env 兩鍵(finish-life-chat-infra.sh,使用者跑);部署 finish-portal-060.sh
+    全綠(11 端點+chat 兩態 403+M3 回歸+記帳線真對話 E2E)。
+    順手修:GCal refresh token invalid_grant(既有故障)→使用者重跑 get_gcal_token.py
+    換發,行事曆線復活(V7 §10.5 gcal 段已註記診斷路徑)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

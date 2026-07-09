@@ -1,5 +1,6 @@
 import { useLife } from '../api'
 import Dot from '../components/Dot'
+import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
 
 function staleText(s?: number | null): string {
@@ -80,6 +81,9 @@ export default function Life() {
           記帳(NocoDB)→ <span className="font-mono text-[12px] text-muted">192.168.20.70:8080 ↗</span>
         </a>
       </div>
+
+      {/* 生活助理:Sonnet 5 對話框(唯讀工具+寫入提案單,僅 portal.hl) */}
+      <LifeChat />
     </>
   )
 }

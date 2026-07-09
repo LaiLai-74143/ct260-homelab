@@ -15,13 +15,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, providers
+from . import actions, life_chat, providers
 
 BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.5.2", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.6.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -154,6 +154,43 @@ async def action(request: Request):
         status, payload = await actions.run(body, request.headers.get("Remote-User"))
         return JSONResponse(payload, status_code=status)
     except actions.ActionError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+# ---- 生活助理(待辦49;Sonnet 5 唯讀工具+提案單→確認執行,見 life_chat.py) ----
+
+@app.get("/api/life/chat")
+async def life_chat_info(request: Request):
+    return life_chat.info(request.headers.get("Remote-User"))
+
+
+@app.post("/api/life/chat")
+async def life_chat_post(request: Request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"messages": [{"role": "user", "content": "..."}]}')
+    try:
+        status, payload = await life_chat.chat(body, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except life_chat.ChatError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.post("/api/life/confirm")
+async def life_confirm(request: Request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", "提案五欄位原樣帶回:action/args/summary/ts/sig")
+    try:
+        status, payload = await life_chat.confirm(body, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except life_chat.ChatError as e:
         return _err(e.status, e.error, e.hint)
 
 

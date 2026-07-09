@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "life": {
+      "command": "/usr/bin/python3",
+      "args": ["/home/codex/.local/bin/life-ro-mcp.py"]
+    }
+  }
+}

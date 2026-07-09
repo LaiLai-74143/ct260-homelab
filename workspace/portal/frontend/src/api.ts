@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, Game, HostDetail, Life, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -149,6 +149,35 @@ export function useActionMutation() {
     retry: 0,
     mutationFn: ({ action, param }) => postJson('/api/action', { action, param: param ?? null }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts'] }) },
+  })
+}
+
+// ---- 生活助理(待辦49;BFF /api/life/chat → CT260 life-chat Sonnet 5) ----
+
+/** 能力探測:enabled(已配置)/ allowed(本請求可對話) */
+export function useLifeChatInfo() {
+  return useQuery<LifeChatInfo>({
+    queryKey: ['lifeChatInfo'],
+    queryFn: () => getJson('/api/life/chat'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** 對話:retry 0(限速 6/分+單飛,絕不自動重試);歷史由呼叫端整串帶上(無 session) */
+export function useLifeChatMutation() {
+  return useMutation<{ status: number; data: ChatReply }, ActionHttpError, { messages: ChatMessage[] }>({
+    retry: 0,
+    mutationFn: (body) => postJson('/api/life/chat', body),
+  })
+}
+
+/** 提案確認執行:五欄位原樣帶回;成功後刷新生活數據(借貸件數可能變) */
+export function useLifeConfirmMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: ChatConfirmResult }, ActionHttpError, ChatProposal>({
+    retry: 0,
+    mutationFn: (p) => postJson('/api/life/confirm', p),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['life'] }) },
   })
 }
 
