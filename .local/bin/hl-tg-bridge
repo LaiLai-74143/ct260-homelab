@@ -168,10 +168,12 @@ def proposals_all():
 # ---------- 訊息處理 ----------
 def handle_text(text):
     text = text.strip()[:MAX_MSG]
-    if text in ("/start", "/help"):
+    # 群組裡指令常帶 @botname 後綴(/help@KumaBot),剝掉再比對
+    cmd = text.split("@", 1)[0] if text.startswith("/") else None
+    if cmd in ("/start", "/help"):
         tg("sendMessage", chat_id=CHAT_ID, text=HELP_TEXT)
         return
-    if text == "/reset":
+    if cmd == "/reset":
         _save(TRANSCRIPT_FILE, {"last": 0, "messages": []})
         tg("sendMessage", chat_id=CHAT_ID, text="🧹 已重開話題。")
         return
