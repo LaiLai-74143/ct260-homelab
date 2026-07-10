@@ -103,11 +103,14 @@ async def _pc40_alive(client: httpx.AsyncClient) -> bool:
 
 async def overview() -> dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
-        up_vec, cpu, mem, disk, boot, pve, pc40, snmp_upt, ports_up, ports_all = await asyncio.gather(
+        (up_vec, cpu, mem, disk, boot, pve, pc40, snmp_upt, ports_up, ports_all,
+         ow_cpu, ow_mem, ow_disk, ow_upt) = await asyncio.gather(
             _promq(client, "up"),
             _promq(client, '100 * (1 - avg by (job)(rate(node_cpu_seconds_total{mode="idle"}[5m])))'),
             _promq(client, '100 * avg by (job)(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'),
-            _promq(client, '100 * max by (job)(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})'),
+            # mountpoint 放寬到 NAS 型佈局(UGOS 根=/rootfs、資料=/volumeN;0.9.2)
+            # ——NAS 取「最滿掛載點」為 disk 讀數(volume 滿比 rootfs 滿更致命)
+            _promq(client, '100 * max by (job)(1 - node_filesystem_avail_bytes{mountpoint=~"/|/rootfs|/volume[0-9]+"} / node_filesystem_size_bytes{mountpoint=~"/|/rootfs|/volume[0-9]+"})'),
             _promq(client, "time() - max by (job)(node_boot_time_seconds)"),
             _promq(client, "pve_up"),
             _pc40_alive(client),
@@ -115,11 +118,19 @@ async def overview() -> dict:
             _promq(client, "max by (job)(sysUpTime) / 100"),
             _promq(client, "count by (job)(ifOperStatus == 1)"),
             _promq(client, "count by (job)(ifOperStatus)"),
+            # openwrt textfile 指標(0.9.2 補接:M1 起 bare 只走 SNMP 路徑,openwrt 卡一直空)
+            _promq(client, '100 * (1 - sum by (job)(rate(openwrt_cpu_seconds_total{mode="idle"}[5m])) / sum by (job)(rate(openwrt_cpu_seconds_total[5m])))'),
+            _promq(client, '100 * (1 - max by (job)(openwrt_memory_bytes{type="available"}) / max by (job)(openwrt_memory_bytes{type="total"}))'),
+            _promq(client, '100 * max by (job)(1 - openwrt_filesystem_available_bytes{mountpoint="/"} / openwrt_filesystem_size_bytes{mountpoint="/"})'),
+            _promq(client, "max by (job)(openwrt_uptime_seconds)"),
         )
 
     up = _by_job(up_vec)
     cpu, mem, disk, boot = _by_job(cpu), _by_job(mem), _by_job(disk), _by_job(boot)
     snmp_upt, ports_up, ports_all = _by_job(snmp_upt), _by_job(ports_up), _by_job(ports_all)
+    # openwrt 讀數併入同名 dict(單位一致:% 與 uptime 秒),下游渲染零分叉
+    cpu.update(_by_job(ow_cpu)); mem.update(_by_job(ow_mem))
+    disk.update(_by_job(ow_disk)); boot.update(_by_job(ow_upt))
     pve_up = {r["metric"].get("id"): float(r["value"][1]) for r in pve}
 
     hosts = []
@@ -137,12 +148,13 @@ async def overview() -> dict:
         elif job and job in up:
             if up[job] >= 1:
                 state = "ok"
-                if not h.get("bare"):
-                    c = round(cpu[job]) if job in cpu else None
-                    m = round(mem[job]) if job in mem else None
-                    dk = round(disk[job]) if job in disk else None
-                    uptime = _human_secs(boot[job]) if job in boot else "—"
-                else:
+                # 0.9.2 統一取數:dict 有值就用(openwrt 靠上方併入的 openwrt_* 讀數;
+                # switch3f 無 cpu/mem 自然缺席),bare 只決定 SNMP 補充項
+                c = round(cpu[job]) if job in cpu else None
+                m = round(mem[job]) if job in mem else None
+                dk = round(disk[job]) if job in disk else None
+                uptime = _human_secs(boot[job]) if job in boot else "—"
+                if h.get("bare"):
                     # SNMP bare 主機(switch3f,待辦25):uptime 與埠數各自獨立,缺一不擋另一
                     if job in snmp_upt:
                         uptime = _human_secs(snmp_upt[job])
@@ -556,7 +568,7 @@ async def host_detail(slug: str) -> dict:
         q = {
             "cpu": f'100 * (1 - avg(rate(node_cpu_seconds_total{{mode="idle",job="{job}"}}[5m])))',
             "mem": f'100 * avg(1 - node_memory_MemAvailable_bytes{{job="{job}"}} / node_memory_MemTotal_bytes{{job="{job}"}})',
-            "disk": f'100 * max(1 - node_filesystem_avail_bytes{{mountpoint="/",job="{job}"}} / node_filesystem_size_bytes{{mountpoint="/",job="{job}"}})',
+            "disk": f'100 * max(1 - node_filesystem_avail_bytes{{mountpoint=~"/|/rootfs|/volume[0-9]+",job="{job}"}} / node_filesystem_size_bytes{{mountpoint=~"/|/rootfs|/volume[0-9]+",job="{job}"}})',
             # 網路:rx+tx KB/s,排除虛擬介面
             "net": (f'sum(rate(node_network_receive_bytes_total{{job="{job}",device!~"lo|veth.*|br.*|docker.*|tap.*|fwbr.*|fwpr.*|fwln.*"}}[5m])'
                     f' + rate(node_network_transmit_bytes_total{{job="{job}",device!~"lo|veth.*|br.*|docker.*|tap.*|fwbr.*|fwpr.*|fwln.*"}}[5m])) / 1024'),

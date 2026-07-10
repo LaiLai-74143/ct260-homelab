@@ -2859,3 +2859,20 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   .before-tailscaled-metric-*);②CT201 ctdmz-gate.yml 加 CtdmzTailscaledDown
   (warning for 5m;備份 .before-tailscaled-alert-*),promtool 過+熱載+指標=1。
 - 教訓入長期記憶:宿主殺程序先 pgrep -a 對 cgroup,殺特定 PID,不按名字盲殺。
+
+### 2026-07-10 portal 0.9.2:設備總覽三修(使用者問「怎麼有些數據不顯示了」)
+- 查證結論:三塊都不是本日退化,是 M1 起就沒接上/接不上,細看才發現:
+  ① openwrt 卡空白=bare 主機路徑只實作了 SNMP(switch3f)取數,openwrt 的
+    openwrt_*(cpu/mem/filesystem/uptime)從未接卡。修=overview 增四條 PromQL
+    (cpu=1-idle/sum(rate);mem=1-available/total;disk=mountpoint "/";uptime 直讀)
+    併入同名 dict,渲染零分叉;bare 旗標降級為「SNMP 補充項」開關。
+  ② dxp4800 無 disk 條=查詢寫死 mountpoint="/",UGOS 根掛載叫 /rootfs → 永遠查空。
+    修=mountpoint=~"/|/rootfs|/volume[0-9]+"(overview+host detail 兩處);NAS 讀數
+    語意=最滿掛載點(volume 滿比 rootfs 滿致命),上線值 73%(volume 級)。
+  ③ vm300 紅點「停機(非預期)」=off_ok 旗標沒跟上手動開機裁決。修=registry 加
+    off_ok+note「手動開機(onboot 0,省RAM)」,比照 ct250 轉灰點。
+- PromQL 先對 live Prometheus 逐條驗值再寫碼(openwrt 3.9/6.0/0.2%/13d、dxp 72.8%、
+  既有主機讀數不受 regex 放寬影響)。部署=finish-portal-092.sh(照 091 模式;
+  驗證段改本機執行避免三層引號——首版巢狀 heredoc 在 ssh 雙引號層炸掉的教訓)。
+- 驗證:11 端點 200;openwrt 4%/6%/0%/13d、dxp disk 73%、vm300 up=unk、switch3f
+  8/28 埠+41d 回歸 OK。備份=portal-src-before-092-*+docker-compose.yml.before-portal092-*。

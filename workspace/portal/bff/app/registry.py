@@ -36,7 +36,7 @@ HOSTS: list[dict] = [
     {"slug": "ct270", "name": "ct270 · life", "vlan": "srv", "job": "ct270-life-ops-node",
      "loki": "ct270"},
     {"slug": "vm300", "name": "vm300 · honeypot", "vlan": "666", "job": "vm300-honeypot-node",
-     "pve": "qemu/300"},
+     "pve": "qemu/300", "off_ok": True, "note": "手動開機(onboot 0,省RAM)"},
 ]
 
 BY_SLUG = {h["slug"]: h for h in HOSTS}
