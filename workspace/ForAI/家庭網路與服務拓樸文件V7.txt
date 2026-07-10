@@ -682,8 +682,8 @@ Allow-DMZProxy-TSGate-To-Router-Web  dmz/10.60.60.10 -> router input tcp/80,443,
   參數相同);temp_allow_pc40_to_openwrt_ssh 轉正=Allow-PC40-To-Router-SSH-52438(section
   allow_pc40_router_ssh);新增 Block-Honeypot-To-WAN(REJECT,蜜罐出網不再依賴 zone 預設);
   dhcp.dmz.ignore='1'。回歸=Kuma 全綠+portal 200+VLAN40-Hairpin 存活(PC 端 MC 公網名連線
-  請使用者順手驗一次)。CT203/204/205 sshd 停用被分類器攔→finish-sweep-leftovers.sh 待使用者
-  (含 pve24 孤兒 tailscaled 清理)。
+  請使用者順手驗一次)。CT203/204/205 sshd 停用 ✔(2026-07-10 使用者跑 finish-sweep-
+  leftovers.sh,三台 inactive);pve24 孤兒 tailscaled ◐=pkill 後 pgrep 仍見 PID(待 -9 複殺)。
 ```
 
 ### 4.5 portscan-autoban
