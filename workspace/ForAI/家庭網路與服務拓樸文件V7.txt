@@ -1538,9 +1538,14 @@ BFF:純 stdlib http.server(零 pip,比照 CT203/life-ops-mcp 最小攻擊面;無
 資料(推不是拉,零憑證進 DMZ):CT260 hl-write-guest(cron */30,flock)讀 GCal(14 天議程,
   完整標題)+ NocoDB Transactions(逐人未結+淨額屋主視角+最近已結 10 筆)→ guest.json
   → hl-push ct205 /opt/guest-portal/data/guest.json;BFF 只讀此快照,零出站。
-帳號:CT260 ~/.config/homelab/guest-accounts.json(600,含 scrypt hash,不進 NocoDB=符合
-  「secrets 僅存 ~/.config/homelab」戒律)。hl-guest add/passwd/enable/disable/rm/list;
-  add 時對 NocoDB People 模糊比對驗證人名(=「聯動記賬人名」)。查無帳號密碼=拒登。
+帳號(2026-07-10 改版):併入 NocoDB People 表三欄 portal_user_hash/portal_pw_hash/portal_enabled
+  (與記賬共用同一庫;取代原 CT260 本地 JSON)。登入名(身分證字號)+密碼皆 scrypt 雜湊,
+  連 NocoDB UI 也讀不回明文。hl-guest setup/add/passwd/enable/disable/rm/list(NocoDB-backed;
+  add 人名不存在自動建 People 列,rm 只清三欄保留列);hl-guest svc=機器介面(stdin JSON→
+  stdout JSON,secrets 不進 argv)。圖形化管理兩路:①NocoDB 內建 UI(PC40:8080)②入口大廳
+  生活頁「行程共享·帳號管理」面板(portal 0.9.0;portal.hl 經 Authelia+BFF Remote-User 閘門
+  → CT260 life-chat :5002 /guest → hl-guest svc,複用既有 :5002 零新埠/防火牆/token)。
+  登入三態:帳號不符→「查無此帳號·聯絡管理員新增」;帳號符密碼錯→「密碼錯誤」;都符→通過。
 登入審計:BFF 寫 audit.jsonl;策略=未知帳號記密碼原文(蜜罐)、已知錯密碼遮罩(GUEST_LOG_WRONG_PW=full
   可切全文)、成功不記密碼。異常哨兵 CT260 hl-guest-watch(cron */5,游標增量):未知帳號嘗試
   即報(附密碼)/已知 fails=3 跨門檻或鎖定/新 IP 成功登入/非 TW 國別(CF-IPCountry)→ TG(curl -K stdin)。

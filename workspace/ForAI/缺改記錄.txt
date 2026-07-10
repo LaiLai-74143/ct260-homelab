@@ -2624,3 +2624,12 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
     無明文→雜湊被 verify_password 驗過→rm+刪 junk 列全清;mock 三態+審計+Playwright 6/6 全綠。
   待使用者:hl-guest add <身分證字號> <人名> --ask-pass 建真帳號 + 外網登入實測。
   ★剩:圖形化帳號管理原列待辦(待辦50)已被 NocoDB UI 取代,可註銷該子項。
+【portal 帳號管理 GUI 2026-07-10,使用者「懶得打指令」】入口大廳生活頁加「行程共享·帳號管理」
+  面板(portal 0.9.0):列出/新增/改密碼/停用啟用/移除帳號,身分證字號+密碼不回顯(雜湊)。
+  鏈路(複用既有 :5002,零新埠/防火牆/token):portal.hl(Authelia)→ BFF /api/life/guest
+  (Remote-User 閘門)→ CT260 life-chat :5002 /guest(Bearer+op 白名單)→ hl-guest svc
+  (stdin JSON→JSON,secrets 不進 argv;log 只記 op+person)→ NocoDB。僅 portal.hl 顯示面板
+  (IS_HL gate)+ BFF 再驗 Remote-User(比照生活頁 8b 兩層,非硬邊界,真邊界在 CT260 token+白名單)。
+  live 全綠:mock BFF+Playwright 7/7、life-chat /guest live(add 建人+推 CT205/錯 token 401/
+  白名單 400)、portal 0.9.0 部署 CT201(11 端點+面板進包+guest 閘門 403+op 400+M3/game/Grafana
+  回歸全過)。SoT:portal/(finish-portal-090.sh)、life-chat/life-chat.py、guest-portal/scripts/hl-guest。
