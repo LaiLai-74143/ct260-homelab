@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-07-10T12:00:00+00:00",
+  "accounts": [
+    {
+      "username": "小明",
+      "person": "小明",
+      "hash": "scrypt$16384$8$1$gHbNi0Na4/Xn3OX66QmPBg==$hfG3IdjBAN176U2IyYNfrPVGnbvs6uCwwMgj3RDf1jw=",
+      "enabled": true
+    },
+    {
+      "username": "老王",
+      "person": "老王",
+      "hash": "scrypt$16384$8$1$W0+ZYGkWX9Vqbao2hFsXGQ==$TfBtbtRbQyzeZvbCn57xvkHa5PZHCy1XWZBAcbCphPc=",
+      "enabled": true
+    },
+    {
+      "username": "停用範例",
+      "person": "停用範例",
+      "hash": "scrypt$16384$8$1$gHbNi0Na4/Xn3OX66QmPBg==$hfG3IdjBAN176U2IyYNfrPVGnbvs6uCwwMgj3RDf1jw=",
+      "enabled": false
+    }
+  ],
+  "calendar": [
+    { "date": "2026-07-10", "time": "14:00", "title": "牙醫回診", "all_day": false },
+    { "date": "2026-07-10", "time": "19:30", "title": "與老王吃飯", "all_day": false },
+    { "date": "2026-07-11", "time": "全天", "title": "端午連假", "all_day": true },
+    { "date": "2026-07-12", "time": "10:00", "title": "羽球團", "all_day": false },
+    { "date": "2026-07-14", "time": "09:00", "title": "回公司 standup", "all_day": false },
+    { "date": "2026-07-16", "time": "全天", "title": "小明生日", "all_day": true },
+    { "date": "2026-07-18", "time": "20:00", "title": "電影《沙丘3》", "all_day": false }
+  ],
+  "debts": {
+    "小明": {
+      "net": -1200,
+      "currency": "TWD",
+      "open": [
+        { "id": 101, "dir": "i_owe", "amount": 1500, "item": "代墊演唱會門票", "date": "2026-06-28", "due": "2026-07-15", "notes": "搖滾區" },
+        { "id": 102, "dir": "they_owe", "amount": 300, "item": "還我上次的計程車錢", "date": "2026-07-02", "due": null, "notes": null }
+      ],
+      "settled": [
+        { "id": 90, "dir": "i_owe", "amount": 200, "item": "手搖飲", "date": "2026-06-20", "settled_date": "2026-06-21", "notes": null },
+        { "id": 85, "dir": "they_owe", "amount": 5000, "item": "借週轉", "date": "2026-05-10", "settled_date": "2026-06-01", "notes": "已全額歸還" }
+      ]
+    },
+    "老王": {
+      "net": 800,
+      "currency": "TWD",
+      "open": [
+        { "id": 110, "dir": "they_owe", "amount": 800, "item": "上次聚餐 AA", "date": "2026-07-05", "due": "2026-07-20", "notes": null }
+      ],
+      "settled": []
+    }
+  }
+}

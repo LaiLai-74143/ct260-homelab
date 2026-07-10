@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""hl-guest — guest-portal 帳號管理(CT260)。
+
+帳號(含 scrypt 密碼雜湊)存 ~/.config/homelab/guest-accounts.json(600),不進 NocoDB
+(符合「secrets 僅存 ~/.config/homelab」戒律;雜湊永不落 DMZ/資料庫)。
+「聯動記賬人名」= add 時對 NocoDB People 模糊比對驗證,person 欄存實際 People.name,
+hl-write-guest 據此 bucket 該人的 Transactions。
+
+用法(CT260):
+  hl-guest add <username> [記賬人名]   # 人名省略=同 username;生成隨機密碼一次性印出
+  hl-guest passwd <username>           # 重設密碼
+  hl-guest disable <username>          # 停用(保留)/  enable 重新啟用
+  hl-guest enable  <username>
+  hl-guest rm <username>               # 刪除
+  hl-guest list                        # 列出所有帳號
+任何變更後自動觸發 hl-write-guest 推送 CT205(可 --no-push 略過)。
+"""
+import base64
+import datetime
+import hashlib
+import json
+import os
+import secrets
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+ACCT = HOME / ".config/homelab/guest-accounts.json"
+NOCODB_ENV = HOME / ".config/homelab/nocodb.env"
+WRITE_GUEST = HOME / ".local/bin/hl-write-guest"
+
+# scrypt 參數必須與 guest-portal bff/app/security.py 完全一致(否則 BFF 驗不過)
+_N, _R, _P, _DKLEN = 2 ** 14, 8, 1, 32
+# 密碼字元集:去除易混淆(0/O/l/1/I),對外分享友善
+_PW_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
+
+
+def die(msg: str, code: int = 1):
+    print(f"hl-guest: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load_env(path: Path) -> dict:
+    env = {}
+    try:
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k] = v.strip().strip('"').strip("'")
+    except OSError as e:
+        die(f"讀不到 {path}: {e}")
+    return env
+
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.scrypt(password.encode(), salt=salt, n=_N, r=_R, p=_P, dklen=_DKLEN)
+    return f"scrypt${_N}${_R}${_P}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
+
+
+def gen_password(nchars: int = 12) -> str:
+    return "".join(secrets.choice(_PW_ALPHABET) for _ in range(nchars))
+
+
+def load_accounts() -> dict:
+    if not ACCT.exists():
+        return {"accounts": []}
+    try:
+        return json.loads(ACCT.read_text())
+    except Exception as e:  # noqa: BLE001
+        die(f"帳號檔壞了 {ACCT}: {e}")
+
+
+def save_accounts(doc: dict):
+    ACCT.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ACCT.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    os.chmod(tmp, 0o600)
+    tmp.replace(ACCT)
+    os.chmod(ACCT, 0o600)
+
+
+def find(doc: dict, username: str) -> dict | None:
+    for a in doc["accounts"]:
+        if a["username"] == username:
+            return a
+    return None
+
+
+# ---- NocoDB People 模糊比對(驗證「聯動記賬人名」)----
+
+def nocodb_people_names() -> list[str]:
+    c = load_env(NOCODB_ENV)
+    url, tok = c["NC_URL"].rstrip("/"), c["NC_TOKEN"]
+    base = c.get("NC_BASE", "ppralaha4e76q5o")
+
+    def api(path: str) -> dict:
+        req = urllib.request.Request(url + path, headers={"xc-token": tok})
+        return json.loads(urllib.request.urlopen(req, timeout=20).read())
+
+    tid = None
+    for t in api(f"/api/v1/db/meta/projects/{base}/tables")["list"]:
+        if t["title"] == "People":
+            tid = t["id"]
+            break
+    if tid is None:
+        die("NocoDB 無 People 表")
+    names, offset = [], 0
+    while True:
+        r = api(f"/api/v2/tables/{tid}/records?limit=200&offset={offset}&fields=name")
+        batch = r["list"]
+        names += [x.get("name") for x in batch if x.get("name")]
+        offset += len(batch)
+        if not batch or r.get("pageInfo", {}).get("isLastPage", True):
+            break
+    return names
+
+
+def resolve_person(name: str) -> str:
+    """對 People 名單比對:完全相符優先,其次唯一子字串命中;含糊則報選項要求精確。"""
+    try:
+        names = nocodb_people_names()
+    except Exception as e:  # noqa: BLE001
+        die(f"無法查 NocoDB People(檢查 nocodb.env/CT270 可達):{type(e).__name__}: {e}")
+    if name in names:
+        return name
+    hits = [n for n in names if name in n or n in name]
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        die(f"記賬人名『{name}』在 NocoDB People 找不到。現有:{'、'.join(names) or '（空）'}")
+    die(f"記賬人名『{name}』對到多個:{'、'.join(hits)};請用精確全名。")
+
+
+def push(no_push: bool):
+    if no_push:
+        print("（--no-push:略過推送;稍後手動 hl-write-guest)")
+        return
+    if not WRITE_GUEST.exists():
+        print(f"（注意:{WRITE_GUEST} 不存在,未推送)")
+        return
+    r = subprocess.run([str(WRITE_GUEST)], capture_output=True, text=True, timeout=120)
+    tail = (r.stdout + r.stderr).strip().splitlines()
+    print("  " + (tail[-1] if tail else f"hl-write-guest rc={r.returncode}"))
+    if r.returncode != 0:
+        print("  ⚠️ 推送失敗;帳號變更已存本地,修好後手動跑 hl-write-guest")
+
+
+def now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+
+def cmd_add(args, no_push):
+    if not args:
+        die("用法:hl-guest add <username> [記賬人名]")
+    username = args[0]
+    person_in = args[1] if len(args) > 1 else username
+    doc = load_accounts()
+    if find(doc, username):
+        die(f"帳號『{username}』已存在(改密碼用 hl-guest passwd)")
+    person = resolve_person(person_in)
+    pw = gen_password()
+    doc["accounts"].append({
+        "username": username, "person": person,
+        "hash": hash_password(pw), "enabled": True, "created": now_iso(),
+    })
+    save_accounts(doc)
+    print(f"✓ 已新增帳號『{username}』→ 記賬人『{person}』")
+    print(f"\n  帳號:{username}\n  密碼:{pw}\n")
+    print("  ↑ 密碼僅顯示這一次,請立刻交給對方。忘了就 hl-guest passwd 重設。")
+    push(no_push)
+
+
+def cmd_passwd(args, no_push):
+    if not args:
+        die("用法:hl-guest passwd <username>")
+    username = args[0]
+    doc = load_accounts()
+    a = find(doc, username)
+    if not a:
+        die(f"查無帳號『{username}』")
+    pw = gen_password()
+    a["hash"] = hash_password(pw)
+    a["pw_changed"] = now_iso()
+    save_accounts(doc)
+    print(f"✓ 已重設『{username}』密碼\n\n  帳號:{username}\n  新密碼:{pw}\n")
+    print("  ↑ 僅顯示一次。")
+    push(no_push)
+
+
+def cmd_toggle(args, enable: bool, no_push):
+    if not args:
+        die(f"用法:hl-guest {'enable' if enable else 'disable'} <username>")
+    username = args[0]
+    doc = load_accounts()
+    a = find(doc, username)
+    if not a:
+        die(f"查無帳號『{username}』")
+    a["enabled"] = enable
+    save_accounts(doc)
+    print(f"✓ 帳號『{username}』已{'啟用' if enable else '停用'}")
+    push(no_push)
+
+
+def cmd_rm(args, no_push):
+    if not args:
+        die("用法:hl-guest rm <username>")
+    username = args[0]
+    doc = load_accounts()
+    if not find(doc, username):
+        die(f"查無帳號『{username}』")
+    doc["accounts"] = [x for x in doc["accounts"] if x["username"] != username]
+    save_accounts(doc)
+    print(f"✓ 已刪除帳號『{username}』")
+    push(no_push)
+
+
+def cmd_list(_args, _no_push):
+    doc = load_accounts()
+    if not doc["accounts"]:
+        print("（尚無帳號;hl-guest add <username> [記賬人名]）")
+        return
+    print(f"{'帳號':<16}{'記賬人':<16}{'狀態':<8}建立")
+    for a in doc["accounts"]:
+        st = "啟用" if a.get("enabled", True) else "停用"
+        print(f"{a['username']:<16}{a.get('person',''):<16}{st:<8}{a.get('created','')[:10]}")
+
+
+def main():
+    argv = sys.argv[1:]
+    no_push = "--no-push" in argv
+    argv = [x for x in argv if x != "--no-push"]
+    if not argv:
+        die("用法:hl-guest {add|passwd|enable|disable|rm|list} …", 2)
+    cmd, rest = argv[0], argv[1:]
+    table = {
+        "add": lambda: cmd_add(rest, no_push),
+        "passwd": lambda: cmd_passwd(rest, no_push),
+        "enable": lambda: cmd_toggle(rest, True, no_push),
+        "disable": lambda: cmd_toggle(rest, False, no_push),
+        "rm": lambda: cmd_rm(rest, no_push),
+        "list": lambda: cmd_list(rest, no_push),
+    }
+    fn = table.get(cmd)
+    if not fn:
+        die(f"未知子命令『{cmd}』", 2)
+    fn()
+
+
+if __name__ == "__main__":
+    main()

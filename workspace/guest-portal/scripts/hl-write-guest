@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""hl-write-guest — 產出 guest-portal 的 guest.json 並推送 CT205(schedule)。
+
+比照 hl-write-life「推不是拉」:CT260 讀 GCal + NocoDB → 產檔 → hl-push → CT205。
+BFF(CT205)零憑證、零出站,只讀這份快照。
+
+內容:
+  accounts —— 本地 ~/.config/homelab/guest-accounts.json(username/person/hash/enabled)
+  calendar —— GCal 未來 14 天議程(全體共用,展示屋主行程,完整標題)
+  debts    —— 逐帳號:該 person 的未結明細 + 淨額(屋主視角)+ 最近已結 10 筆
+
+任一「資料源」失敗=整次不投遞(exit 1),讓 CT205 stale 態自然浮現,不推殘缺裝完整。
+無帳號時仍投遞(accounts=[]、debts={}),讓 CT205 從 mock/舊檔切到乾淨 live 空態。
+cron:*/30(flock);手動:hl-write-guest [--dry-run]
+"""
+import datetime
+import json
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+ACCT = HOME / ".config/homelab/guest-accounts.json"
+GCAL_ENV = HOME / ".config/homelab/gcal.env"
+NOCODB_ENV = HOME / ".config/homelab/nocodb.env"
+STATE = HOME / ".local/state/homelab-notify"
+OUT = STATE / "guest.json"
+PUSH = HOME / ".local/bin/hl-push"
+CAL_DAYS = 14
+SETTLED_PER_PERSON = 10
+
+
+def log(msg: str):
+    print(f"hl-write-guest: {msg}", flush=True)
+
+
+def load_env(path: Path) -> dict:
+    env = {}
+    for line in open(path):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            env[k] = v.strip().strip('"').strip("'")
+    return env
+
+
+# ---- accounts(本地檔;非「資料源」,缺檔=空帳號不算失敗)----
+
+def load_accounts() -> list[dict]:
+    if not ACCT.exists():
+        return []
+    doc = json.loads(ACCT.read_text())
+    # 只帶 BFF 需要的欄位(hash 必帶=驗證所需;created/pw_changed 不外送)
+    return [{"username": a["username"], "person": a.get("person") or a["username"],
+             "hash": a["hash"], "enabled": bool(a.get("enabled", True))}
+            for a in doc.get("accounts", [])]
+
+
+# ---- Google Calendar(唯讀 events.list,未來 14 天)----
+
+def gcal_agenda() -> list[dict]:
+    c = load_env(GCAL_ENV)
+    data = urllib.parse.urlencode({
+        "client_id": c["GCAL_CLIENT_ID"], "client_secret": c["GCAL_CLIENT_SECRET"],
+        "refresh_token": c["GCAL_REFRESH_TOKEN"], "grant_type": "refresh_token",
+    }).encode()
+    tok = json.loads(urllib.request.urlopen(
+        urllib.request.Request("https://oauth2.googleapis.com/token", data=data),
+        timeout=20).read())["access_token"]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tmax = now + datetime.timedelta(days=CAL_DAYS)
+    cal_id = urllib.parse.quote(c.get("GCAL_CALENDAR_ID", "primary"))
+    q = urllib.parse.urlencode({
+        "timeMin": now.isoformat(), "timeMax": tmax.isoformat(),
+        "singleEvents": "true", "orderBy": "startTime", "maxResults": "100",
+    })
+    req = urllib.request.Request(
+        f"https://www.googleapis.com/calendar/v3/calendars/{cal_id}/events?{q}",
+        headers={"Authorization": f"Bearer {tok}"})
+    items = json.loads(urllib.request.urlopen(req, timeout=20).read()).get("items", [])
+    out = []
+    for e in items:
+        start = e.get("start", {})
+        if "dateTime" in start:
+            dt = start["dateTime"]
+            date, time_ = dt[:10], dt[11:16]
+            all_day = False
+        else:
+            date, time_, all_day = start.get("date", ""), "全天", True
+        out.append({"date": date, "time": time_,
+                    "title": e.get("summary", "(無標題)"), "all_day": all_day})
+    return out
+
+
+# ---- NocoDB Transactions 逐人(屋主視角 net;direction 我借出/我借入)----
+
+def nocodb_debts_by_person(persons_wanted: set[str]) -> dict[str, dict]:
+    """回傳 {person_name: {net, currency, open[], settled[]}},只含 persons_wanted。"""
+    if not persons_wanted:
+        return {}
+    c = load_env(NOCODB_ENV)
+    url, tok = c["NC_URL"].rstrip("/"), c["NC_TOKEN"]
+    base = c.get("NC_BASE", "ppralaha4e76q5o")
+
+    def api(path: str) -> dict:
+        req = urllib.request.Request(url + path, headers={"xc-token": tok})
+        return json.loads(urllib.request.urlopen(req, timeout=20).read())
+
+    tid = link_cid = None
+    for t in api(f"/api/v1/db/meta/projects/{base}/tables")["list"]:
+        if t["title"] == "Transactions":
+            tid = t["id"]
+            break
+    if tid is None:
+        raise RuntimeError("NocoDB 無 Transactions 表")
+    for col in api(f"/api/v1/db/meta/tables/{tid}")["columns"]:
+        if col["title"] == "counterparty" and col["uidt"] in ("Links", "LinkToAnotherRecord"):
+            link_cid = col["id"]
+            break
+    if link_cid is None:
+        raise RuntimeError("NocoDB Transactions 無 counterparty 連結欄")
+
+    rows = []
+    while True:
+        r = api(f"/api/v2/tables/{tid}/records?limit=200&offset={len(rows)}")
+        batch = r["list"]
+        rows += batch
+        if not batch or r.get("pageInfo", {}).get("isLastPage", True):
+            break
+
+    def who_of(rid) -> str | None:
+        try:
+            ls = api(f"/api/v2/tables/{tid}/links/{link_cid}/records/{rid}?limit=1").get("list", [])
+            return (ls[0].get("name") or None) if ls else None
+        except Exception:  # noqa: BLE001 — 人名解析失敗降級(不中斷整次)
+            return None
+
+    # 逐筆解析 counterparty,只保留 wanted;dir 從「訪客/朋友」視角:
+    #   direction=我借出 → 屋主借出給對方 → 對方(朋友)欠屋主 → they_owe
+    #   direction=我借入 → 屋主向對方借 → 屋主欠朋友 → i_owe
+    result: dict[str, dict] = {p: {"net": 0, "currency": "TWD", "open": [], "settled": []}
+                               for p in persons_wanted}
+    settled_buckets: dict[str, list] = {p: [] for p in persons_wanted}
+    for x in rows:
+        name = who_of(x.get("Id"))
+        if name not in persons_wanted:
+            continue
+        is_out = x.get("direction") == "我借出"
+        dir_ = "they_owe" if is_out else "i_owe"
+        amt = x.get("amount")
+        cur = x.get("currency") or "TWD"
+        settled = bool(x.get("settled"))
+        entry = {
+            "id": x.get("Id"), "dir": dir_,
+            "amount": amt if amt is not None else 0,
+            "item": x.get("item") or None,
+            "date": (x.get("date") or None),
+            "notes": x.get("notes") or None,
+        }
+        if settled:
+            entry["settled_date"] = x.get("settled_date") or None
+            settled_buckets[name].append((x.get("settled_date") or x.get("date") or "", entry))
+        else:
+            entry["due"] = x.get("due_date") or None
+            result[name]["open"].append(entry)
+            # 淨額:屋主視角,僅 TWD;>0=朋友欠屋主
+            if x.get("kind") == "金錢" and amt and cur == "TWD":
+                result[name]["net"] += amt if is_out else -amt
+
+    for p in persons_wanted:
+        # 未結:到期近的先,再按 id(穩定)
+        result[p]["open"].sort(key=lambda e: (e.get("due") or "9999-12-31", e.get("id") or 0))
+        # 已結:最新在前,取前 N
+        recent = sorted(settled_buckets[p], key=lambda t: t[0], reverse=True)[:SETTLED_PER_PERSON]
+        result[p]["settled"] = [e for _, e in recent]
+    return result
+
+
+def main():
+    accounts = load_accounts()
+    persons = {a["person"] for a in accounts if a.get("enabled", True)}
+
+    try:
+        cal = gcal_agenda()
+    except Exception as e:  # noqa: BLE001
+        log(f"GCal 失敗 {type(e).__name__}: {e}")
+        sys.exit(1)
+    try:
+        debts = nocodb_debts_by_person(persons)
+    except Exception as e:  # noqa: BLE001
+        log(f"NocoDB 失敗 {type(e).__name__}: {e}")
+        sys.exit(1)
+
+    doc = {
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "accounts": accounts,
+        "calendar": cal,
+        "debts": debts,
+    }
+    STATE.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    log(f"written: 帳號 {len(accounts)} · 行程 {len(cal)} · 有借貸的人 {sum(1 for d in debts.values() if d['open'] or d['settled'])}")
+
+    if "--dry-run" in sys.argv:
+        log("dry-run: 不投遞 CT205")
+        return
+    r = subprocess.run([str(PUSH), "ct205", str(OUT), "/opt/guest-portal/data/guest.json"],
+                       capture_output=True, text=True, timeout=90)
+    if r.returncode != 0:
+        log(f"push failed rc={r.returncode}: {r.stderr.strip()[:200]}")
+        sys.exit(1)
+    log("pushed -> CT205 /opt/guest-portal/data/guest.json")
+
+
+if __name__ == "__main__":
+    main()

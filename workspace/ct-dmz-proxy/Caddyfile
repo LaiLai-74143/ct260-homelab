@@ -20,14 +20,28 @@
 	tls /etc/caddy/certs/hl-fullchain.pem /etc/caddy/certs/hl-privkey.pem
 }
 
-# ===== 對外（cloudflared -> :80，pw.* = Vaultwarden）=====
+# ===== 對外（cloudflared -> :80）=====
+# 兩條對外服務共用 :80，以 Host 分流（handle 區塊互斥、由上而下）：
+#   /health*                     -> 探活「OK」（Kuma / 內部）
+#   schedule.lailai74143.com     -> guest-portal（CT205 DMZ，對外唯讀分享站；行程+借貸）
+#   其餘（含 pw.* Vaultwarden）    -> DXP:50303（catch-all 維持現況，不需知道 VW 確切 hostname）
+# ★ 零風險原則：只「加」schedule 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
 :80 {
-	# 健康端點（Uptime Kuma / 內部探活）
-	@health path /health /healthz
-	respond @health "OK" 200
+	# 健康端點（Uptime Kuma / 內部探活）—— 任何 host 的 /health 都回 OK
+	handle /health /healthz {
+		respond "OK" 200
+	}
 
-	# Vaultwarden：cloudflared -> Caddy -> DXP（目前 :80 只有 pw.* 流量，維持 catch-all）
-	reverse_proxy 192.168.30.3:50303
+	# guest-portal（對外分享站）：cloudflared -> Caddy -> CT205:8300
+	@schedule host schedule.lailai74143.com
+	handle @schedule {
+		reverse_proxy 10.60.60.11:8300
+	}
+
+	# Vaultwarden 及其餘：cloudflared -> Caddy -> DXP（catch-all，維持現況）
+	handle {
+		reverse_proxy 192.168.30.3:50303
+	}
 }
 
 # ===== 內部 SSO（待辦③）：hl.lailai74143.com 內部子域，split-DNS -> 100.100.1.2/10.60.60.10 =====

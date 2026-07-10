@@ -26,6 +26,7 @@ resolve() {  # -> echoes: "local" | "ssh <host> <shell>" | "pct <ctid>" | "qm <v
     dxp4800)   echo "ssh dxp4800 sh" ;;
     ct201)     echo "pct 201" ;;
     ct202)     echo "pct 202" ;;
+    ct205)     echo "pct 205" ;;
     ct250)     echo "pct 250" ;;
     ct270)     echo "pct 270" ;;
     vm300)     echo "qm 300" ;;
@@ -37,14 +38,14 @@ usage() {
   cat >&2 <<'U'
 usage: hl-run <node> ['command']        # command from args, or stdin if omitted
        hl-run --list | --resolve <node>
-nodes: ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct250 ct270 vm300
+nodes: ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct205 ct250 ct270 vm300
 U
   exit 2
 }
 
 [ $# -ge 1 ] || usage
 case "$1" in
-  --list|-l)  printf '%s\n' ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct250 ct270 vm300; exit 0 ;;
+  --list|-l)  printf '%s\n' ct260 pve24 openwrt dxp4800 routerpve ct201 ct202 ct205 ct250 ct270 vm300; exit 0 ;;
   --resolve)  shift; resolve "${1:-}" || { echo "hl-run: unknown node '${1:-}'" >&2; exit 2; }; exit 0 ;;
   -h|--help)  usage ;;
 esac

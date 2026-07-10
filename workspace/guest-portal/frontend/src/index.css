@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens —— 沿用入口大廳《設計報告-3》§6 色板,對外站同一套視覺語言 */
+:root {
+  --bg: #0E1116;
+  --panel: #161C24;
+  --line: #232B36;
+  --text: #DDE3EA;
+  --muted: #8A94A3;
+  --amber: #E8A33D;
+  --ok: #4CC38A;
+  --warn: #D9A03F;
+  --crit: #E5534B;
+  --unk: #57606C;
+}
+
+html { background: var(--bg); }
+
+body {
+  @apply bg-bg text-text font-sans antialiased;
+  line-height: 1.45;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; }
+}

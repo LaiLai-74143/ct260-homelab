@@ -2560,3 +2560,43 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   剩 89 天)。又一次「打點位置要對齊防火牆拓樸」(同段7坑1)。④✔ 使用者 root 跑
   finish-hl-path-fix.sh 全綠(root PATH/wrapper/codex PATH 三門全封)。③各裝置 root.crt
   移除=使用者自理,非阻斷。本輪「瀏覽器連線不安全」從源頭收束。
+
+### guest-portal 對外唯讀分享站(2026-07-10;待辦50,材料備妥待建)
+動機:使用者要一個「給外人看的入口大廳」——登入後看屋主 14 天行程(唯讀)+ 與該人相關借貸。
+定位:對外服務,比照 Vaultwarden(CF Tunnel→CT203 Caddy),不經 Authelia/單一入口。
+使用者裁決:①放 DMZ 新 CT205(非 CT270)②schedule.lailai74143.com ③行程完整標題
+  ④借貸未結+最近已結 10 筆 ⑤登入日誌+異常 TG。
+★ 放哪的裁決理由(方案A 勝 方案B):對外公開服務放 DMZ 是既有戒律(網段指導原則);
+  放 CT270 個資節點=公網流量打進離網節點+容器可跳板已發布埠(NocoDB/HA/Paperless);
+  又因 app 不直讀資料(推快照模式),放 CT270 零功能收益 → CT205 進 DMZ。
+架構決定(3 個,均對齊既有戒律):
+  1. BFF 從 FastAPI 改寫成純 stdlib http.server:DMZ 是公網攻擊面(戒律「務必最小化」,
+     CT203 連 Docker 都不用、life-ops-mcp 零依賴)——拉 FastAPI+uvicorn+starlette+pydantic
+     整棵樹還要開 PyPI 窗與此衝突。stdlib 版=只需 apt python3,零 pip/venv/Docker/PyPI 窗。
+  2. 帳號(含 scrypt hash)存 CT260 ~/.config/homelab/guest-accounts.json(600),不進 NocoDB
+     =符合「secrets 僅存 ~/.config/homelab」戒律,雜湊永不落 DMZ/資料庫;避開無法離線測試的
+     NocoDB meta API 建表脆弱點;「聯動記賬人名」改由 hl-guest add 對 People 模糊比對達成。
+  3. Caddy 分流零風險改法:只「加」schedule.* 具名 host 路由,Vaultwarden 仍 catch-all
+     ——不需知道 VW 確切 hostname(tunnel 設定在使用者手上、不入文件),現況一字不動。
+資料流(推不是拉,比照 hl-write-life):CT260 hl-write-guest(cron */30)讀 GCal 14 天議程
+  + NocoDB Transactions 逐人(direction 我借出=they_owe/我借入=i_owe;net 屋主視角)
+  → guest.json → hl-push ct205;BFF 只讀快照,零憑證零出站。CT205↔CT203 同 pve24/vmbr0/tag60
+  =同 L2 直通,Caddy→app:8300 走 bridge 不經路由器=零新防火牆規則。
+登入審計密碼記錄策略(安全細節,明文記錄):未知帳號嘗試記密碼原文(蜜罐情報,反正非真帳號)、
+  已知帳號密碼錯記遮罩 <N chars>(GUEST_LOG_WRONG_PW=full 可切;避免 DMZ 存「準密碼表」)、
+  成功登入永不記密碼。哨兵 hl-guest-watch(cron */5,游標增量去重):未知帳號即報(附密碼)/
+  已知 fails=3 跨門檻或鎖定/新 IP 成功登入/非 TW 國別(CF-IPCountry)→ TG(curl -K stdin)。
+自我審查抓到並修的缺陷:
+  坑1(真 bug,Playwright 抓)=stdlib http.server keep-alive 下 /api/logout 未讀請求 body,
+    殘留 body 污染下一請求解析成「{}GET…」→ 501、登出跳轉失敗;curl 漏掉是因當時 logout 未帶 body。
+    修=do_POST/do_GET/do_HEAD 統一 _drain_body 讀完 Content-Length。
+  縱深防禦2=帳號枚舉時序側信道(未知帳號不跑 scrypt=回應快)→ 補 dummy scrypt 等化(實測差 3.7ms)。
+  縱深防禦3=登入失敗鎖定字典無界成長 → 超 4096 筆機會性清全過期 key。
+無狀態 session 取捨(明文):HMAC 簽章 12h TTL,登出只刪 cookie,舊 token 至 exp 前仍有效
+  (低風險站可接受;若要即時撤銷需伺服器端 session 表,不為此站上)。
+驗證:段A mock 全綠(BFF curl 認證鏈/資料隔離/路徑穿越、Playwright 登入→儀表板→登出 5/5、
+  scrypt 跨 hl-guest↔BFF 相容、審計密碼策略核對);hl-guest 本地生命週期+hl-guest-watch
+  情景分類/游標/輪替離線全綠;段B 唯讀預檢(CT205 空號、debian-13 模板在、CT203 net 推導)。
+待使用者執行(P1 live/CF 帳號不經 Agent):finish-guest-portal-{01-ct(pve24 root),02-deploy,
+  04-pipeline,03-caddy}.sh + hl-guest add + CF 加 public hostname。SoT=~/workspace/guest-portal/。
+新增節點登錄:hl-run 加 ct205(pct 205);其餘節點對照表 hl-工具箱.txt 待同步(下次)。

@@ -22,6 +22,8 @@
 !/workspace/ha-automations
 !/workspace/ct-dmz-proxy
 !/workspace/ops
+# guest-portal 對外唯讀分享站(待辦50;node_modules/dist 由 guest-portal/.gitignore 排除)
+!/workspace/guest-portal
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local

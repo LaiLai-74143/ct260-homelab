@@ -863,6 +863,20 @@
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。
     過渡期 Homepage 凍結現狀不再投入。
 
+50. guest-portal 對外唯讀分享站(行程+借貸)  ★材料備妥待建(2026-07-10)
+    給受邀外人看的迷你入口:登入後顯示屋主未來 14 天行程(唯讀)+ 與該人相關借貸往來。
+    對外模式比照 Vaultwarden(CF Tunnel→CT203 Caddy),不經 Authelia/單一入口。
+    使用者裁決(2026-07-10):①放 DMZ 新 CT205 schedule(非 CT270)②公網名 schedule.lailai74143.com
+    ③行程完整標題 ④借貸未結+最近已結 10 筆 ⑤登入審計+異常 TG(未知帳號記密碼原文、
+    已知錯密碼遮罩、成功不記密碼;哨兵 hl-guest-watch cron */5)。
+    架構:BFF 純 stdlib http.server(零 pip,最小攻擊面)+ 前端沿用大廳視覺;資料推不是拉
+    (hl-write-guest 讀 GCal+NocoDB→guest.json→推 CT205,BFF 零憑證零出站);帳號存
+    CT260 guest-accounts.json(600,scrypt hash,不進 NocoDB),hl-guest 管理、add 對 People 驗證。
+    ▶ 段A(BFF+前端+mock E2E)全綠;段B/C/D finish 腳本備妥+唯讀預檢過(CT205 空號、
+      debian-13 模板在、CT203 net 推導 vmbr0/tag60/SSD-2)。SoT=~/workspace/guest-portal/(README 有 runbook)。
+    ▶ 待使用者執行:①pve24 建 CT ②部署 app ③裝管線+建帳號 ④Caddy 分流 ⑤CF 加 hostname(CF 帳號不經 Agent)。
+    ▶ 可選後續:CT205 可用性 Kuma 探活、vzdump 排程納入。
+
 ===============================================================================
 ## 已決策不做（勿再重複建議）
 
