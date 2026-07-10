@@ -61,7 +61,7 @@ export function useLogin() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (v: { username: string; password: string }) =>
-      postJson<{ ok: boolean; username: string }>('/api/login', v),
+      postJson<{ ok: boolean; person: string }>('/api/login', v),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['me'] })
       qc.invalidateQueries({ queryKey: ['data'] })

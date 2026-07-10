@@ -2,21 +2,21 @@
   "generated_at": "2026-07-10T12:00:00+00:00",
   "accounts": [
     {
-      "username": "小明",
+      "username_hash": "scrypt$16384$8$1$ZZm+om09zSH2Xlk+OfscfQ==$VBywHjkE0rAwRB3+RfVVGBdiwgNLHR6XKpr/AsUr6vk=",
       "person": "小明",
-      "hash": "scrypt$16384$8$1$gHbNi0Na4/Xn3OX66QmPBg==$hfG3IdjBAN176U2IyYNfrPVGnbvs6uCwwMgj3RDf1jw=",
+      "hash": "scrypt$16384$8$1$wmb0wZZj7Sh74tU5LgFFwA==$4JboRDDyztNwdnZXoXAWabZIT9OIgm5fuP+yGEBW86A=",
       "enabled": true
     },
     {
-      "username": "老王",
+      "username_hash": "scrypt$16384$8$1$kiTqqwGgL2IMjp8NHX9fXA==$UPa8oXawK82ubkvSV7i9N0wCYPeXsqZmlJUqsSxC41I=",
       "person": "老王",
-      "hash": "scrypt$16384$8$1$W0+ZYGkWX9Vqbao2hFsXGQ==$TfBtbtRbQyzeZvbCn57xvkHa5PZHCy1XWZBAcbCphPc=",
+      "hash": "scrypt$16384$8$1$22UUKcMr/X4XO4g5y2tsjg==$OYhakt9T5buRkxSbr0/NP9Jw37CFkQVjJZh3bcJkTzo=",
       "enabled": true
     },
     {
-      "username": "停用範例",
+      "username_hash": "scrypt$16384$8$1$iVpYCVhERqgo2TvzuIf3iA==$7e4DNGvL/0h27GR6PJZ2sADnVAElHzpFqjDeroOzaAc=",
       "person": "停用範例",
-      "hash": "scrypt$16384$8$1$gHbNi0Na4/Xn3OX66QmPBg==$hfG3IdjBAN176U2IyYNfrPVGnbvs6uCwwMgj3RDf1jw=",
+      "hash": "scrypt$16384$8$1$wmb0wZZj7Sh74tU5LgFFwA==$4JboRDDyztNwdnZXoXAWabZIT9OIgm5fuP+yGEBW86A=",
       "enabled": false
     }
   ],

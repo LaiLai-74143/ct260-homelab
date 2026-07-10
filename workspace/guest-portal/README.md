@@ -70,26 +70,31 @@ bash ~/workspace/guest-portal/scripts/finish-guest-portal-03-caddy.sh
 
 ## 帳號管理(CT260)
 
+★ 登入名(身分證字號)與密碼(管制標籤號)**都以 scrypt 雜湊儲存**,檔案/快照外洩讀不到明文。
+  故管理用「記賬人名(明文)」定位,登入才用身分證字號。
+
 ```
-hl-guest add <username> [記賬人名]   # 新增,隨機密碼一次性印出
-hl-guest passwd <username>           # 重設密碼
-hl-guest disable / enable <username> # 停用 / 啟用
-hl-guest rm <username>               # 刪除
-hl-guest list                        # 列出
+hl-guest add <身分證字號> <記賬人名> [--ask-pass]  # 新增;--ask-pass=互動輸入自訂密碼(不回顯)
+hl-guest passwd <記賬人名> [--ask-pass]             # 重設密碼
+hl-guest disable / enable <記賬人名>                # 停用 / 啟用
+hl-guest rm <記賬人名>                              # 刪除
+hl-guest list                                       # 列出(只顯示記賬人/狀態,不顯示身分證字號)
 ```
-查無帳號密碼 = 不讓登入。任何變更自動推送 CT205。
+登入三態:帳號不符→「查無此帳號,聯絡管理員新增」;帳號符密碼錯→「密碼錯誤」;都符→通過。
+任何變更自動推送 CT205。忘記自訂密碼只能 `passwd` 重設(雜湊不可逆);忘記登入名只能 `rm` 後重 `add`。
 
 ## 登入審計與異常告警
 
-BFF 寫 `audit.jsonl`,`hl-guest-watch`(cron */5)按情景發 TG:
+BFF 寫 `audit.jsonl`,`hl-guest-watch`(cron */5)按情景發 TG。★身分證字號只在「未知帳號嘗試」
+(蜜罐)才落明文;已知帳號一律記「記賬人名」,身分證字號永不落地:
 | 情景 | 記錄 | TG |
 |---|---|---|
-| 未知帳號嘗試 | IP/帳號/**密碼原文**(蜜罐情報) | 即報 |
-| 已知帳號密碼錯 | IP/帳號/**密碼遮罩**(`<N chars>`;`GUEST_LOG_WRONG_PW=full` 可切全文) | fails=3 跨門檻 / 鎖定 |
-| 登入成功 | IP/帳號/國別,**永不記密碼** | 新 IP / 非 TW |
+| 未知帳號嘗試(帳號雜湊不符) | IP/**輸入原文(身分證字號)**/**密碼原文** | 即報 |
+| 已知帳號密碼錯 | IP/**記賬人名**/**密碼遮罩**(`GUEST_LOG_WRONG_PW=full` 可切全文) | fails=3 跨門檻 / 鎖定 |
+| 登入成功 | IP/**記賬人名**/國別,**永不記密碼** | 新 IP / 非 TW |
 
-app 側:同 (username,ip) 15 分內錯 5 次鎖 15 分;scrypt 雜湊;帳號枚舉時序等化;
-session HMAC 簽章(12h TTL,無狀態=登出後舊 token 至 exp 前仍有效,屬刻意取捨)。
+app 側:同 (person 或輸入,ip) 15 分內錯 5 次鎖 15 分;登入名+密碼皆 scrypt(登入 O(N) 逐一比對);
+session HMAC 簽章(存 person 非身分證字號,12h TTL,無狀態=登出後舊 token 至 exp 前仍有效,刻意取捨)。
 
 ## 斷網語意
 
@@ -99,5 +104,5 @@ CF/外網掛 = 此站掛(純對外服務,合理);內網一切不受影響;CT270/
 
 ```
 cd bff && GUEST_MODE=mock GUEST_COOKIE_SECURE=0 GUEST_STATIC=../frontend/dist \
-  python3 -m app.server         # :8300;帳號 小明/demo1234、老王/wang5678
+  python3 -m app.server         # :8300;demo 登入 A123456789/demo1234(小明)、B987654321/wang5678(老王)
 ```

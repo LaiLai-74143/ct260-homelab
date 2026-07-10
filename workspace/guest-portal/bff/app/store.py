@@ -3,10 +3,14 @@
 guest.json 由 CT260 hl-write-guest 產出並 hl-push 到 /opt/guest-portal/data/guest.json。
 BFF 只讀此檔(mtime 快取),永不直連 NocoDB/GCal——app 全程零憑證、零出站。
 
+帳號連「登入名(身分證字號)」都以 scrypt 雜湊儲存(username_hash),資料庫/快照外洩
+也讀不到明文身分證字號;登入時把輸入的登入名逐一 scrypt 比對(帳號數少,O(N) 可接受)。
+person(記賬人名)維持明文=NocoDB 借貸 bucket 鍵,且本就存在 NocoDB,非新增曝露。
+
 guest.json 結構:
 {
   "generated_at": "...",
-  "accounts": [ {"username": "小明", "person": "小明", "hash": "scrypt$...", "enabled": true} ],
+  "accounts": [ {"username_hash": "scrypt$...", "person": "小明", "hash": "scrypt$...", "enabled": true} ],
   "calendar": [ {"date":"2026-07-11","time":"14:00","title":"...","all_day":false} ],  # 全體共用(展示屋主行程)
   "debts": {
     "小明": {
@@ -24,6 +28,8 @@ import os
 import threading
 import time
 from pathlib import Path
+
+from . import security
 
 _DATA_PATH = Path(os.environ.get("GUEST_DATA", "/opt/guest-portal/data/guest.json"))
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "guest.json"
@@ -60,22 +66,29 @@ def load() -> dict:
         return _cache
 
 
-def find_account(username: str) -> dict | None:
-    """依 username 精確比對(大小寫敏感)。enabled=false 也回傳,由呼叫端判 enabled。"""
+def find_by_login(username: str) -> dict | None:
+    """把輸入的登入名逐一 scrypt 比對 username_hash(帳號數少 O(N) 可接受)。
+    永遠掃完全部帳號(不早退)=不因帳號位置/存在與否洩漏時序。找到回帳號,否則 None。"""
+    matched = None
     for acc in load().get("accounts", []):
-        if acc.get("username") == username:
+        if security.verify_password(username, acc.get("username_hash", "")):
+            matched = acc  # 不 break,掃完等化時序
+    return matched
+
+
+def find_by_person(person: str) -> dict | None:
+    """依 person(記賬人名,明文)精確比對——session 內存 person,/me /data 用它復核 enabled。"""
+    for acc in load().get("accounts", []):
+        if acc.get("person") == person:
             return acc
     return None
 
 
-def data_for(username: str) -> dict:
+def data_for(person: str) -> dict:
     """登入後回傳此人可見資料:全體行事曆 + 只屬於自己的借貸。"""
     doc = load()
-    acc = find_account(username)
-    person = (acc or {}).get("person") or username
     debts = doc.get("debts", {}).get(person, {"net": 0, "currency": "TWD", "open": [], "settled": []})
     return {
-        "username": username,
         "person": person,
         "generated_at": doc.get("generated_at"),
         "calendar": doc.get("calendar", []),

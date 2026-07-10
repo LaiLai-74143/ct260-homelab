@@ -43,6 +43,5 @@ export type GuestData = {
 }
 
 export type Me = {
-  username: string
   person: string
 }

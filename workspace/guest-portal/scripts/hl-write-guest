@@ -52,10 +52,16 @@ def load_accounts() -> list[dict]:
     if not ACCT.exists():
         return []
     doc = json.loads(ACCT.read_text())
-    # 只帶 BFF 需要的欄位(hash 必帶=驗證所需;created/pw_changed 不外送)
-    return [{"username": a["username"], "person": a.get("person") or a["username"],
-             "hash": a["hash"], "enabled": bool(a.get("enabled", True))}
-            for a in doc.get("accounts", [])]
+    # 只帶 BFF 需要的欄位:username_hash(登入名 scrypt)+person+hash(密碼 scrypt)+enabled。
+    # created/pw_changed 不外送。相容舊格式(若還有 username 明文則就地雜湊——理論上不會有)。
+    out = []
+    for a in doc.get("accounts", []):
+        uh = a.get("username_hash")
+        if not uh:
+            continue  # 無 username_hash 的殘缺紀錄跳過(舊格式請 rm 後重 add)
+        out.append({"username_hash": uh, "person": a.get("person") or "",
+                    "hash": a["hash"], "enabled": bool(a.get("enabled", True))})
+    return out
 
 
 # ---- Google Calendar(唯讀 events.list,未來 14 天)----

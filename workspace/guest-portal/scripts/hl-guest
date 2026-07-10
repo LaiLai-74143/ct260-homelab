@@ -6,17 +6,24 @@
 「聯動記賬人名」= add 時對 NocoDB People 模糊比對驗證,person 欄存實際 People.name,
 hl-write-guest 據此 bucket 該人的 Transactions。
 
+★ 登入名(身分證字號)也以 scrypt 雜湊儲存(username_hash),檔案/快照外洩讀不到明文;
+  故管理操作一律用「記賬人名(person,明文可讀)」定位,不用身分證字號。
+
 用法(CT260):
-  hl-guest add <username> [記賬人名]   # 人名省略=同 username;生成隨機密碼一次性印出
-  hl-guest passwd <username>           # 重設密碼
-  hl-guest disable <username>          # 停用(保留)/  enable 重新啟用
-  hl-guest enable  <username>
-  hl-guest rm <username>               # 刪除
-  hl-guest list                        # 列出所有帳號
-任何變更後自動觸發 hl-write-guest 推送 CT205(可 --no-push 略過)。
+  hl-guest add <身分證字號> <記賬人名> [--ask-pass]  # 兩者皆雜湊;人名對 NocoDB People 驗證
+  hl-guest passwd <記賬人名> [--ask-pass]             # 重設密碼
+  hl-guest disable <記賬人名>                          # 停用(保留)/  enable 重新啟用
+  hl-guest enable  <記賬人名>
+  hl-guest rm <記賬人名>                               # 刪除
+  hl-guest list                                        # 列出(只顯示記賬人/狀態,不顯示身分證字號)
+選項:
+  --ask-pass   add/passwd 改用互動輸入自訂密碼(getpass 不回顯、不經 argv/ps;
+               例:用管制標籤號當密碼)。輸入兩次核對。
+  --no-push    變更後不自動推送(預設會觸發 hl-write-guest 推 CT205)。
 """
 import base64
 import datetime
+import getpass
 import hashlib
 import json
 import os
@@ -65,6 +72,20 @@ def gen_password(nchars: int = 12) -> str:
     return "".join(secrets.choice(_PW_ALPHABET) for _ in range(nchars))
 
 
+def prompt_password() -> str:
+    """互動輸入自訂密碼(不回顯、不經 argv);兩次核對,短密碼給提醒不阻擋。"""
+    if not sys.stdin.isatty():
+        die("--ask-pass 需要互動終端(輸入不回顯);管線/腳本呼叫請改用隨機密碼")
+    pw = getpass.getpass("  自訂密碼(輸入不回顯): ")
+    if not pw:
+        die("密碼不可為空")
+    if getpass.getpass("  再輸一次核對: ") != pw:
+        die("兩次輸入不一致")
+    if len(pw) < 6:
+        print("  ⚠️ 密碼短於 6 字元——有登入鎖定+哨兵擋暴力,但仍偏弱,自行斟酌。")
+    return pw
+
+
 def load_accounts() -> dict:
     if not ACCT.exists():
         return {"accounts": []}
@@ -83,9 +104,10 @@ def save_accounts(doc: dict):
     os.chmod(ACCT, 0o600)
 
 
-def find(doc: dict, username: str) -> dict | None:
+def find(doc: dict, person: str) -> dict | None:
+    """依記賬人名(person,明文)定位帳號——身分證字號已雜湊無法直接比對。"""
     for a in doc["accounts"]:
-        if a["username"] == username:
+        if a.get("person") == person:
             return a
     return None
 
@@ -153,92 +175,101 @@ def now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
-def cmd_add(args, no_push):
-    if not args:
-        die("用法:hl-guest add <username> [記賬人名]")
-    username = args[0]
-    person_in = args[1] if len(args) > 1 else username
+def cmd_add(args, no_push, ask_pass=False):
+    if len(args) < 2:
+        die("用法:hl-guest add <身分證字號> <記賬人名> [--ask-pass]")
+    login_id = args[0]        # 身分證字號:雜湊後儲存,不落明文
+    person_in = args[1]
     doc = load_accounts()
-    if find(doc, username):
-        die(f"帳號『{username}』已存在(改密碼用 hl-guest passwd)")
-    person = resolve_person(person_in)
-    pw = gen_password()
+    person = resolve_person(person_in)   # 對 NocoDB People 驗證,取實際人名
+    if find(doc, person):
+        die(f"記賬人『{person}』已有帳號(改密碼用 hl-guest passwd『{person}』)")
+    pw = prompt_password() if ask_pass else gen_password()
     doc["accounts"].append({
-        "username": username, "person": person,
-        "hash": hash_password(pw), "enabled": True, "created": now_iso(),
+        "username_hash": hash_password(login_id),  # 身分證字號 scrypt
+        "person": person,
+        "hash": hash_password(pw),                 # 密碼 scrypt
+        "enabled": True, "created": now_iso(),
     })
     save_accounts(doc)
-    print(f"✓ 已新增帳號『{username}』→ 記賬人『{person}』")
-    print(f"\n  帳號:{username}\n  密碼:{pw}\n")
-    print("  ↑ 密碼僅顯示這一次,請立刻交給對方。忘了就 hl-guest passwd 重設。")
+    print(f"✓ 已新增帳號 → 記賬人『{person}』(登入名與密碼皆雜湊儲存,不留明文)")
+    if ask_pass:
+        print("  (自訂密碼已設定,不回顯)")
+    else:
+        print(f"\n  登入名:{login_id}\n  密碼:{pw}\n")
+        print("  ↑ 僅顯示這一次,請立刻交給對方。忘了密碼就 hl-guest passwd 重設。")
     push(no_push)
 
 
-def cmd_passwd(args, no_push):
+def cmd_passwd(args, no_push, ask_pass=False):
     if not args:
-        die("用法:hl-guest passwd <username>")
-    username = args[0]
+        die("用法:hl-guest passwd <記賬人名> [--ask-pass]")
+    person = args[0]
     doc = load_accounts()
-    a = find(doc, username)
+    a = find(doc, person)
     if not a:
-        die(f"查無帳號『{username}』")
-    pw = gen_password()
+        die(f"查無記賬人『{person}』的帳號(hl-guest list 看現有)")
+    pw = prompt_password() if ask_pass else gen_password()
     a["hash"] = hash_password(pw)
     a["pw_changed"] = now_iso()
     save_accounts(doc)
-    print(f"✓ 已重設『{username}』密碼\n\n  帳號:{username}\n  新密碼:{pw}\n")
-    print("  ↑ 僅顯示一次。")
+    if ask_pass:
+        print(f"✓ 已重設『{person}』密碼(自訂,不回顯)")
+    else:
+        print(f"✓ 已重設『{person}』密碼\n\n  新密碼:{pw}\n  ↑ 僅顯示一次。")
     push(no_push)
 
 
 def cmd_toggle(args, enable: bool, no_push):
     if not args:
-        die(f"用法:hl-guest {'enable' if enable else 'disable'} <username>")
-    username = args[0]
+        die(f"用法:hl-guest {'enable' if enable else 'disable'} <記賬人名>")
+    person = args[0]
     doc = load_accounts()
-    a = find(doc, username)
+    a = find(doc, person)
     if not a:
-        die(f"查無帳號『{username}』")
+        die(f"查無記賬人『{person}』的帳號")
     a["enabled"] = enable
     save_accounts(doc)
-    print(f"✓ 帳號『{username}』已{'啟用' if enable else '停用'}")
+    print(f"✓ 『{person}』已{'啟用' if enable else '停用'}")
     push(no_push)
 
 
 def cmd_rm(args, no_push):
     if not args:
-        die("用法:hl-guest rm <username>")
-    username = args[0]
+        die("用法:hl-guest rm <記賬人名>")
+    person = args[0]
     doc = load_accounts()
-    if not find(doc, username):
-        die(f"查無帳號『{username}』")
-    doc["accounts"] = [x for x in doc["accounts"] if x["username"] != username]
+    if not find(doc, person):
+        die(f"查無記賬人『{person}』的帳號")
+    doc["accounts"] = [x for x in doc["accounts"] if x.get("person") != person]
     save_accounts(doc)
-    print(f"✓ 已刪除帳號『{username}』")
+    print(f"✓ 已刪除『{person}』的帳號")
     push(no_push)
 
 
 def cmd_list(_args, _no_push):
     doc = load_accounts()
     if not doc["accounts"]:
-        print("（尚無帳號;hl-guest add <username> [記賬人名]）")
+        print("（尚無帳號;hl-guest add <身分證字號> <記賬人名>）")
         return
-    print(f"{'帳號':<16}{'記賬人':<16}{'狀態':<8}建立")
+    print(f"{'記賬人':<16}{'狀態':<8}建立")
     for a in doc["accounts"]:
         st = "啟用" if a.get("enabled", True) else "停用"
-        print(f"{a['username']:<16}{a.get('person',''):<16}{st:<8}{a.get('created','')[:10]}")
+        print(f"{a.get('person',''):<16}{st:<8}{a.get('created','')[:10]}")
+    print("（身分證字號已雜湊儲存,不顯示;忘記登入名只能 rm 後重新 add）")
 
 
 def main():
     argv = sys.argv[1:]
     no_push = "--no-push" in argv
-    argv = [x for x in argv if x != "--no-push"]
+    ask_pass = "--ask-pass" in argv
+    argv = [x for x in argv if x not in ("--no-push", "--ask-pass")]
     if not argv:
-        die("用法:hl-guest {add|passwd|enable|disable|rm|list} …", 2)
+        die("用法:hl-guest {add|passwd|enable|disable|rm|list} … [--ask-pass] [--no-push]", 2)
     cmd, rest = argv[0], argv[1:]
     table = {
-        "add": lambda: cmd_add(rest, no_push),
-        "passwd": lambda: cmd_passwd(rest, no_push),
+        "add": lambda: cmd_add(rest, no_push, ask_pass),
+        "passwd": lambda: cmd_passwd(rest, no_push, ask_pass),
         "enable": lambda: cmd_toggle(rest, True, no_push),
         "disable": lambda: cmd_toggle(rest, False, no_push),
         "rm": lambda: cmd_rm(rest, no_push),

@@ -163,43 +163,48 @@ class Handler(BaseHTTPRequestHandler):
         body = self._read_json()
         if body is None:
             return self._err(400, "請求格式錯誤", "需 JSON body {username, password}")
-        username = (body.get("username") or "").strip()
+        username = (body.get("username") or "").strip()  # 登入名=身分證字號(明文只在此請求內)
         password = body.get("password") or ""
         if not username or not password:
             return self._err(400, "缺帳號或密碼")
 
-        acc = store.find_account(username)
-        known = acc is not None and acc.get("enabled", True)
+        acc = store.find_by_login(username)  # 逐一 scrypt 比對 username_hash
+        # 鎖定鍵:已知帳號用 person(不落身分證字號);未知用輸入原文
+        lock_key = acc["person"] if acc else username
 
-        if store.is_locked(username, ip):
-            security.audit("locked", ip=ip, country=country, username=username,
-                           password=password, known_user=known)
-            return self._err(429, "嘗試過於頻繁", "帳號暫時鎖定,請 15 分鐘後再試")
+        if store.is_locked(lock_key, ip):
+            # locked:已知記 person,未知記輸入原文(蜜罐)
+            security.audit("locked", ip=ip, country=country,
+                           username=(acc["person"] if acc else username),
+                           password=password, known_user=acc is not None)
+            return self._err(429, "嘗試過於頻繁", "已暫時鎖定,請 15 分鐘後再試")
 
+        # ① 帳號雜湊不符 → 查無此帳號(明確告知+可聯絡管理員;審計記輸入原文=蜜罐)
         if acc is None:
-            security.verify_password(password, security.DUMMY_HASH)  # 等化時間,堵帳號枚舉
-            store.record_fail(username, ip)
+            store.record_fail(lock_key, ip)
             security.audit("login_unknown", ip=ip, country=country, username=username,
                            password=password, known_user=False)
-            return self._err(401, "帳號或密碼錯誤")
+            return self._err(401, "查無此帳號", "如需存取,請聯絡管理員新增帳號")
 
+        # 停用帳號:視為已知帳號但擋下(記 person,不落身分證字號)
         if not acc.get("enabled", True):
-            security.verify_password(password, security.DUMMY_HASH)  # 等化時間
-            store.record_fail(username, ip)
-            security.audit("login_fail", ip=ip, country=country, username=username,
+            store.record_fail(lock_key, ip)
+            security.audit("login_fail", ip=ip, country=country, username=acc["person"],
                            password=password, known_user=True, extra={"reason": "disabled"})
-            return self._err(401, "帳號或密碼錯誤")
+            return self._err(401, "此帳號已停用", "請聯絡管理員")
 
+        # ② 帳號符、密碼不符 → 密碼錯誤(審計記 person+遮罩密碼,不落身分證字號)
         if not security.verify_password(password, acc.get("hash", "")):
-            n = store.record_fail(username, ip)
-            security.audit("login_fail", ip=ip, country=country, username=username,
+            n = store.record_fail(lock_key, ip)
+            security.audit("login_fail", ip=ip, country=country, username=acc["person"],
                            password=password, known_user=True, extra={"fails": n})
-            return self._err(401, "帳號或密碼錯誤")
+            return self._err(401, "密碼錯誤")
 
-        store.clear_fails(username, ip)
-        security.audit("login_ok", ip=ip, country=country, username=username, known_user=True)
-        token = security.make_session(username)
-        self._send_json(200, {"ok": True, "username": username},
+        # ③ 都符 → 通過(審計記 person,永不記密碼、不落身分證字號)
+        store.clear_fails(lock_key, ip)
+        security.audit("login_ok", ip=ip, country=country, username=acc["person"], known_user=True)
+        token = security.make_session(acc["person"])  # session 存 person,不存身分證字號
+        self._send_json(200, {"ok": True, "person": acc["person"]},
                         set_cookie=self._cookie_header(token))
 
     def _logout(self) -> None:
@@ -207,22 +212,22 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True}, set_cookie=expired)
 
     def _me(self) -> None:
-        user = self._cookie_user()
-        if not user:
+        person = self._cookie_user()  # session 存的是 person
+        if not person:
             return self._err(401, "未登入")
-        acc = store.find_account(user)
+        acc = store.find_by_person(person)
         if acc is None or not acc.get("enabled", True):
             return self._err(401, "帳號已停用")
-        self._send_json(200, {"username": user, "person": acc.get("person") or user})
+        self._send_json(200, {"person": person})
 
     def _data(self) -> None:
-        user = self._cookie_user()
-        if not user:
+        person = self._cookie_user()
+        if not person:
             return self._err(401, "未登入")
-        acc = store.find_account(user)
+        acc = store.find_by_person(person)
         if acc is None or not acc.get("enabled", True):
             return self._err(401, "帳號已停用")
-        self._send_json(200, store.data_for(user))
+        self._send_json(200, store.data_for(person))
 
     def _static(self, path: str) -> None:
         # SPA:實體檔存在則回,否則 index.html(前端路由)

@@ -12,12 +12,10 @@ export default function Login() {
     login.mutate({ username: username.trim(), password })
   }
 
-  const err = login.error as (Error & { status?: number }) | null
-  const errMsg = err
-    ? err.status === 429
-      ? '嘗試過於頻繁,請 15 分鐘後再試'
-      : '帳號或密碼錯誤'
-    : ''
+  const err = login.error as (Error & { status?: number; hint?: string }) | null
+  // 顯示伺服器實際訊息(查無此帳號 / 密碼錯誤 / 此帳號已停用 / 嘗試過於頻繁)+ 提示
+  const errMsg = err ? (err.message || '登入失敗') : ''
+  const errHint = err?.hint || ''
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -28,7 +26,7 @@ export default function Login() {
         </div>
         <form onSubmit={submit} className="bg-panel border border-line rounded-card p-5 space-y-4">
           <label className="block">
-            <span className="text-sm text-muted">帳號</span>
+            <span className="text-sm text-muted">帳號<span className="ml-1.5 text-unk">(身分證字號)</span></span>
             <input
               type="text"
               autoComplete="username"
@@ -40,7 +38,7 @@ export default function Login() {
             />
           </label>
           <label className="block">
-            <span className="text-sm text-muted">密碼</span>
+            <span className="text-sm text-muted">密碼<span className="ml-1.5 text-unk">(管制標籤號)</span></span>
             <input
               type="password"
               autoComplete="current-password"
@@ -51,7 +49,10 @@ export default function Login() {
             />
           </label>
           {errMsg && (
-            <div className="text-crit text-sm" role="alert">{errMsg}</div>
+            <div role="alert">
+              <div className="text-crit text-sm">{errMsg}</div>
+              {errHint && <div className="text-muted text-xs mt-0.5">{errHint}</div>}
+            </div>
           )}
           <button
             type="submit"
@@ -62,9 +63,6 @@ export default function Login() {
             {login.isPending ? '登入中…' : '登入'}
           </button>
         </form>
-        <p className="text-center text-unk text-xs mt-6">
-          僅限受邀者存取。所有登入行為均被記錄。
-        </p>
       </div>
     </div>
   )

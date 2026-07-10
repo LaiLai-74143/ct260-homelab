@@ -17,7 +17,7 @@ export default function Dashboard() {
   const data = useData(me.isSuccess)
   const logout = useLogout()
 
-  const person = me.data?.person ?? me.data?.username ?? ''
+  const person = me.data?.person ?? ''
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-10 pt-5">

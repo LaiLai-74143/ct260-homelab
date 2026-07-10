@@ -33,11 +33,6 @@ def hash_password(password: str) -> str:
     )
 
 
-# 固定 dummy hash(真 scrypt 產,格式合法可完整跑):未知/停用帳號路徑拿它跑一次 verify,
-# 讓「帳號不存在」與「帳號存在但密碼錯」的回應時間一致,堵使用者名枚舉時序側信道。
-DUMMY_HASH = "scrypt$16384$8$1$hzOPKmn906tNIb50wicEQw==$S4FqB0Vd2KKyOm7P0g5NmCZ9rYVD7RbIwWMBFvqcc+4="
-
-
 def verify_password(password: str, stored: str) -> bool:
     """常數時間比對。stored 格式不符或空 → False(不拋例外,登入路徑不因髒資料 500)。"""
     try:
