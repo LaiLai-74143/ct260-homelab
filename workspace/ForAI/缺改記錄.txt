@@ -2550,5 +2550,13 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 回滾:Caddyfile 蓋回 /root/_backups/Caddyfile.before-le-<TS>+restart;憑證 .prev 蓋回。
 斷網語意(使用者確認過才動工):驗證純本地+解析純內部→CF/外網掛內網照常綠鎖;唯續簽
   依賴外網,>60 天過期後=警告可點過(刻意不開 HSTS 留 break-glass)。
-遺留(使用者):①手機開 https://portal.hl 確認綠鎖 ②Kuma 加 HTTPS monitor(portal.hl)
-  開憑證到期通知=續簽斷鏈備援 ③各裝置移除舊 root.crt ④root 跑 ops/finish-hl-path-fix.sh。
+遺留(使用者):①手機開 https://portal.hl 確認綠鎖 ②憑證到期備援哨兵 ③各裝置移除舊
+  root.crt ④root 跑 ops/finish-hl-path-fix.sh。
+【收束 2026-07-10 晨】①✔ 手機綠鎖實測(kuma.hl 亦綠鎖)。②✔ 改 CT260 哨兵落地:原定
+  Kuma HTTPS monitor 走不通——CT201 解析 *.hl→100.100.1.2(tailnet-only)不可達、
+  monitor→dmz:443 未放行、打 IP 則 SNI 不匹配(Caddy 站點皆 host-based 直接拒握手);
+  改 ops/hl-cert-watch.sh(→~/.local/bin,cron 週一 01:00 UTC flock,openssl 讀
+  10.60.60.10:443 SNI=portal.hl,<21 天或讀不到=直發 TG,token 走 -K stdin;實測 OK
+  剩 89 天)。又一次「打點位置要對齊防火牆拓樸」(同段7坑1)。④✔ 使用者 root 跑
+  finish-hl-path-fix.sh 全綠(root PATH/wrapper/codex PATH 三門全封)。③各裝置 root.crt
+  移除=使用者自理,非阻斷。本輪「瀏覽器連線不安全」從源頭收束。

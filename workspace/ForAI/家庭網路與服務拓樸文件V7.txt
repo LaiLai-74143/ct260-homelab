@@ -1435,8 +1435,10 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
       hl.* 維持零公網 record(DNS-01 純出站,CT log 只見 wildcard 不枚舉主機名)。
       Caddyfile=7 站 import hl_tls snippet(指 /etc/caddy/certs/ 檔案式)。
       舊 tls internal 自簽已退役(裝置端 root.crt 可移除=信任面收縮;該自建 CA 可簽任意
-      網域,root key 在 DMZ host 上,屬前架構已知曝險);Kuma 憑證到期 monitor=續簽斷鏈
-      備援哨兵(待使用者 UI 加)。腳本 SoT=CT260 ~/workspace/ct-dmz-proxy/le-cert/。
+      網域,root key 在 DMZ host 上,屬前架構已知曝險)。續簽斷鏈備援哨兵=CT260
+      hl-cert-watch.sh(cron 週一 01:00 UTC,openssl 讀 CT203:443 憑證,<21 天直發 TG;
+      不用 Kuma:CT201 解析 *.hl→100.100.1.2 tailnet-only 不可達+monitor→dmz:443 未放行)。
+      腳本 SoT=CT260 ~/workspace/ct-dmz-proxy/le-cert/ 與 ~/workspace/ops/。
       ★ 斷網影響:憑證驗證純本地(ISRG root 內建),解析純內部 dnsmasq——CF/外網全斷內網照常;
       唯續簽依賴外網,斷 >60 天過期後=瀏覽器警告可點過(刻意不開 HSTS 保留 break-glass)。
     源檔 CT260 ~/workspace/ct-dmz-proxy/Caddyfile → pct push → caddy validate → restart
