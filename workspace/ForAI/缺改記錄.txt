@@ -2846,3 +2846,16 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 ### 過程備忘
 - ops 鑰 6h 自動上鎖到點,後段驗證改走 pve24-auto(自動化軌不受鎖影響)——設計如預期。
 - crontab 新增三行:token-watch(週一 01:10 UTC)/coldstart(@reboot+600s)/trivy(週二 01:30 UTC)。
+
+### 2026-07-10 事故:CT203 tailscaled 被宿主 pkill 連坐(13:02–15:2x,使用者發現)
+- 根因:pve24 孤兒 tailscaled 清理指令 `pkill -x tailscaled` 在宿主跑,宿主 PID
+  namespace 看得到所有 LXC 程序 → CT203 的 tailscaled 一併收到 TERM,乾淨退出
+  (exit 0)不觸發 Restart=on-failure,躺 2.5h;當時 pgrep 剩的 578096 才是真孤兒。
+- 影響:tailnet 入口斷(Jellyfin share/portal.hl 遠端);無直穿風險(閘門 nft 表
+  完好、fail-closed 綁定無恙)。監控全程靜默=閘門指標只盯 nft 表的盲區。
+- 修復:systemctl start tailscaled(fail-closed 依賴自動先確保閘門),節點
+  100.100.1.2 回線,v3.1 規則序驗證無誤。
+- 補強:①CT203 collector 加 ctdmz_tailscaled_up gauge(備份 ctdmz-gate-metrics
+  .before-tailscaled-metric-*);②CT201 ctdmz-gate.yml 加 CtdmzTailscaledDown
+  (warning for 5m;備份 .before-tailscaled-alert-*),promtool 過+熱載+指標=1。
+- 教訓入長期記憶:宿主殺程序先 pgrep -a 對 cgroup,殺特定 PID,不按名字盲殺。
