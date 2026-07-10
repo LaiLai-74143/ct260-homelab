@@ -23,6 +23,22 @@
 | limboautoserver-velocity-1.0.0-beta.1.jar | github.com/Uxzylon/LimboAutoServer v1.0.0-beta.1 | 57b722526101cff90402c8ceace07c78c0ae331c2397de7d59299d7d274edf29 |
 | VelocityWhitelist-1.1.0-SNAPSHOT.jar | hangar.papermc.io gmisi/VelocityWhitelist 1.1.0-SNAPSHOT | e2799d215b578bd09eae65fb0b3403e783d83075799b47a4ba6bbc739abf8d05 |
 
+## 等待室建築(worldfile 補丁,2026-07-10)
+
+- 上游 beta.1 只有虛空;本目錄 `limboautoserver-worldfile.patch` 給 LimboAutoServer 加
+  `limbo.worldFile*` 設定(LimboAPI WorldFile API,SCHEMATIC/WORLDEDIT_SCHEM/STRUCTURE),
+  fail-open:任何設定/檔案錯誤只退回虛空,不炸 proxy(對抗審查抓到 toml4j 硬轉型
+  ClassCastException 逃逸鏈,已以整方法 try/catch 收束=worldfile.2)。
+- 現行 jar:`limboautoserver-velocity-1.0.0-beta.1+worldfile.2.jar`
+  (sha256 95fc18b90f3dccf0005a79fbe9c7abb08aab27b5c5b28c7b044c16cc5f71c8f2;
+  重建:clone 上游 → `git apply limboautoserver-worldfile.patch` → JDK17+ `./gradlew build`)。
+- 建築:Modern House by Raaamseeel(abfielder id=8717,76×46×118,Sponge schem v2)。
+  ★ BlockEntities 已全剝(777 個,含 664 告示牌):LimboAPI SimpleBlockEntity 對新式
+  BE 型別映射 NPE 會炸 createLimbo。換建築時同樣要先剝(nbtlib 置空 BlockEntities)。
+- 佈局:貼圖原點 (0,64,0),出生點=天台 (38.5, 96.2, 59.5)(schem 屋頂主平面 y=31)。
+- 上游 PR 建議:worldFile 功能+CCE fail-open 修法可回饋 Uxzylon/LimboAutoServer(待使用者
+  用自己 GitHub 帳號發,Agent 不代發)。
+
 ## 白名單維護
 
 改 CT102 `plugins/velocitywhitelist/config.yml` 的 `servers.VelocityProxy.whitelisted`

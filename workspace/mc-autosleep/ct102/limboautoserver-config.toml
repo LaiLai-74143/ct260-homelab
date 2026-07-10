@@ -12,11 +12,20 @@ level = "INFO"
 dimension = "OVERWORLD"
 gameMode = "ADVENTURE"
 worldTime = 1000
-posX = 0.0
-posY = 100.0
-posZ = 0.0
+# 出生點=Modern House 天台中央(貼圖原點 0,64,0;屋頂主平面 schem y=31 → 站面 96)
+posX = 38.5
+posY = 96.2
+posZ = 59.5
 yaw = 0.0
 pitch = 0.0
+# 等待室建築(mc-autosleep worldfile 補丁;Modern House by Raaamseeel,abfielder id=8717,
+# 76x46x118,Sponge schem v2 DataVersion 4325)
+worldFile = "/opt/velocity/plugins/limboautoserver/modern-house.schem"
+worldFileType = "WORLDEDIT_SCHEM"
+worldFileOffsetX = 0
+worldFileOffsetY = 64
+worldFileOffsetZ = 0
+worldFileLightLevel = 15
 readTimeout = 20000
 progressBar = true
 # 只驅動 boss bar 進度觀感,實際送入仍等真 ping(Fabric 冷啟實測值再校)

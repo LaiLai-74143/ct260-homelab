@@ -1,2 +1,3 @@
 # jar 成品不入庫(下載來源與 sha256 見缺改記錄/README);token env 由全域 *.env 排除
 jars/
+las-src/

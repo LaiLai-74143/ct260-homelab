@@ -2668,3 +2668,23 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
     hook/備份腳本改動獨立可留 ④pgrep 教訓再現:檢查指令含 pattern 原文會自匹配,用 [j]ava 寫法。
   待使用者終驗:白名單帳號實際 join 走等待室進服;非白名單被拒訊息;MC 客戶端 server list 見
     休眠 MOTD。SoT=~/workspace/mc-autosleep/(jars/ct100/ct102/ct260)。
+【mc-autosleep 等待室裝修 2026-07-10】使用者選 Modern House by Raaamseeel(abfielder id=8717,
+  76×46×118,51445 方塊;原候選 PMC「Shade_」為 12 年前世界存檔+HD 材質依賴,勸退)。
+  LimboAutoServer beta.1 等待室寫死虛空 → 打 worldfile 補丁(limbo.worldFile/Type/Offset*/
+  LightLevel 六鍵,LimboAPI openWorldFile→toWorld),CT260 userspace Temurin JDK21+Gradle 9.5
+  自建 jar(worldfile.2)。ultracode 對抗審查(3 鏡頭+逐項驗證)抓到真 bug:toml4j getString/getLong
+  對型別不符 TOML 值硬轉型丟 ClassCastException,從 pasteWorldFile 頂部讀值段逃逸穿透
+  rebuild()/onProxyInitialization(驗證者反編譯 toml4j-0.7.2+JDK21 實跑重現)→ 修法=整方法
+  try/catch(Exception) 收束。部署實戰又踩一雷:schem 內 777 個 BlockEntities(664 告示牌/旗幟/
+  頭顱/床)令 LimboAPI SimpleBlockEntity 型別映射 NPE 炸 createLimbo(「Limbo world ready」缺席=
+  等待室半死)→ nbtlib 置空 BlockEntities 重推 → 全綠(Pasted→Limbo world ready→enabled)。
+  佈局:貼圖 (0,64,0)、出生點天台 (38.5,96.2,59.5)(NBT 解析屋頂主平面 schem y=31,
+  15×15 眾數 135/225)。CT102 記憶體餘裕(687/2048MB)。教訓:①LimboAPI 等待室用 schem 一律
+  先剝 BlockEntities ②fail-open 傘要蓋「讀 config」不只「用 config」③候選建築先查來源格式
+  (世界存檔 vs schematic)與年代再給使用者選。SoT=mc-autosleep/(patch 入庫、jar/schem 不入庫
+  sha256 見 README;las-src 上游 clone 不入庫)。
+【CT260 磁碟暴增排查 2026-07-10】83%(13G/16G)非 log(/var/log 140M):.vscode-server 3.3G
+  (桌面 App SSH 三版本 server+ChatGPT 擴充兩版+VSIX 快取)+.npm 1.5G+Playwright 646M+pip 259M。
+  處置:npm/pip 快取清+舊版 vscode-server/擴充/VSIX 刪(使用者授權)=釋 4.3G;pct resize 260
+  rootfs +8G(local-lvm SSD,live)→ 8.7G/24G(39%)。hdd1 掛載點評估=不需要(非 log 非大宗
+  冷資料);HDD-0 污染區不分配(使用者裁決)。

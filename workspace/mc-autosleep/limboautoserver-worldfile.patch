@@ -1,0 +1,170 @@
+diff --git a/gradle.properties b/gradle.properties
+index acc8d49..cfd8443 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -4,6 +4,6 @@ org.gradle.parallel=true
+ org.gradle.configuration-cache=false
+ 
+ # Versions
+-mod_version=1.0.0
++mod_version=1.0.0-beta.1+worldfile.2
+ velocity_api_version=3.4.0-SNAPSHOT
+ limboapi_version=1.1.27
+diff --git a/src/main/java/fr/jeanney/limboautoserver/Configuration.java b/src/main/java/fr/jeanney/limboautoserver/Configuration.java
+index 270304d..85116f6 100644
+--- a/src/main/java/fr/jeanney/limboautoserver/Configuration.java
++++ b/src/main/java/fr/jeanney/limboautoserver/Configuration.java
+@@ -175,6 +175,38 @@ public class Configuration {
+         return config.getDouble("limbo.pitch", 0.0);
+     }
+ 
++    /**
++     * Path to a schematic/structure pasted into the limbo world at startup.
++     * Empty (default) keeps the bare void world.
++     */
++    public String getLimboWorldFile() {
++        return config.getString("limbo.worldFile", "");
++    }
++
++    /**
++     * World file format: SCHEMATIC (legacy .schematic), WORLDEDIT_SCHEM
++     * (modern .schem) or STRUCTURE (vanilla structure block .nbt).
++     */
++    public String getLimboWorldFileType() {
++        return config.getString("limbo.worldFileType", "WORLDEDIT_SCHEM").toUpperCase();
++    }
++
++    public int getLimboWorldFileOffsetX() {
++        return config.getLong("limbo.worldFileOffsetX", 0L).intValue();
++    }
++
++    public int getLimboWorldFileOffsetY() {
++        return config.getLong("limbo.worldFileOffsetY", 90L).intValue();
++    }
++
++    public int getLimboWorldFileOffsetZ() {
++        return config.getLong("limbo.worldFileOffsetZ", 0L).intValue();
++    }
++
++    public int getLimboWorldFileLightLevel() {
++        return config.getLong("limbo.worldFileLightLevel", 15L).intValue();
++    }
++
+     // ----- helpers -----
+ 
+     private String serverKey(RegisteredServer server, String key) {
+diff --git a/src/main/java/fr/jeanney/limboautoserver/LimboManager.java b/src/main/java/fr/jeanney/limboautoserver/LimboManager.java
+index 997a66b..f702d51 100644
+--- a/src/main/java/fr/jeanney/limboautoserver/LimboManager.java
++++ b/src/main/java/fr/jeanney/limboautoserver/LimboManager.java
+@@ -7,8 +7,13 @@ import net.elytrium.limboapi.api.Limbo;
+ import net.elytrium.limboapi.api.LimboFactory;
+ import net.elytrium.limboapi.api.chunk.Dimension;
+ import net.elytrium.limboapi.api.chunk.VirtualWorld;
++import net.elytrium.limboapi.api.file.BuiltInWorldFileType;
++import net.elytrium.limboapi.api.file.WorldFile;
+ import net.elytrium.limboapi.api.player.GameMode;
+ 
++import java.nio.file.Files;
++import java.nio.file.Path;
++
+ /**
+  * Owns the LimboAPI virtual world/server that players wait in while their
+  * backend boots, and handles spawning players into it.
+@@ -56,6 +61,8 @@ public class LimboManager {
+                 config.getLimboPosX(), config.getLimboPosY(), config.getLimboPosZ(),
+                 (float) config.getLimboYaw(), (float) config.getLimboPitch());
+ 
++        pasteWorldFile(config, world);
++
+         Limbo newLimbo = factory.createLimbo(world)
+                 .setName("LimboAutoServer")
+                 .setWorldTime(config.getLimboWorldTime())
+@@ -73,6 +80,67 @@ public class LimboManager {
+         logger.info("Limbo world ready (dimension={}, gameMode={}).", dimension, gameMode);
+     }
+ 
++    /**
++     * Pastes the configured schematic/structure into the limbo world.
++     *
++     * <p>Fail-open: any problem (missing file, unknown type, parse error) is
++     * logged and the limbo stays a bare void world — a bad world file must
++     * never take the whole proxy hostage.</p>
++     */
++    private void pasteWorldFile(Configuration config, VirtualWorld world) {
++        try {
++            doPasteWorldFile(config, world);
++        } catch (Exception e) {
++            // toml4j getters hard-cast TOML values (e.g. `worldFile = true` throws
++            // ClassCastException before any specific handling below can run).
++            logger.error("Failed to paste limbo world file; keeping empty world.", e);
++        }
++    }
++
++    private void doPasteWorldFile(Configuration config, VirtualWorld world) {
++        String pathString = config.getLimboWorldFile();
++        if (pathString == null || pathString.isEmpty()) {
++            return;
++        }
++
++        Path path;
++        try {
++            path = Path.of(pathString);
++        } catch (java.nio.file.InvalidPathException e) {
++            logger.error("Invalid limbo worldFile path '{}'; keeping empty world.", pathString);
++            return;
++        }
++        if (!Files.isRegularFile(path)) {
++            logger.error("Limbo world file '{}' not found; keeping empty world.", pathString);
++            return;
++        }
++
++        BuiltInWorldFileType type;
++        try {
++            type = BuiltInWorldFileType.valueOf(config.getLimboWorldFileType());
++        } catch (IllegalArgumentException e) {
++            logger.error("Unknown limbo worldFileType '{}' (expected SCHEMATIC, WORLDEDIT_SCHEM or STRUCTURE); keeping empty world.",
++                    config.getLimboWorldFileType());
++            return;
++        }
++
++        try {
++            WorldFile worldFile = factory.openWorldFile(type, path);
++            worldFile.toWorld(factory, world,
++                    config.getLimboWorldFileOffsetX(),
++                    config.getLimboWorldFileOffsetY(),
++                    config.getLimboWorldFileOffsetZ(),
++                    Math.max(0, Math.min(15, config.getLimboWorldFileLightLevel())));
++            logger.info("Pasted limbo world file '{}' ({}) at offset ({}, {}, {}).",
++                    pathString, type,
++                    config.getLimboWorldFileOffsetX(),
++                    config.getLimboWorldFileOffsetY(),
++                    config.getLimboWorldFileOffsetZ());
++        } catch (Exception e) {
++            logger.error("Failed to paste limbo world file '{}'; keeping empty world.", pathString, e);
++        }
++    }
++
+     /**
+      * Spawns the player into the limbo world and kicks off the backend startup.
+      */
+diff --git a/src/main/resources/config.toml b/src/main/resources/config.toml
+index a3c17f1..0bf56ae 100644
+--- a/src/main/resources/config.toml
++++ b/src/main/resources/config.toml
+@@ -34,6 +34,15 @@ pitch = 0.0
+ # readTimeout/2 ms, so this MUST stay well under the vanilla client's 30s timeout,
+ # independently of Velocity's global read-timeout. 20000 -> keep-alive every 10s.
+ readTimeout = 20000
++# Optional schematic/structure pasted into the limbo at startup (empty = void).
++# worldFileType: SCHEMATIC (legacy .schematic) / WORLDEDIT_SCHEM (modern .schem) / STRUCTURE (vanilla .nbt)
++# Offsets place the file's origin corner in the world; keep the build under posY so players spawn on it.
++worldFile = ""
++worldFileType = "WORLDEDIT_SCHEM"
++worldFileOffsetX = 0
++worldFileOffsetY = 90
++worldFileOffsetZ = 0
++worldFileLightLevel = 15
+ # Show a boss bar that fills while the backend starts.
+ progressBar = true
+ # Rough estimate (seconds) of how long the backend takes to boot. Only drives how
