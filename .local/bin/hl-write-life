@@ -38,7 +38,12 @@ def log(msg: str) -> None:
 
 # ---- Google Calendar(唯讀 events.list) ----
 
-def gcal_today() -> list[dict]:
+UPCOMING_DAYS = 14  # 近期行程窗口(明日起 14 天;2026-07-10 生活頁「近期行程」段)
+
+
+def gcal_agenda() -> tuple[list[dict], list[dict]]:
+    """一次抓「今日起 1+UPCOMING_DAYS 天」,拆成 (今日 [{time,title}], 近期 [{date,time,title}])。
+    今日形狀維持舊 calendar_today 相容;近期供生活頁「近期行程」段(依日分組)。"""
     c = load_env("~/.config/homelab/gcal.env")
     data = urllib.parse.urlencode({
         "client_id": c["GCAL_CLIENT_ID"], "client_secret": c["GCAL_CLIENT_SECRET"],
@@ -49,24 +54,29 @@ def gcal_today() -> list[dict]:
 
     now = datetime.datetime.now(TZI)
     t0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    t1 = t0 + datetime.timedelta(days=1)
+    t1 = t0 + datetime.timedelta(days=1 + UPCOMING_DAYS)
     cal = c.get("GCAL_CALENDAR_ID", "primary")
     q = urllib.parse.urlencode({"timeMin": t0.isoformat(), "timeMax": t1.isoformat(),
-                                "singleEvents": "true", "orderBy": "startTime", "maxResults": 50})
+                                "singleEvents": "true", "orderBy": "startTime", "maxResults": 100})
     req = urllib.request.Request(
         f"https://www.googleapis.com/calendar/v3/calendars/{urllib.parse.quote(cal)}/events?{q}",
         headers={"Authorization": f"Bearer {tok}"})
     items = json.loads(urllib.request.urlopen(req, timeout=20).read()).get("items", [])
 
-    out = []
+    today_str = t0.strftime("%Y-%m-%d")
+    today, upcoming = [], []
     for e in items:
         start = e.get("start", {})
         if "dateTime" in start:
-            hhmm = start["dateTime"][11:16]
+            date, hhmm = start["dateTime"][:10], start["dateTime"][11:16]
         else:
-            hhmm = "全天"
-        out.append({"time": hhmm, "title": e.get("summary", "(無標題)")})
-    return out
+            date, hhmm = start.get("date", ""), "全天"
+        title = e.get("summary", "(無標題)")
+        if date == today_str:
+            today.append({"time": hhmm, "title": title})
+        elif date > today_str:
+            upcoming.append({"date": date, "time": hhmm, "title": title})
+    return today, upcoming
 
 
 def _tx_of(x: dict, tag: str, settled: bool) -> dict:
@@ -197,7 +207,7 @@ def nocodb_debts() -> dict:
 
 def main() -> None:
     try:
-        cal = gcal_today()
+        cal, upcoming = gcal_agenda()
     except Exception as e:  # noqa: BLE001
         log(f"GCal 失敗 {type(e).__name__}: {e}")
         sys.exit(1)
@@ -208,10 +218,10 @@ def main() -> None:
         sys.exit(1)
 
     STATE.mkdir(parents=True, exist_ok=True)
-    doc = {"calendar_today": cal, "debts_open": debts,
+    doc = {"calendar_today": cal, "calendar_upcoming": upcoming, "debts_open": debts,
            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     OUT.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
-    log(f"written: 行程 {len(cal)} · 未結 {debts['count']} 筆(淨額 {debts['total']})")
+    log(f"written: 今日 {len(cal)} · 近期 {len(upcoming)} · 未結 {debts['count']} 筆(淨額 {debts['total']})")
 
     if "--dry-run" in sys.argv:
         log("dry-run: 不投遞 CT201")

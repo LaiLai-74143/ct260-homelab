@@ -2633,3 +2633,8 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   live 全綠:mock BFF+Playwright 7/7、life-chat /guest live(add 建人+推 CT205/錯 token 401/
   白名單 400)、portal 0.9.0 部署 CT201(11 端點+面板進包+guest 閘門 403+op 400+M3/game/Grafana
   回歸全過)。SoT:portal/(finish-portal-090.sh)、life-chat/life-chat.py、guest-portal/scripts/hl-guest。
+【生活頁近期行程 2026-07-10,portal 0.9.1】今日行程卡下加「近期行程」段(明日起 14 天,依日分組
+  月/日+週幾)。資料鏈:hl-write-life gcal_today→gcal_agenda(單次 GCal 呼叫抓 1+14 天拆
+  今日/近期;calendar_today 形狀不變=相容)→life.json 加 calendar_upcoming→BFF _redact_life
+  對 upcoming 同步遮蔽 title(未經 portal.hl 只見日期時間)→前端 UpcomingCard。
+  finish-portal-091.sh 部署全綠(近期進包+全回歸);live /api/life 實收 7 筆近期。

@@ -34,6 +34,49 @@ function localToday(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
+const WEEK = ['日', '一', '二', '三', '四', '五', '六']
+
+/** 近期行程卡(明日起 14 天,依日分組;redacted 時 title=null 顯示登入提示) */
+function UpcomingCard({ items }: { items?: LifeData['calendar_upcoming'] }) {
+  const list = items ?? []
+  // 依日分組(保序;資料源已按時間排序)
+  const groups: { date: string; rows: NonNullable<LifeData['calendar_upcoming']> }[] = []
+  for (const it of list) {
+    const g = groups[groups.length - 1]
+    if (g && g.date === it.date) g.rows.push(it)
+    else groups.push({ date: it.date, rows: [it] })
+  }
+  return (
+    <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
+      <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">近期行程</div>
+      {groups.length === 0 && <div className="text-[13.5px] text-muted">未來兩週沒有安排的行程。</div>}
+      {groups.map((g) => {
+        const dt = new Date(g.date + 'T00:00:00')
+        const md = `${dt.getMonth() + 1}/${dt.getDate()}`
+        const wd = WEEK[dt.getDay()]
+        return (
+          <div key={g.date} className="flex gap-3 border-b border-line/60 py-2 last:border-b-0">
+            <div className="w-14 shrink-0 text-right">
+              <span className="font-mono text-[13px]">{md}</span>
+              <span className="ml-1 text-[11px] text-muted">{wd}</span>
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              {g.rows.map((e, i) => (
+                <div key={e.time + i} className="flex items-baseline gap-2.5 text-[13.5px]">
+                  <span className="w-12 shrink-0 font-mono text-[12px] text-muted">{e.time || '—'}</span>
+                  <span className={`min-w-0 flex-1 truncate ${e.title == null ? 'text-muted' : ''}`}>
+                    {e.title ?? '•••（登入後可見）'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
 /** 借貸未結卡:筆數+全體互抵後淨額,點開列逐人淨額(同人多筆合併成一列) */
 function DebtsCard({ d }: { d: LifeData }) {
   const [open, setOpen] = useState(false)
@@ -210,6 +253,7 @@ export default function Life() {
               </div>
             ))}
           </section>
+          <UpcomingCard items={d.calendar_upcoming} />
           <DebtsCard d={d} />
           <div className="rounded-card border border-dashed border-line px-4 py-3 text-[12.5px] text-muted">
             RSS 訊息:待辦 30 落地後接入,本期不留假位。

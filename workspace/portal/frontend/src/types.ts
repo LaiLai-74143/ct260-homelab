@@ -183,6 +183,8 @@ export interface Life {
   hint?: string
   redacted?: boolean
   calendar_today?: { time: string; title: string | null }[]
+  /** 明日起 14 天(hl-write-life calendar_upcoming;redacted 時 title=null) */
+  calendar_upcoming?: { date: string; time: string; title: string | null }[]
   debts_open?: {
     count: number
     /** 全體互抵後淨額(TWD 簽名值);redacted 時 null */

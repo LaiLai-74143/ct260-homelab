@@ -152,6 +152,9 @@ def _redact_life(d: dict) -> dict:
     if isinstance(d.get("calendar_today"), list):
         out["calendar_today"] = [{"time": e.get("time", ""), "title": None}
                                  for e in d["calendar_today"] if isinstance(e, dict)]
+    if isinstance(d.get("calendar_upcoming"), list):
+        out["calendar_upcoming"] = [{"date": e.get("date", ""), "time": e.get("time", ""), "title": None}
+                                    for e in d["calendar_upcoming"] if isinstance(e, dict)]
     if isinstance(d.get("debts_open"), dict):
         # 未認證只露件數:淨額抹除、逐人明細(對象/金額)整組不出
         out["debts_open"] = {"count": d["debts_open"].get("count", 0), "total": None,
