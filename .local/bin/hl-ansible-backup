@@ -20,10 +20,26 @@ tg() {  # 直發 TG(沿用 watchdog-ct201.sh 模式)
         --data-urlencode "text=$1" >/dev/null
 }
 
+port_drift() {  # B4(2026-07-10):監聽埠基線漂移→TG 一次性告警
+    # 與 git HEAD 比對 listen-ports.txt;23:30 autocommit 會把新基線入庫=自動接受,
+    # 所以每次漂移只告警一次。新檔(首日/新主機)=基線播種,不告警。
+    local changed detail
+    changed=$(git -C "$HOME" diff --name-only -- 'workspace/ansible/backups/*/listen-ports.txt')
+    if [ -z "$changed" ]; then echo "port-drift: none"; return 0; fi
+    detail=$(git -C "$HOME" diff --unified=0 -- 'workspace/ansible/backups/*/listen-ports.txt' \
+        | grep -E '^(\+\+\+|[+-][^+-])' \
+        | sed 's|^+++ b/workspace/ansible/backups/|=== |; s|/listen-ports.txt||' | head -40)
+    echo "port-drift DETECTED:"; echo "$detail"
+    tg "🔌 監聽埠基線漂移(hl-ansible-backup):
+$detail
+(+=新增監聽 -=消失;今晚 autocommit 自動入庫為新基線。非自己開的服務→立即上該機排查!)"
+}
+
 {
   echo "== $(date -Is) hl-ansible-backup =="
   if (cd "$AD" && "$PB" playbooks/config-backup.yml) && "$AD/scan-secrets.sh"; then
     echo "backup + scan-secrets: ok"
+    port_drift
   else
     echo "FAIL — 回滾 backups/,詳見本 log"
     git -C "$HOME" checkout -- workspace/ansible/backups 2>/dev/null

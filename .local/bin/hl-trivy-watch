@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""hl-trivy-watch — 暴露面映像 CVE 哨兵(B5,2026-07-10)。
+
+背景:待辦21 版本 pin 死後,diun 只報新版、不報「現跑版本有洞」——本哨兵補該盲區。
+範圍=**暴露面** 6 映像(全站 21+ pin 映像刻意不全掃,避免告警疲勞;內網 VLAN 限定
+的監控棧等維持 diun 節奏)。IMAGES 與 CT201 diun-images.yml 同源,改 pin 版本兩邊同步。
+本地 build(portal/guest-portal/paperless-ocr)= 已知盲區,trivy 掃不到 registry 外映像。
+
+規則:--ignore-unfixed(無修復版=喊也沒用)+ CRITICAL,HIGH;
+TG 僅在「新出現的 CRITICAL」;HIGH 累積在狀態檔(週誌可查),不推播。
+trivy binary=~/.local/bin/trivy v0.72.0(gitignore 排除;升級=重抓 release)。
+掃完清 scan-cache(映像層數 GB 級,CT260 磁碟 24G 省著用;vuln DB 保留)。
+cron:每週二 01:30 UTC(台北 09:30)。--dry-run 只印不發。
+"""
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+TRIVY = HOME / ".local/bin/trivy"
+TG_ENV = HOME / ".config/homelab/notify-telegram.env"
+STATE = HOME / ".local/state/homelab-notify/trivy-watch.state.json"
+LAST = HOME / ".local/state/homelab-notify/trivy-last.json"
+DRY = "--dry-run" in sys.argv
+
+# 暴露面(2026-07-10 裁定):DMZ 反代後(authelia/paperless/navidrome)、
+# 手機推播通道(ntfy)、IoT 橋+手機入口(home-assistant)、外抓不可信 RSS(freshrss)
+IMAGES = [
+    "authelia/authelia:4.39.20",
+    "ghcr.io/paperless-ngx/paperless-ngx:2.20.15",
+    "ghcr.io/navidrome/navidrome:0.62.0",
+    "binwiederhier/ntfy:v2.25.0",
+    "ghcr.io/home-assistant/home-assistant:2026.7.0",
+    "freshrss/freshrss:1.29.1",
+]
+
+
+def tg(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = {}
+    for line in TG_ENV.read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            c[k] = v.strip().strip('"').strip("'")
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True)
+
+
+def scan(image):
+    """回 (vulns, err):vulns=[{cve,sev,pkg,installed,fixed}];err=None 或字串。"""
+    r = subprocess.run(
+        [str(TRIVY), "image", "--severity", "CRITICAL,HIGH", "--ignore-unfixed",
+         "--format", "json", "--quiet", "--timeout", "15m", image],
+        capture_output=True, text=True, timeout=1200)
+    if r.returncode != 0:
+        return [], (r.stderr.strip().splitlines() or ["unknown"])[-1][:150]
+    vulns = []
+    try:
+        for res in json.loads(r.stdout).get("Results") or []:
+            for v in res.get("Vulnerabilities") or []:
+                vulns.append({
+                    "cve": v.get("VulnerabilityID"), "sev": v.get("Severity"),
+                    "pkg": v.get("PkgName"), "installed": v.get("InstalledVersion"),
+                    "fixed": v.get("FixedVersion")})
+    except ValueError:
+        return [], "JSON 解析失敗"
+    return vulns, None
+
+
+def main():
+    seen = set()
+    try:
+        seen = set(map(tuple, json.loads(STATE.read_text()).get("seen", [])))
+    except (OSError, ValueError):
+        pass
+
+    all_vulns, errs = {}, []
+    for img in IMAGES:
+        try:
+            vulns, err = scan(img)
+        except subprocess.TimeoutExpired:
+            vulns, err = [], "timeout"
+        if err:
+            errs.append(f"{img}:{err}")
+        all_vulns[img] = vulns
+
+    now_keys = {(i, v["cve"]) for i, vs in all_vulns.items() for v in vs}
+    new_crit = [(i, v) for i, vs in all_vulns.items() for v in vs
+                if v["sev"] == "CRITICAL" and (i, v["cve"]) not in seen]
+    counts = {i: (sum(1 for v in vs if v["sev"] == "CRITICAL"),
+                  sum(1 for v in vs if v["sev"] == "HIGH")) for i, vs in all_vulns.items()}
+
+    if new_crit:
+        lines = "\n".join(
+            f"- {i.split('/')[-1]}:{v['cve']} {v['pkg']} {v['installed']}→修 {v['fixed']}"
+            for i, v in new_crit[:12])
+        more = f"\n(另 {len(new_crit)-12} 條,見 trivy-last.json)" if len(new_crit) > 12 else ""
+        tg(f"🛡️ CVE 哨兵(hl-trivy-watch):暴露面新 CRITICAL {len(new_crit)} 條(皆有修復版):\n"
+           f"{lines}{more}\n處置=升 pin(diun-images.yml+compose 同步)後重掃。"
+           + ("\n(註:" + ";".join(errs)[:200] + ")" if errs else ""))
+
+    LAST.parent.mkdir(parents=True, exist_ok=True)
+    LAST.write_text(json.dumps({"ts": time.time(), "counts": counts,
+                                "vulns": all_vulns, "errs": errs},
+                               ensure_ascii=False, indent=1))
+    # seen 只在成功掃描輪推進;全數失敗時保留舊集合避免下輪誤判「全新」
+    if any(all_vulns.values()) or not errs:
+        STATE.write_text(json.dumps({"seen": sorted(map(list, now_keys)), "ts": time.time()}))
+    subprocess.run([str(TRIVY), "clean", "--scan-cache"], capture_output=True)
+    print(json.dumps({"counts": counts, "new_critical": len(new_crit), "errs": errs},
+                     ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

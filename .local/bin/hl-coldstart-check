@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""hl-coldstart-check — 復電/冷啟自檢(B3,2026-07-10)。
+
+CT260 @reboot +10 分鐘跑一次:照清單探全站關鍵端點,發**一則** TG 總結
+(全綠也發——復電後的「一切就緒」是安心訊號;缺項列名+排查指引)。
+冷啟依賴 DAG 見 V7 §「冷啟依賴與復電自檢」;本清單=該 DAG 的驗收面。
+註:CT260 單獨重啟(pct reboot 260)也會觸發,屬可接受的罕見小噪音。
+探測全走 TCP/HTTP(刻意不用 ssh——hl-lock 金鑰上鎖時 ssh 會假陰性)。
+--dry-run 只印不發。與待辦1h UPS 拔線實測同窗驗收。
+"""
+import json
+import socket
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+TG_ENV = Path.home() / ".config/homelab/notify-telegram.env"
+TIMEOUT = 5
+DRY = "--dry-run" in sys.argv
+
+# (名稱, 種類, 目標, 備註-失敗時的第一排查點)
+# 覆蓋面=CT260 合法可達域(2026-07-10 實測校準):
+#  - MC(VLAN70)/MCSM:防火牆不通,由 hl-mc-watch(Loki)覆蓋
+#  - routerpve:8006/NAS:445/portal:8088:未放行——routerpve 用 DNS 推定
+#    (AGH 在它上面的 VM101 裡,DNS 綠 ⟹ routerpve 活);NAS/portal 由
+#    CT201 監控面(TargetDown/Kuma)覆蓋,冷啟時人工看 portal 設備頁補盲
+#  - DMZ 探 443(80 未放行;hl-cert-watch 同路徑)
+CHECKS = [
+    ("DNS(AGH@OpenWrt;綠=routerpve+VM101 活)", "dns", "pve24-server.home.arpa", "OpenWrt VM101/AGH 未起(或 routerpve 未開機,BIOS AC 設定?)"),
+    ("WAN 出網",           "tcp",  "1.1.1.1:443",                     "PPPoE 未撥上(OpenWrt)"),
+    ("pve24 API",          "tcp",  "192.168.20.5:8006",               "24Bay 未開機(BIOS AC 設定?)"),
+    ("Loki",               "http", "http://10.80.80.11:3100/ready",   "CT201/monitoring compose"),
+    ("ntfy",               "http", "http://10.80.80.11:8091/v1/health", "CT201/ntfy 容器"),
+    ("DMZ Caddy 閘門",     "tcp",  "10.60.60.10:443",                 "CT203(注意 ctdmz-nft fail-closed:閘門壞=tailscaled 也不起)"),
+    ("HA",                 "tcp",  "192.168.20.70:8123",              "CT270/homeassistant 容器"),
+    ("Paperless",          "tcp",  "192.168.20.70:8000",              "CT270 compose"),
+    ("Navidrome",          "tcp",  "192.168.20.70:4533",              "CT270 compose"),
+    ("NocoDB",             "tcp",  "192.168.20.70:8080",              "CT270 compose"),
+    ("FreshRSS",           "tcp",  "192.168.20.70:8082",              "CT270 compose"),
+    ("webhook(本機)",      "http", "http://127.0.0.1:5001/health",    "CT260 ntfy-webhook.py"),
+    ("life-chat(本機)",    "http", "http://127.0.0.1:5002/health",    "CT260 life-chat.py"),
+]
+
+
+def probe(kind, target):
+    try:
+        if kind == "dns":
+            socket.gethostbyname(target)
+            return True
+        if kind == "tcp":
+            host, port = target.rsplit(":", 1)
+            with socket.create_connection((host, int(port)), timeout=TIMEOUT):
+                return True
+        if kind == "http":
+            with urllib.request.urlopen(target, timeout=TIMEOUT) as r:
+                return 200 <= r.status < 400
+    except Exception:
+        return False
+    return False
+
+
+def tg(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = {}
+    for line in TG_ENV.read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            c[k] = v.strip().strip('"').strip("'")
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True)
+
+
+def main():
+    ok, bad = [], []
+    for name, kind, target, hint in CHECKS:
+        (ok if probe(kind, target) else bad).append((name, hint))
+    n, total = len(ok), len(CHECKS)
+    if not bad:
+        tg(f"🔋 復電自檢(hl-coldstart-check):{n}/{total} 全綠,全站就緒。")
+    else:
+        lines = "\n".join(f"- {name} ✗ → 查:{hint}" for name, hint in bad)
+        tg(f"🔋 復電自檢:{n}/{total} 綠,缺 {len(bad)} 項:\n{lines}\n"
+           "(VM300 蜜罐/CT250 屬手動開機,不在清單;DAG 見 V7 冷啟節)")
+    print(json.dumps({"ok": n, "total": total,
+                      "bad": [b[0] for b in bad]}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

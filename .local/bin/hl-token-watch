@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+"""hl-token-watch — 憑證/token 靜默失效哨兵(B2,2026-07-10)。
+
+每週一 09:10 台北對各 API token 打「最便宜的唯讀端點」:
+  401/403(或該 API 的等價失效訊號)→ token 失效 → TG 點名(續期步驟見
+  ForAI/憑證與token登記表.txt,本腳本與登記表同步維護——加 token 兩邊都要加)
+  連線失敗/超時 → 僅記 note(fail-open;服務可達性是 Kuma/TargetDown 的事)
+GCal 探活即保活:refresh token 六個月不用會作廢,每週 refresh 一次順帶續命。
+webhook token 自測法:真 token+假 action → 403=token 有效(不執行、不耗限速);
+401 才是 token 壞(比照 finish-webhook-portal-token.sh 驗證矩陣)。
+狀態檔去抖:問題集合簽名變化才發,恢復發解除。--dry-run 只印不發。
+cron:每週一 01:10 UTC(台北 09:10,排在 hl-cert-watch 01:00 之後)。
+"""
+import hashlib
+import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+CONF = HOME / ".config/homelab"
+TG_ENV = CONF / "notify-telegram.env"
+STATE = HOME / ".local/state/homelab-notify/token-watch.state.json"
+TIMEOUT = 15
+DRY = "--dry-run" in sys.argv
+
+
+def load_env(name):
+    c = {}
+    try:
+        for line in (CONF / name).read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                c[k] = v.strip().strip('"').strip("'")  # 剝引號(2026-07-10 DeepSeek 401 假警報教訓)
+    except OSError:
+        pass
+    return c
+
+
+def tg(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = load_env("notify-telegram.env")
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("hl-token-watch: 無 TG 憑證,略過發送", file=sys.stderr)
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True)
+
+
+def http(url, headers=None, data=None):
+    """回 (status, body[:300]);連線層失敗回 (None, errmsg)。"""
+    req = urllib.request.Request(url, data=data, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return r.status, r.read(300).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(300).decode("utf-8", "replace")
+    except Exception as e:  # DNS/timeout/refused
+        return None, str(e)[:200]
+
+
+# ── 各 probe:回 None=正常、str=token 問題描述、("note", str)=連線問題 ──
+
+def _classify(name, st, body, bad_codes=(401, 403)):
+    if st is None:
+        return ("note", f"{name}:不可達({body})")
+    if st in bad_codes:
+        return f"{name}:HTTP {st} → token 失效/被撤,查登記表續期"
+    if st >= 500:
+        return ("note", f"{name}:HTTP {st}(服務端錯誤,非 token 問題)")
+    return None
+
+
+def p_telegram():
+    c = load_env("notify-telegram.env")
+    if not c.get("TELEGRAM_BOT_TOKEN"):
+        return "telegram-bot:env 缺 TELEGRAM_BOT_TOKEN"
+    st, body = http(f"https://api.telegram.org/bot{c['TELEGRAM_BOT_TOKEN']}/getMe")
+    return _classify("telegram-bot", st, body)
+
+
+def p_cf_dns():
+    # 注意:token 是帳戶級(cfat_ 前綴),/user/tokens/verify 對它必回 Invalid(2026-07-10 實測),
+    # 改打 /zones(acme.sh dns_cf 本來就靠 Zone.Read 找 zone)。壞 token=403;格式爛=400 code 6003。
+    c = load_env("cloudflare-dns.env")
+    if not c.get("CF_Token"):
+        return "cf-dns:env 缺 CF_Token"
+    st, body = http("https://api.cloudflare.com/client/v4/zones?per_page=1",
+                    {"Authorization": f"Bearer {c['CF_Token']}"})
+    if st == 400 and "6003" in body:
+        return "cf-dns-token(acme.sh 續簽用):400/6003 → env 內容格式損毀"
+    return _classify("cf-dns-token(acme.sh 續簽用)", st, body)
+
+
+def p_gcal():
+    c = load_env("gcal.env")
+    if not all(c.get(k) for k in ("GCAL_CLIENT_ID", "GCAL_CLIENT_SECRET", "GCAL_REFRESH_TOKEN")):
+        return "gcal:env 欄位不全"
+    data = urllib.parse.urlencode({
+        "client_id": c["GCAL_CLIENT_ID"], "client_secret": c["GCAL_CLIENT_SECRET"],
+        "refresh_token": c["GCAL_REFRESH_TOKEN"], "grant_type": "refresh_token"}).encode()
+    st, body = http("https://oauth2.googleapis.com/token", data=data)
+    if st == 400 and "invalid_grant" in body:
+        return "gcal-refresh-token:invalid_grant → refresh token 作廢(六個月未用/被撤),需重跑 OAuth 授權"
+    return _classify("gcal", st, body, bad_codes=(401,))
+
+
+def p_deepseek():
+    c = load_env("deepseek.env")
+    base = (c.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
+    if not c.get("DEEPSEEK_API_KEY"):
+        return "deepseek:env 缺 DEEPSEEK_API_KEY"
+    st, body = http(base + "/models", {"Authorization": f"Bearer {c['DEEPSEEK_API_KEY']}"})
+    return _classify("deepseek(晨報 AI 濃縮)", st, body)
+
+
+def p_hass():
+    c = load_env("hass.env")
+    if not (c.get("HASS_URL") and c.get("HASS_TOKEN")):
+        return "hass:env 欄位不全"
+    st, body = http(c["HASS_URL"].rstrip("/") + "/api/",
+                    {"Authorization": f"Bearer {c['HASS_TOKEN']}"})
+    return _classify("hass-token", st, body)
+
+
+def p_nocodb():
+    c = load_env("nocodb.env")
+    if not (c.get("NC_URL") and c.get("NC_TOKEN")):
+        return "nocodb:env 欄位不全"
+    st, body = http(c["NC_URL"].rstrip("/") + "/api/v2/meta/bases",
+                    {"xc-token": c["NC_TOKEN"]})
+    return _classify("nocodb-token(life-ops 資料層)", st, body)
+
+
+def p_paperless():
+    c = load_env("paperless.env")
+    if not (c.get("PAPERLESS_URL") and c.get("PAPERLESS_TOKEN")):
+        return "paperless:env 欄位不全"
+    st, body = http(c["PAPERLESS_URL"].rstrip("/") + "/api/documents/?page_size=1",
+                    {"Authorization": f"Token {c['PAPERLESS_TOKEN']}"})
+    return _classify("paperless-token", st, body)
+
+
+def p_freshrss():
+    c = load_env("freshrss.env")
+    if not all(c.get(k) for k in ("FRESHRSS_URL", "FRESHRSS_USER", "FRESHRSS_API_PASSWORD")):
+        return "freshrss:env 欄位不全"
+    q = urllib.parse.urlencode({"Email": c["FRESHRSS_USER"], "Passwd": c["FRESHRSS_API_PASSWORD"]})
+    st, body = http(c["FRESHRSS_URL"].rstrip("/") + "/api/greader.php/accounts/ClientLogin?" + q)
+    return _classify("freshrss-api-password(晨報訊息段)", st, body)
+
+
+def p_ntfy():
+    c = load_env("ntfy.env")
+    if not (c.get("NTFY_URL") and c.get("NTFY_PUB_TOKEN")):
+        return "ntfy:env 欄位不全"
+    st, body = http(c["NTFY_URL"].rstrip("/") + "/v1/account",
+                    {"Authorization": f"Bearer {c['NTFY_PUB_TOKEN']}"})
+    return _classify("ntfy-pub-token(哨兵推播)", st, body)
+
+
+def p_webhook():
+    """CT260 webhook 三把 token 自測:真 token+假 action → 期望 403;401=token 壞。"""
+    c = load_env("ntfy-webhook.env")
+    out = []
+    for key in ("WEBHOOK_TOKEN", "WEBHOOK_TOKEN_PORTAL", "WEBHOOK_TOKEN_HA"):
+        tok = c.get(key)
+        if not tok:
+            continue  # 選填鍵,缺=未啟用該通道
+        st, body = http(f"http://127.0.0.1:{c.get('WEBHOOK_PORT', '5001')}/run",
+                        {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+                        json.dumps({"action": "tokenwatch-selftest-invalid"}).encode())
+        if st is None:
+            out.append(("note", f"webhook({key}):不可達({body})"))
+        elif st == 401:
+            out.append(f"webhook {key}:401 → env 與服務端 token 不同步")
+        elif st == 429:
+            out.append(("note", f"webhook({key}):429 限速中,本輪跳過"))
+        # 403=假 action 被白名單擋=token 有效 → 正常
+    return out
+
+
+# MCSM_CTRL_KEY 刻意不探:CT260→VLAN70(10.70.70.20:23333)防火牆不通(refused),
+# 且 portal 遊戲頁每次載入都打該 key——壞了當天就會被看見,登記表-only。
+PROBES = [p_telegram, p_cf_dns, p_gcal, p_deepseek, p_hass, p_nocodb,
+          p_paperless, p_freshrss, p_ntfy, p_webhook]
+
+
+def main():
+    problems, notes = [], []
+    for p in PROBES:
+        try:
+            r = p()
+        except Exception as e:
+            notes.append(f"{p.__name__}:probe 例外 {e!r}")
+            continue
+        items = r if isinstance(r, list) else [r]
+        for it in items:
+            if it is None:
+                continue
+            if isinstance(it, tuple):
+                notes.append(it[1])
+            else:
+                problems.append(it)
+
+    sig = hashlib.sha1("\n".join(sorted(problems)).encode()).hexdigest() if problems else ""
+    st = {}
+    try:
+        st = json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        pass
+
+    if problems and st.get("sig") != sig:
+        tg("🔑 token 哨兵(hl-token-watch):\n- " + "\n- ".join(problems)
+           + "\n續期步驟見 ForAI/憑證與token登記表.txt"
+           + ("\n(註:" + ";".join(notes) + ")" if notes else ""))
+    elif not problems and st.get("sig"):
+        tg("✅ token 哨兵:先前失效項已全數解除。")
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps({"sig": sig, "ts": time.time()}))
+    print("problems:", json.dumps(problems, ensure_ascii=False))
+    print("notes:", json.dumps(notes, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

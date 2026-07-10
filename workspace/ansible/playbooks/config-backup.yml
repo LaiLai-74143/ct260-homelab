@@ -52,7 +52,7 @@
   gather_facts: false
   vars:
     backup_root: "{{ playbook_dir }}/../backups"
-    ct_ids: [100, 102, 201, 202, 203, 250, 260, 270]
+    ct_ids: [100, 102, 201, 202, 203, 204, 205, 250, 260, 270]  # 204/205 補入 2026-07-10(B3 盤點發現漏)
   tasks:
     - name: pvesh storage 定義
       ansible.builtin.command: sudo pvesh get storage --output-format json-pretty

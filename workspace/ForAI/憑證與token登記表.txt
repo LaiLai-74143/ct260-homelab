@@ -1,0 +1,80 @@
+# 憑證與 token 登記表
+
+建立:2026-07-10(B2 token 探活哨兵配套)
+本表**不含任何秘鑰值**,只記:哪把、在哪、幹嘛用、會怎麼死、怎麼救。
+哨兵=CT260 `~/.local/bin/hl-token-watch`(cron 每週一 09:10 台北,401/403 → TG)。
+**維護鐵律:新增/移除 token 時,本表與 hl-token-watch 的 PROBES 兩邊同步改。**
+憑證(TLS)類另有 hl-cert-watch(每週一 09:00)盯到期日,本表只記位置與續期路徑。
+
+---
+
+## 1. 哨兵每週探活(hl-token-watch PROBES)
+
+```text
+名稱               所在檔(CT260 ~/.config/homelab/)  用途                    失效樣態                探活端點
+telegram-bot       notify-telegram.env                全站 TG 告警            BotFather 撤銷(手動)   api.telegram.org getMe
+cf-dns-token       cloudflare-dns.env(CF_Token)       acme.sh DNS-01 續簽     到期/撤銷/rotate        CF /zones(帳戶級 cfat_
+                                                                                                      token,/user/tokens/verify
+                                                                                                      不適用——2026-07-10 實測)
+gcal-refresh       gcal.env                           晨報行事曆段            六個月未用作廢/撤銷     Google oauth2 refresh
+                                                                              (探活即保活,每週續命)
+deepseek           deepseek.env                       晨報 AI 濃縮            儲值歸零/key 撤銷       {BASE_URL}/models
+hass-token         hass.env                           HA 自動化/通知橋        長效 token 10 年/手撤   {HASS_URL}/api/
+nocodb-token       nocodb.env(NC_TOKEN)               life-ops 資料層/hl-guest 手撤/重裝丟失          {NC_URL}/api/v2/meta/bases
+paperless-token    paperless.env(PAPERLESS_TOKEN)     文件搜尋 MCP/哨兵       手撤/重裝丟失           {URL}/api/documents/
+freshrss-api       freshrss.env(FRESHRSS_API_PASSWORD) 晨報今日訊息段         UI 改 API 密碼          greader ClientLogin
+ntfy-pub-token     ntfy.env(NTFY_PUB_TOKEN)           哨兵 ntfy 推播          手撤                    {NTFY_URL}/v1/account
+webhook 三把       ntfy-webhook.env(WEBHOOK_TOKEN,    手機按鈕/portal M3/HA   env 與服務端不同步      本機 :5001 真 token+假
+                   _PORTAL,_HA)                       →CT260 動作執行                                 action(403=活,401=死)
+```
+
+## 2. 登記不探活(理由各註)
+
+```text
+名稱               所在                                用途                   為何不探/怎麼發現死了
+MCSM_CTRL_KEY      mcsm-control.env + CT201 portal.env portal 遊戲頁控制      CT260→VLAN70 防火牆不通;portal 每次
+                                                                              載入都打,壞了當天可見
+CF_TUNNEL_TOKEN    cloudflared.env                     guest-portal 對外隧道  無廉價驗證端點;隧道斷=對外域名斷,
+                                                                              Kuma/使用者可見
+LIFE_CHAT_TOKEN/   life-chat.env                       BFF→life-chat 對話     本機自簽發不到期;壞=生活頁對話立即報錯
+SIGNING_KEY
+SNMP_COMMUNITY     switch3f-snmp.env + CT201           Switch3F 流量監控      Prometheus target snmp-switch3f up==0
+                   snmp-auth.yml                                              即為失效訊號(TargetDown 蓋)
+wazuh 三密碼        wazuh.env                          Wazuh 內部棧/API       純內部(CT204 容器間),不對外;壞=
+                                                                              dashboard 登不進(月檢順看)
+GOTIFY_WAZUH_APP   wazuh.env                           Wazuh→Gotify 推播      探活需真發訊息(噪);Wazuh 週報有推=活
+paperless 內部三把  paperless.env(DBPASS/SECRET_KEY/    Paperless 棧內部       容器棧自用,不輪替;重建才會動
+                   ADMIN_*)
+FRESHRSS_PASSWORD  freshrss.env                        FreshRSS 網頁登入      使用者自用,UI 登入即驗
+NTFY_PUB/PHONE     ntfy.env(USER/PASS 兩組)            ntfy 帳號本體          token 探活已間接蓋(token 掛在帳號下)
+TELEGRAM_CHAT_ID   notify-telegram.env                 收訊對象               非秘鑰,不會失效
+DIUN_NTFY_TOKEN    ntfy.env + CT201 diun.yml           diun 新版推播          diun 週推有訊=活;壞=靜默(月檢順看)
+```
+
+## 3. TLS 憑證與金鑰類(哨兵=hl-cert-watch;本表記位置)
+
+```text
+hl.* LE wildcard   SoT=CT260 ~/.acme.sh(ECC);部署副本=CT203 /etc/caddy/certs/
+                   (hl-cert.pem+hl-privkey.pem;ansible 備份已排除 certs/ 目錄
+                   ——2026-07-10 scan-secrets 攔到後加的排除)。
+                   續簽:acme.sh cron 自動;斷鏈救法見 hl-cert-watch 告警文案
+                   (--renew -d '*.hl.lailai74143.com' --ecc + hl-deploy-hl-cert)。
+WG break-glass     實鑰只存 OpenWrt /etc/wireguard/(077);CT260 僅 phone conf 副本
+                   (wg-phone-breakglass.conf)。uci 內金鑰=ansible redact+scan-secrets
+                   雙保險。不到期;季檢=待辦24d(V7 §4.9)。
+SSH 金鑰           CT260 ~/.ssh/(別名綁定見 project_ssh_aliases);hl-lock/hl-unlock
+                   6h 自動上鎖機制(待辦22)。不到期。
+自簽 root CA       已退役(2026-07-10 root.crt 各裝置清除;LE 上線後不再簽發)。
+```
+
+## 4. 續期通則
+
+```text
+1. 哨兵報某把 401/403:先確認服務本身活著(Kuma/portal),再判 token。
+2. 續期後:更新 ~/.config/homelab/ 對應 env(600 權限保持)→ 跑
+   `hl-token-watch --dry-run` 確認轉綠 → 有下游副本的(MCSM/CF token 等)
+   照 V7 對應段同步(portal.env 走 scp+pct push,不走 pct exec echo)。
+3. GCal refresh token 重授權:跑 CT260 get_gcal_token.py(OAuth 流程),
+   新 refresh_token 寫回 gcal.env。
+4. 任何 token 值不進 argv、不進本表、不進 git(gitignore *token*/*secret* 雙保險)。
+```

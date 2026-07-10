@@ -2790,3 +2790,59 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
    raw prerouting 早於一切放行規則)。原則入檔:break-glass 通道不得依賴「沒被封」。
 ③ WG 收案連帶:缺改上段⑥「最可能=在家 WiFi 測」推測作廢,真因如上(截圖
    已傳送 296B/接收 0B+fw4 44873 計數 0 為定案證據)。
+
+## 2026-07-10 新想法 B 系列(安全縱深)五項落地(B1/B2/B3/B4/B5;B6 併入未來夜間代理)
+
+使用者裁決「12345 都按建議開工」。B6 月度 SLO 回顧=不做工具,待 C 組夜間 LLM 代理輪掛月度分支。
+
+### B1 Alertmanager 依賴抑制(CT201)
+- prometheus.yml 全 23 target 加 node 標籤(pve24×16/openwrt×3/routerpve×2/nas/switch3f)。
+- 偵察修正原設計:監控棧自己在 pve24 上,「pve24 倒」時 AM 也死、發不出洗版——真洗版源
+  =OpenWrt/Switch 倒(跨 VLAN scrape 全滅)。故只設 RouterDown(up{openwrt-system}==0
+  for 2m,critical)全域壓 TargetDown(不設 equal),不做 per-host HostDown。
+- 順手滅噪:VM300 onboot=0 裁決後 TargetDown×2+PveGuestUnexpectedStop(qemu/300)
+  每 4h 重發中、無 silence——TargetDown expr 排除兩 job、pve.yml 排除 qemu/300;
+  改後 firing 只剩 Watchdog。
+- 驗證:promtool/amtool 過、HUP 熱載、node 標籤 23/23、AM 2 條 inhibit。
+- 備份:/opt/monitoring/_backups/{prometheus,alertmanager,alerts,pve}.yml.before-b1-inhibit-*。
+
+### B4 監聽埠基線漂移(ansible 載體)
+- config-backup.yml 末段新 play:全站(all:!manual:!wazuhct)收監聽埠正規化快照
+  backups/<host>/listen-ports.txt(openwrt=busybox netstat、其餘 ss;剝 PID;
+  UDP≥32768 濾暫態,WG 44873 例外);hl-ansible-backup 成功分支加 port_drift():
+  入庫前 git diff,漂移→TG 一次性列 ±(23:30 autocommit=新基線自動接受)。
+- 播種 12 台基線(233 行)commit d99eecf;模擬漂移(+31337/-443)偵測管線驗證通過。
+- 連帶三修:inventory 補 ct205(此前完全不在 ansible 視野)、pve24 play ct_ids 補
+  204/205(pct config 備份漏)、**scan-secrets 攔到 LE 私鑰**——hl-privkey.pem 今日
+  隨 LE 部署落 CT203 /etc/caddy/certs/,被 ct203 find 撈進 backups/(未入 git);
+  修=find 排除 */certs/*+刪副本。若非本輪手動跑,今晚 23:15 排程必炸。gate 有效性實證。
+
+### B2 token 探活哨兵
+- 新 ForAI/憑證與token登記表.txt(無值;探活 10 類/登記不探 12 類/TLS 類/續期通則)。
+- 新 ~/.local/bin/hl-token-watch(cron 週一 09:10 台北):詳見監控告警 §9。
+- 首輪即踩坑修正:CF token 是帳戶級(cfat_ 前綴 53 字),/user/tokens/verify 必回
+  Invalid → 改打 /zones(壞 token=403 實測);MCSM 探活撤(CT260→VLAN70 不通+portal
+  天天在用=壞了立刻可見),轉登記表-only。
+- .gitignore *token* 誤傷本腳本 → 加 !hl-token-watch 例外。
+
+### B3 冷啟依賴 DAG+復電自檢
+- V7 新 §12:市電→Switch/AP→routerpve→VM101(OpenWrt=跨 VLAN 前置)→pve24(CT
+  startup order 100→201→102→260→無序)→DXP(最慢);手動項 VM300/CT250/PC。
+- 新 ~/.local/bin/hl-coldstart-check(@reboot+600s):13 端點單則 TG;首測校準覆蓋面
+  =CT260 合法可達域(routerpve:8006/NAS:445/portal:8088 未放行→改由監控面覆蓋,
+  routerpve 以 DNS 推定;DMZ 探 443 非 80)。實跑 13/13 全綠。
+- 刻意不用 ssh 探測(hl-lock 上鎖時會假陰性)。驗收綁待辦1h 拔線窗。
+
+### B5 Trivy 暴露面 CVE 週掃
+- trivy v0.72.0 binary 落 ~/.local/bin(gitignore 排除,150MB 不入庫)。
+- 新 ~/.local/bin/hl-trivy-watch(cron 週二 09:30 台北):暴露面 6 映像,規則與盲區
+  見監控告警 §9。首掃戰果:paperless 13 CRITICAL(imagemagick/ffmpeg/Django/nltk/
+  gnutls——文件解析面,皆等上游 rebuild/新 tag)+157 HIGH、HA 2 CRIT(Go stdlib)+82
+  HIGH、authelia/navidrome/freshrss/ntfy 0 CRIT。已記入 seen 狀態,下輪只報新增。
+- 對帳補漏:diun-images.yml 漏 freshrss(07-09 部署未同步)→ 補入+diun 重啟
+  (備份 diun-images.yml.before-freshrss-*)。vaultwarden 不在 diun/Caddyfile 視野
+  (vault.* AGH rewrite 仍在使用者手上),未入掃描集。
+
+### 過程備忘
+- ops 鑰 6h 自動上鎖到點,後段驗證改走 pve24-auto(自動化軌不受鎖影響)——設計如預期。
+- crontab 新增三行:token-watch(週一 01:10 UTC)/coldstart(@reboot+600s)/trivy(週二 01:30 UTC)。

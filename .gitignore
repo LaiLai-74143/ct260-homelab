@@ -38,6 +38,9 @@
 # --- 納管:本檔 ---
 !/.gitignore
 
+# --- 排除:第三方 binary(B5;150MB,版本見 hl-trivy-watch 檔頭) ---
+/.local/bin/trivy
+
 # --- 全域排除:秘鑰/憑證/暫存(即使位於納管目錄內) ---
 snmp-auth.yml
 __pycache__/
@@ -46,6 +49,8 @@ __pycache__/
 *.env
 *token*
 !get_gcal_token.py
+!hl-token-watch
+!憑證與token登記表.txt
 *secret*
 !scan-secrets.sh
 *credential*
