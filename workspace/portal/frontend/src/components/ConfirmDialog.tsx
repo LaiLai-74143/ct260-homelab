@@ -26,7 +26,7 @@ export default function ConfirmDialog({
       onClick={onCancel}
     >
       <div
-        className="route-fade w-full max-w-[380px] rounded-card border border-line bg-panel p-5"
+        className="dialog-in w-full max-w-[380px] rounded-card border border-line bg-panel p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-serif text-[15px] font-bold">確認執行</div>
@@ -36,13 +36,13 @@ export default function ConfirmDialog({
           <button
             autoFocus
             onClick={onCancel}
-            className="rounded-btn border border-line px-3 py-1.5 text-[12.5px] text-muted transition-colors duration-150 hover:text-text"
+            className="btn-press rounded-btn border border-line px-3 py-1.5 text-[12.5px] text-muted transition-colors duration-150 hover:text-text"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className="rounded-btn border border-amber px-3 py-1.5 text-[12.5px] text-amber transition-colors duration-150 hover:bg-amber/10"
+            className="btn-press rounded-btn border border-amber px-3 py-1.5 text-[12.5px] text-amber transition-colors duration-150 hover:bg-amber/10"
           >
             確認執行
           </button>

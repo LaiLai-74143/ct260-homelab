@@ -2,6 +2,7 @@ import { useAlerts, useBrief, useDataLag, useOverview } from '../api'
 import StatusBanner from '../components/StatusBanner'
 import BriefCard from '../components/BriefCard'
 import ModuleCard, { type ModuleCardData } from '../components/ModuleCard'
+import PageSkeleton from '../components/Skeleton'
 import { MODULES } from '../modules'
 import { SITE_GROUPS } from '../sites'
 import type { ModuleStub } from '../types'
@@ -60,17 +61,25 @@ export default function Home() {
 
   return (
     <>
-      {ov.data && <StatusBanner state={ov.data.summary.state} text={ov.data.summary.text} lag={lag} />}
-      {br.data && <BriefCard brief={br.data} />}
-      {br.isError && (
-        <div className="mb-[22px] rounded-card border border-line bg-panel p-4 text-[13.5px] text-muted">
-          晨報尚未送達(brief.json 待 CT260 投遞)。
-        </div>
+      {/* 首屏骨架(D2):overview 未到前不畫假數據(舊版首繪會閃「0 告警/M2 待接」);
+          只蓋 banner+模塊卡——下方 SITES 為靜態 import,不必等 API(審查 CONFIRMED) */}
+      {!ov.data ? (
+        <PageSkeleton banner tiles={7} />
+      ) : (
+        <>
+          <StatusBanner state={ov.data.summary.state} text={ov.data.summary.text} lag={lag} />
+          {br.data && <BriefCard brief={br.data} />}
+          {br.isError && (
+            <div className="mb-[22px] rounded-card border border-line bg-panel p-4 text-[13.5px] text-muted">
+              晨報尚未送達(brief.json 待 CT260 投遞)。
+            </div>
+          )}
+          <div className="mb-2.5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">MODULES</div>
+          <div className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
+            {cards.map((c) => <ModuleCard key={c.route} m={c} />)}
+          </div>
+        </>
       )}
-      <div className="mb-2.5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">MODULES</div>
-      <div className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
-        {cards.map((c) => <ModuleCard key={c.route} m={c} />)}
-      </div>
 
       {/* 常用網站(Homepage bookmarks 搬遷,Homepage 退役前置) */}
       <div className="mb-2.5 ml-0.5 mt-6 font-mono text-[11px] tracking-[.12em] text-muted">SITES · 常用網站</div>

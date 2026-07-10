@@ -9,6 +9,7 @@ interface ToastItem {
   id: number
   kind: 'ok' | 'err'
   text: string
+  leaving?: boolean
 }
 
 const ToastCtx = createContext<Push>(() => {})
@@ -20,7 +21,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback<Push>((kind, text) => {
     const id = ++seq.current
     setItems((s) => [...s, { id, kind, text }])
-    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), kind === 'err' ? 8_000 : 5_000)
+    // 兩相離場(D5):先標 leaving 播 220ms toast-out,再真移除;
+    // reduced-motion 下動畫被殺=原地多站 240ms,無害
+    const ttl = kind === 'err' ? 8_000 : 5_000
+    setTimeout(() => setItems((s) => s.map((t) => (t.id === id ? { ...t, leaving: true } : t))), ttl)
+    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), ttl + 240)
   }, [])
 
   return (
@@ -34,7 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((t) => (
           <div
             key={t.id}
-            className="route-fade flex max-w-[320px] items-start gap-2.5 rounded-card border border-line bg-panel px-3.5 py-2.5 text-[12.5px]"
+            className={`${t.leaving ? 'toast-out' : 'toast-in'} flex max-w-[320px] items-start gap-2.5 rounded-card border border-line bg-panel px-3.5 py-2.5 text-[12.5px]`}
           >
             <Dot state={t.kind === 'ok' ? 'ok' : 'crit'} className="mt-1" />
             <span className="min-w-0 break-words">{t.text}</span>

@@ -1,6 +1,8 @@
 import { usePower } from '../api'
 import Dot from '../components/Dot'
+import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 
 function fmtRuntime(s?: number): string {
   if (s == null) return '—'
@@ -19,6 +21,7 @@ export default function Power() {
           讀不到電力數據——檢查 BFF /api/power。
         </div>
       )}
+      {!d && !pw.isError && <PageSkeleton tiles={6} rows={1} />}
       {d?.pending && (
         // 誠實態(待辦49 決策2):數據源未接就明說 + 給出路,不隱藏、不擺假數據(§7)
         <div className="rounded-card border border-dashed border-line px-5 py-10 text-center">
@@ -35,29 +38,29 @@ export default function Power() {
               <div className="mb-1 flex items-center gap-2 text-[12px] text-muted">
                 <Dot state={d.on_battery ? 'crit' : 'ok'} />電源
               </div>
-              <div className="font-mono text-2xl font-semibold">{d.on_battery ? '電池' : '市電'}</div>
+              <div className="font-mono text-2xl font-semibold"><Num value={d.on_battery ? '電池' : '市電'} /></div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 flex items-center gap-2 text-[12px] text-muted">
                 {d.battery_low && <Dot state="crit" />}電池
               </div>
-              <div className="font-mono text-2xl font-semibold">{d.charge ?? '—'}<span className="text-[13px] font-normal text-muted">%</span></div>
+              <div className="font-mono text-2xl font-semibold"><Num value={String(d.charge ?? '—')} unit="%" /></div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 text-[12px] text-muted">估計續航</div>
-              <div className="font-mono text-2xl font-semibold">{fmtRuntime(d.runtime_s)}</div>
+              <div className="font-mono text-2xl font-semibold"><Num value={fmtRuntime(d.runtime_s)} /></div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 text-[12px] text-muted">負載</div>
-              <div className="font-mono text-2xl font-semibold">{d.load ?? '—'}<span className="text-[13px] font-normal text-muted">%</span></div>
+              <div className="font-mono text-2xl font-semibold"><Num value={String(d.load ?? '—')} unit="%" /></div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 text-[12px] text-muted">估計功耗</div>
-              <div className="font-mono text-2xl font-semibold">{d.watts ?? '—'}<span className="text-[13px] font-normal text-muted"> W</span></div>
+              <div className="font-mono text-2xl font-semibold"><Num value={String(d.watts ?? '—')} unit=" W" /></div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 text-[12px] text-muted">輸入電壓</div>
-              <div className="font-mono text-2xl font-semibold">{d.input_v ?? '—'}<span className="text-[13px] font-normal text-muted"> V</span></div>
+              <div className="font-mono text-2xl font-semibold"><Num value={String(d.input_v ?? '—')} unit=" V" /></div>
             </div>
           </div>
           <section className="rounded-card border border-line bg-panel px-4 py-3.5">

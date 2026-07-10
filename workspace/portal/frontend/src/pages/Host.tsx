@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom'
 import { grafanaUrl, useHostDetail } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import Spark from '../components/Spark'
 import type { AlertItem } from '../types'
 
@@ -45,6 +46,7 @@ export default function Host() {
           讀不到 /api/host/{name}——主機名不對或 BFF 未回應。
         </div>
       )}
+      {!d && !hd.isError && <PageSkeleton tiles={4} rows={2} />}
       {d && (
         <>
           {d.bare ? (

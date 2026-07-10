@@ -4,6 +4,7 @@ import { useActions, useAlerts } from '../api'
 import AlertActions from '../components/AlertActions'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import Timeline from '../components/Timeline'
 import type { AlertItem } from '../types'
 
@@ -47,6 +48,7 @@ export default function Alerts() {
           讀不到告警數據——檢查 BFF /api/alerts。
         </div>
       )}
+      {!al.data && !al.isError && <PageSkeleton rows={3} />}
       {al.data && firing.length === 0 && pending.length === 0 && (
         <div className="mb-2.5 flex items-center gap-3 rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px]">
           <Dot state="ok" /> 目前無 firing / pending 告警。

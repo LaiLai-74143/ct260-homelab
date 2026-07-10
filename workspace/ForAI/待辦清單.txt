@@ -890,6 +890,15 @@
     "/" 永遠查空;NAS 讀數=最滿掛載點);vm300 off_ok+「手動開機」灰點(裁決同步)。
     ★ 2026-07-10 版本鏈勘誤:本段曾落後現實(文件停在 0.8.2 待跑、實機已 0.9.1);
     重跑 082 腳本無害 no-op(錨點斷言擋下),殘留 build 映像已清。
+    【進度 2026-07-10(0.10.0 絲滑包,使用者點名 D 系列五件)】①View Transitions 真
+    crossfade(RR 6.30 viewTransition,拔 key remount 淡入閃);②九頁首屏 Skeleton
+    (拔載入中假數據首繪);③數字 count-up+值變微閃(Num.tsx);④MCSM 控制鍵樂觀更新
+    (按下秒轉「切換中」卡,體感 bug 修復;過渡態 5s 輪詢);⑤微互動 pass(按鈕壓下/
+    Bar 過渡/Toast 離場/Dialog 進場)。全 reduced-motion 相容(順手補漏 .route-fade
+    既有缺口)。審查 workflow 16 agents:3 CONFIRMED 全修+3 minor 修;mock 走查
+    12 斷言全過。版本三處同步 0.10.0;細節見 V7 §5 portal 版本史。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0100.sh
+      (分類器攔正式服務換版;體感驗收五點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

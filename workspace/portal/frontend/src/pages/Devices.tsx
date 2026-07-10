@@ -4,6 +4,7 @@ import Bar from '../components/Bar'
 import Dot from '../components/Dot'
 import GrafanaPanel from '../components/GrafanaPanel'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 
 const DEV_DASH = 'http://10.80.80.11:3002/d/homelab-overview/homelab-overview'
 // d-solo 用 uid/slug;panelId 對照 ForAI/grafana-overview-gen.py 流水號(部署腳本驗 id 存在)
@@ -23,11 +24,13 @@ export default function Devices({ embeds = true }: { embeds?: boolean }) {
           讀不到設備數據——檢查 BFF /api/overview。
         </div>
       )}
+      {!ov.data && !ov.isError && <PageSkeleton tiles={8} />}
       <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4 md:grid-cols-3 md:gap-3">
         {hosts.map((h) => (
           <Link
             key={h.slug}
             to={`/host/${h.slug}`}
+            viewTransition
             className={`block rounded-card border border-line bg-panel px-3.5 py-[13px] transition-colors duration-150 hover:border-amber ${h.up === 'unk' ? 'opacity-55' : ''}`}
           >
             <div className="mb-0.5 flex items-center gap-2">

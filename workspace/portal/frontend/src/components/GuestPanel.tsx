@@ -64,20 +64,20 @@ export default function GuestPanel() {
               <div className="flex shrink-0 gap-1.5 font-mono text-[11px]">
                 <button disabled={busy} onClick={() => run({ op: a.enabled ? 'disable' : 'enable', person: a.person },
                           `已${a.enabled ? '停用' : '啟用'}「${a.person}」`)}
-                        className="rounded-btn border border-line px-2 py-0.5 text-muted hover:text-text disabled:opacity-40">
+                        className="btn-press rounded-btn border border-line px-2 py-0.5 text-muted hover:text-text disabled:opacity-40">
                   {a.enabled ? '停用' : '啟用'}
                 </button>
                 <button disabled={busy} onClick={() => {
                           const np = prompt(`重設「${a.person}」的密碼(管制標籤號),留空取消:`)
                           if (np) run({ op: 'passwd', person: a.person, password: np }, `已重設「${a.person}」密碼`)
                         }}
-                        className="rounded-btn border border-line px-2 py-0.5 text-muted hover:text-text disabled:opacity-40">
+                        className="btn-press rounded-btn border border-line px-2 py-0.5 text-muted hover:text-text disabled:opacity-40">
                   改密碼
                 </button>
                 <button disabled={busy} onClick={() => {
                           if (confirm(`移除「${a.person}」的登入?(記賬資料保留)`)) run({ op: 'rm', person: a.person }, `已移除「${a.person}」登入`)
                         }}
-                        className="rounded-btn border border-line px-2 py-0.5 text-crit/80 hover:text-crit disabled:opacity-40">
+                        className="btn-press rounded-btn border border-line px-2 py-0.5 text-crit/80 hover:text-crit disabled:opacity-40">
                   移除
                 </button>
               </div>
@@ -98,7 +98,7 @@ export default function GuestPanel() {
                      className="rounded-btn border border-line bg-bg px-2.5 py-1.5 text-[13px] focus:border-amber focus:outline-none" />
             </div>
             <button type="submit" disabled={busy || !id.trim() || !person.trim() || !pw}
-                    className="w-full rounded-btn bg-amber py-1.5 text-[13px] font-medium text-bg disabled:opacity-40">
+                    className="btn-press w-full rounded-btn bg-amber py-1.5 text-[13px] font-medium text-bg disabled:opacity-40">
               {busy ? '處理中…' : '新增帳號'}
             </button>
           </form>

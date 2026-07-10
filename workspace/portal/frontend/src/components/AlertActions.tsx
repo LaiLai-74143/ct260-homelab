@@ -74,7 +74,7 @@ export default function AlertActions({
           key={b.action}
           disabled={busy || sentSilence}
           onClick={() => setConfirm(b)}
-          className={`rounded-btn border px-2 py-1 font-mono text-[11px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`btn-press rounded-btn border px-2 py-1 font-mono text-[11px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
             b.strong
               ? 'border-amber/60 text-amber hover:enabled:bg-amber/10'
               : 'border-line text-muted hover:enabled:border-amber hover:enabled:text-text'

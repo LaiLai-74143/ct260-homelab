@@ -21,14 +21,14 @@ function ProposalCard({ p, busy, onConfirm, onCancel }: {
         <button
           onClick={onConfirm}
           disabled={busy}
-          className="rounded-btn border border-amber px-3 py-1.5 text-[12.5px] transition-colors duration-150 hover:bg-amber/10 disabled:opacity-50"
+          className="btn-press rounded-btn border border-amber px-3 py-1.5 text-[12.5px] transition-colors duration-150 hover:bg-amber/10 disabled:opacity-50"
         >
           {busy ? '執行中…' : '確認執行'}
         </button>
         <button
           onClick={onCancel}
           disabled={busy}
-          className="rounded-btn border border-line px-3 py-1.5 text-[12.5px] text-muted transition-colors duration-150 hover:border-amber disabled:opacity-50"
+          className="btn-press rounded-btn border border-line px-3 py-1.5 text-[12.5px] text-muted transition-colors duration-150 hover:border-amber disabled:opacity-50"
         >
           取消
         </button>
@@ -149,7 +149,7 @@ export default function LifeChat() {
         <button
           onClick={send}
           disabled={chat.isPending || !input.trim()}
-          className="shrink-0 rounded-btn border border-line px-3.5 py-2 text-[13.5px] transition-colors duration-150 hover:border-amber disabled:opacity-50"
+          className="btn-press shrink-0 rounded-btn border border-line px-3.5 py-2 text-[13.5px] transition-colors duration-150 hover:border-amber disabled:opacity-50"
         >
           送出
         </button>

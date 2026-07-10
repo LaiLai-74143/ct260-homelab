@@ -34,8 +34,60 @@ body {
 .dot-crit-breathe {
   animation: breathe 2s ease-in-out infinite;
 }
+
+/* ---- 絲滑包(0.10.0)一次性動效:全部進下方 reduced-motion 殺名單 ---- */
+
+/* 路由 crossfade:View Transitions API(RR 6.30 viewTransition);
+   無 API 的瀏覽器 RR 直接切頁=優雅退化,不再用 key remount 淡入(會閃) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease;
+}
+
+/* Skeleton 骨架:載入佔位;殺動畫後退化為靜態灰塊。
+   底色用 --unk(語義 token):--line 對 panel 只有 ~1.2:1,靜態態幾乎不可見(審查 minor) */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skeleton {
+  background: var(--unk);
+  border-radius: 3px;
+  opacity: 0.55;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+/* 數據變動微閃:值變一瞬琥珀→回原色(省略 to=回元素本色) */
+@keyframes data-flash {
+  from { color: var(--amber); }
+}
+.data-flash { animation: data-flash 700ms ease-out; }
+
+/* toast 兩相:進場浮起、離場右滑淡出(forwards 停在終格,等 React 真移除) */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+.toast-in { animation: toast-in 180ms ease-out; }
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(12px); }
+}
+.toast-out { animation: toast-out 220ms ease-in forwards; }
+
+/* 確認框進場:縮放淡入 */
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.96); }
+}
+.dialog-in { animation: dialog-in 150ms ease-out; }
+
+/* 按鈕壓下感:瞬時位移非動效,reduced-motion 不需豁免 */
+.btn-press:active { transform: translateY(1px); }
+
 @media (prefers-reduced-motion: reduce) {
-  .dot-crit-breathe { animation: none; }
+  .dot-crit-breathe, .skeleton, .data-flash, .toast-in, .toast-out, .dialog-in,
+  .route-fade { animation: none !important; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
 
@@ -46,7 +98,8 @@ body {
   opacity: 0.85;
 }
 
-/* 路由切換 150ms 淡入(§6 唯二動效之一) */
+/* 首次掛載 150ms 淡入(0.10.0 起路由切換改走 View Transitions;此 class 只剩
+   Layout 首載與 kiosk 輪播在用) */
 .route-fade {
   animation: routefade 150ms ease-out;
 }

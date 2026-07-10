@@ -2902,3 +2902,25 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 使用者裁決:不升 admin、不關隱私模式,定案用法=「滑動回覆」bot 訊息說話。
 - 同場修:群組指令帶 @botname 後綴(/help@bot)剝除後再比對。
 - E2E 收案:23:52 MSG→life-chat 12s DONE(查詢類);寫入類確認鈕流程待自然使用驗證。
+
+## 2026-07-10 portal 0.10.0 絲滑包(D 系列五件)+審查修正
+- 使用者點名 D 絲滑包直接實作:View Transitions crossfade/首屏骨架/數字 count-up
+  +微閃/MCSM 控制鍵樂觀更新/微互動 pass,打包 0.10.0(原提 0.9.0,版號已被
+  0.9.0~0.9.2 佔用,順位改 0.10.0)。
+- 根因級改動:路由「閃」的來源=Layout 用 key={pathname} 整頁 remount 播單向淡入;
+  拔 key 改 RR 6.30 viewTransition(站內 Link/NavLink/nav 全帶),無 API 瀏覽器
+  優雅退化。MCSM 控制鍵「枯等」=UI 等 HTTP 返回才變化;改 onMutate 樂觀設過渡態
+  (失敗回滾),過渡態輪詢 30s→5s。
+- 部署前審查 workflow(4 鏡頭 16 agents,93.7 萬 tokens)3 CONFIRMED 全修:
+  ①Num.tsx 數值→非數值分支沒 cancelAnimationFrame,殘留 count-up 閉包會把「—」
+  蓋回過期數字(違反誠實原則)——cancel 提到 effect 頂;②.route-fade 漏出
+  reduced-motion 殺名單(0.9.2 前既有缺口,Kiosk 有 JS 防護、Layout 首載沒有);
+  ③Home 骨架 early return 誤擋靜態 SITES 區(改行內條件)。minor 修 3:count-up
+  改從畫面中繼值起跳、skeleton 靜態底色 --line→--unk(1.2:1 幾乎不可見)、
+  Security cowrie 數字補接 Num。判不修:D4 輪詢競態(2/3 票駁回——實際超時 20s
+  非 120s、onSettled 即時刷新、本地 pending 鎖;殘餘 BFF /api/game 10s TTL 快取
+  閃回窗由 5s 輪詢自癒,已入 V7 備註)。
+- 驗證:tsc+vite build 過;Playwright mock 走查 12 斷言全過(行為級:骨架先現後消、
+  樂觀更新在 HTTP 拖 3s 下仍 <800ms 轉過渡卡、startViewTransition 實被呼叫)。
+- 部署:finish-portal-0100.sh 備妥(錨點 0.9.2→0.10.0),分類器攔正式服務
+  force-recreate→交使用者在 CT260 跑;體感驗收五點寫在腳本尾註。

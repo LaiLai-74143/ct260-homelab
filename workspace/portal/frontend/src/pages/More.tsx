@@ -12,6 +12,7 @@ export default function More() {
           <Link
             key={m.key}
             to={m.route}
+            viewTransition
             className="flex items-center gap-2.5 rounded-card border border-line bg-panel px-4 py-3.5 text-sm transition-colors duration-150 hover:border-amber"
           >
             <span className="font-mono text-xs text-muted">{m.icon}</span>

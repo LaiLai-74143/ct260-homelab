@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IS_HL, useServices } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import type { ServiceItem } from '../types'
 
 /** 依存取場景(§5 可達性矩陣)決定可點連結;不可達=灰化+提示,不做死鏈。
@@ -88,6 +89,7 @@ export default function Services() {
           讀不到服務目錄——檢查 BFF /api/services。
         </div>
       )}
+      {!sv.data && !sv.isError && <PageSkeleton rows={5} />}
       {groups.map((g) => (
         <section key={g.group} className="mb-4">
           <div className="mb-2 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">{g.group.toUpperCase?.() || g.group}</div>

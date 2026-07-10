@@ -918,7 +918,8 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.8.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4,2026-07-08;
+portal        8088   portal:0.9.2 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.10.0 絲滑包已備妥待使用者部署,見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1041,7 +1042,32 @@ portal        8088   portal:0.8.1 本地 build(python:3.13.5-slim+pin;待辦49 M
               終端提示行(HL 網域終端區塊直接不渲染,只留頁尾 MCSM 面板入口);BFF 僅
               version 字串。同輪勘誤:Grafana admin 非弱密(實測 admin/admin login 401,
               env ADMIN_PASSWORD 只在首次初始化生效,詳監控告警 §7)。部署
-              finish-portal-082.sh(分類器攔 force-recreate→交使用者跑)
+              finish-portal-082.sh(分類器攔 force-recreate→交使用者跑);
+              0.9.0~0.9.2(2026-07-10):0.9.0=生活頁行程共享帳號管理面板(隨待辦50);
+              0.9.1=生活頁「近期行程」段(明日起 14 天依日分組);0.9.2=設備總覽三修
+              (openwrt 卡接 textfile 指標/dxp4800 disk mountpoint 放寬 /rootfs/
+              vm300 off_ok 手動開機灰點)——細節見待辦清單 49 進度段;
+              0.10.0(2026-07-10 施工,絲滑包 D 系列;純前端+BFF 僅 version 字串):
+              ①路由 crossfade 改 View Transitions API(react-router 6.30 viewTransition,
+              站內 Link/NavLink/nav() 全帶;拔掉 Layout key={pathname} remount 單向
+              淡入閃;無 API 瀏覽器=直接切頁優雅退化);②九頁首屏 Skeleton 骨架
+              (components/Skeleton.tsx;拔掉載入中「0 告警/M2 待接」假數據首繪;
+              Home 骨架只蓋 banner+模塊卡,靜態 SITES 區不等 API);③components/Num.tsx
+              數字 count-up 400ms+值變琥珀微閃(ModuleCard/遊戲/電力/安全大數字;
+              非數值直接切換只閃不滾;count-up 從畫面當前值起跳防連續變動跳點);
+              ④MCSM 控制鍵樂觀更新(useGameActionMutation onMutate 即設過渡態→按下
+              秒轉「切換中」卡,失敗回滾快照;過渡態輪詢 30s→5s。已知微瑕=BFF
+              /api/game 有 10s TTL 快取,onSettled 刷新偶可拿到動作前舊狀態短暫閃回,
+              5s 輪詢自癒,審查 2/3 票判不修);⑤微互動(btn-press 壓下感/Bar 寬度
+              500ms 過渡/Toast 兩相 toast-in/out 離場/確認框 dialog-in 縮放進場)。
+              全動效進 reduced-motion 殺名單(含補漏 .route-fade——0.9.2 前既有缺口,
+              Kiosk 有 JS 防護但 Layout 首載沒有);部署前審查 workflow 4 鏡頭
+              16 agents:3 CONFIRMED 全修(Num rAF 殘留覆寫新值、route-fade 漏殺、
+              Home 骨架誤擋 SITES)+minor 修 3(skeleton 靜態對比改 --unk、count-up
+              中繼值起跳、cowrie 數字補接 Num);Playwright mock 走查 12 斷言全過
+              (含「樂觀更新不等 HTTP 返回」「骨架先現後消」行為級驗證)。
+              部署 finish-portal-0100.sh(分類器攔 force-recreate→交使用者跑,
+              compose 錨點 0.9.2→0.10.0,回滾兩層同慣例)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

@@ -6,7 +6,7 @@ export default function Bar({ k, v }: { k: string; v: number | null }) {
       <span className="w-7 font-mono text-[10px] text-muted">{k}</span>
       <span className="h-1 flex-1 overflow-hidden rounded-[2px] bg-line">
         <span
-          className={`block h-full rounded-[2px] ${v >= 80 ? 'bg-warn' : 'bg-muted'}`}
+          className={`block h-full rounded-[2px] transition-[width] duration-500 ease-out ${v >= 80 ? 'bg-warn' : 'bg-muted'}`}
           style={{ width: `${Math.min(100, Math.max(0, v))}%` }}
         />
       </span>

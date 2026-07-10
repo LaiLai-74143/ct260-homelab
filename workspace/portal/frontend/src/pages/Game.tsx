@@ -3,7 +3,9 @@ import { IS_HL, useGame, useGameActionMutation } from '../api'
 import Bar from '../components/Bar'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Dot from '../components/Dot'
+import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import { useToast } from '../components/Toast'
 import type { Game as GameData } from '../types'
 
@@ -74,7 +76,7 @@ function GameControls({ d }: { d: GameData }) {
             key={k}
             disabled={busy}
             onClick={() => setConfirm({ action: k, desc: spec.desc, danger: spec.danger })}
-            className={`rounded-btn border px-3 py-1.5 font-mono text-[12px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`btn-press rounded-btn border px-3 py-1.5 font-mono text-[12px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
               strong
                 ? 'border-ok/60 text-ok hover:enabled:bg-ok/10'
                 : 'border-amber/60 text-amber hover:enabled:bg-amber/10'
@@ -129,6 +131,7 @@ export default function Game() {
           讀不到遊戲數據——檢查 BFF /api/game。
         </div>
       )}
+      {!d && !gm.isError && <PageSkeleton tiles={2} rows={2} />}
       {d && (
         <>
           <div className="mb-3.5 grid grid-cols-2 gap-2.5">
@@ -140,16 +143,17 @@ export default function Game() {
                 Minecraft 伺服器
               </div>
               <div className="font-mono text-2xl font-semibold">
-                {/* instance_state=MCSM 權威狀態;running 但 exporter down=主機異常 */}
-                {d.instance_state === 'running' && !d.server_up ? '異常'
-                  : STATE_TEXT[d.instance_state] ?? '異常'}
+                {/* instance_state=MCSM 權威狀態;running 但 exporter down=主機異常;
+                    Num 非數值不滾動、只在狀態變時微閃(含 D4 樂觀切換那一下) */}
+                <Num value={d.instance_state === 'running' && !d.server_up ? '異常'
+                  : STATE_TEXT[d.instance_state] ?? '異常'} />
               </div>
               <div className="mt-1 font-mono text-[11px] text-muted">MCSM {d.instance_state}</div>
             </div>
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 text-[12px] text-muted">在線玩家</div>
               <div className="font-mono text-2xl font-semibold">
-                {d.players_online ?? '—'}
+                <Num value={String(d.players_online ?? '—')} />
               </div>
               {d.players_online === null && (
                 <div className="mt-1 text-[11.5px] text-muted">{d.note}</div>

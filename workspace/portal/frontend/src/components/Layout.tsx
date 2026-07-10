@@ -23,13 +23,13 @@ export default function Layout() {
         // 進服務目錄;頁內的 / 聚焦由 Services 自己接手
         e.preventDefault()
         pendingG.current = false
-        nav('/m/services')
+        nav('/m/services', { viewTransition: true })
         return
       }
       if (e.key === 'g') { pendingG.current = true; return }
       if (pendingG.current) {
-        if (e.key === 'd') nav('/')
-        if (e.key === 'a') nav('/m/alerts')
+        if (e.key === 'd') nav('/', { viewTransition: true })
+        if (e.key === 'a') nav('/m/alerts', { viewTransition: true })
       }
       pendingG.current = false
     }
@@ -46,7 +46,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.9</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.10</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {
@@ -56,6 +56,7 @@ export default function Layout() {
                 key={m.key}
                 to={m.route}
                 title={m.label}
+                viewTransition
                 className={`mb-0.5 flex items-center gap-2.5 rounded-card border-l-2 px-2 py-[9px] text-sm transition-colors duration-150 xl:px-3 ${
                   on
                     ? 'border-amber bg-amber/[.07] text-text'
@@ -71,7 +72,9 @@ export default function Layout() {
       </aside>
 
       <main className="min-w-0 max-w-[1180px] flex-1 px-3.5 pb-[90px] pt-4 md:px-[26px] md:pt-[22px]">
-        <div key={pathname} className="route-fade">
+        {/* 0.10.0:拔 key={pathname} remount(單向淡入會閃)——路由切換交給
+            View Transitions crossfade;route-fade 只在首載播一次 */}
+        <div className="route-fade">
           <Outlet />
         </div>
       </main>
@@ -88,6 +91,7 @@ export default function Layout() {
             <NavLink
               key={m.key}
               to={m.route}
+              viewTransition
               className={`flex-1 pb-2 pt-2.5 text-center text-[11px] ${on ? 'text-amber' : 'text-muted'}`}
             >
               <span className="mb-px block font-mono text-[15px]">{m.icon}</span>

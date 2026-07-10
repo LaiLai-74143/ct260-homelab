@@ -79,11 +79,14 @@ export function usePower() {
   })
 }
 
+/** 過渡態(啟停中)輪詢 30s→5s,讓真實狀態快點落地(絲滑包 D4) */
+const GAME_TRANSIENT = new Set(['starting', 'stopping', 'busy'])
+
 export function useGame() {
   return useQuery<Game>({
     queryKey: ['game'],
     queryFn: () => getJson('/api/game'),
-    refetchInterval: 30_000,
+    refetchInterval: (q) => (GAME_TRANSIENT.has(q.state.data?.instance_state ?? '') ? 5_000 : 30_000),
     staleTime: 15_000,
   })
 }
@@ -93,11 +96,21 @@ export function useGame() {
     X-Requested-With=自訂 header 強制 CORS preflight,跨站惡意頁帶不了(CSRF 防護) */
 export function useGameActionMutation() {
   const qc = useQueryClient()
-  return useMutation<{ status: number; data: GameActionResult }, ActionHttpError, { action: string }>({
+  return useMutation<{ status: number; data: GameActionResult }, ActionHttpError, { action: string }, { prev?: Game }>({
     retry: 0,
     mutationFn: ({ action }) => postJson('/api/game/action', { action },
       { 'X-Requested-With': 'XMLHttpRequest' }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['game'] }) },
+    // 樂觀更新(絲滑包 D4,體感 bug 修復):按下即把 instance_state 轉過渡態,
+    // 前端立刻顯示「啟動中…」,不枯等 MCSM 往返;失敗回滾快照,settled 拉真實狀態
+    onMutate: async ({ action }) => {
+      await qc.cancelQueries({ queryKey: ['game'] })
+      const prev = qc.getQueryData<Game>(['game'])
+      const next = action === 'open' ? 'starting' : action === 'stop' ? 'stopping' : 'busy'
+      if (prev) qc.setQueryData<Game>(['game'], { ...prev, instance_state: next })
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['game'], ctx.prev) },
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['game'] }) },
   })
 }
 

@@ -4,6 +4,7 @@ import Dot from '../components/Dot'
 import GuestPanel from '../components/GuestPanel'
 import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import type { DebtTx, Life as LifeData } from '../types'
 
 function staleText(s?: number | null): string {
@@ -221,6 +222,7 @@ export default function Life() {
           讀不到生活數據——檢查 BFF /api/life。
         </div>
       )}
+      {!d && !lf.isError && <PageSkeleton rows={3} />}
       {d?.pending && (
         // 誠實態:資料是 CT260 推送的(推不是拉),還沒到就等
         <div className="rounded-card border border-dashed border-line px-5 py-10 text-center">

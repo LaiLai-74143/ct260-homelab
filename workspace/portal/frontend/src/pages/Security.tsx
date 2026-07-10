@@ -1,7 +1,9 @@
 import { grafanaUrl, useSecurity } from '../api'
 import Dot from '../components/Dot'
 import GrafanaPanel from '../components/GrafanaPanel'
+import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import PageSkeleton from '../components/Skeleton'
 import Spark from '../components/Spark'
 
 const SEC_DASH = 'http://10.80.80.11:3002/d/openwrt-portscan-autoban/openwrt-portscan-autoban'
@@ -15,7 +17,7 @@ function Tile({ label, big, unit, state }: { label: string; big: string; unit?: 
         {state && <Dot state={state} />}{label}
       </div>
       <div className="font-mono text-2xl font-semibold">
-        {big}{unit && <span className="text-[13px] font-normal text-muted">{unit}</span>}
+        <Num value={big} unit={unit} />
       </div>
     </div>
   )
@@ -34,6 +36,7 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
           讀不到安全數據——檢查 BFF /api/security。
         </div>
       )}
+      {!d && !se.isError && <PageSkeleton tiles={3} rows={2} />}
       {d && (
         <>
           <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
@@ -63,7 +66,7 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
             ) : (
               <>
                 <div className="mb-2 font-mono text-xl font-semibold">
-                  {d.cowrie.count}<span className="text-[13px] font-normal text-muted"> 次攻擊(24h)</span>
+                  <Num value={String(d.cowrie.count)} unit=" 次攻擊(24h)" />
                 </div>
                 {(d.cowrie.top_src ?? []).map((s) => (
                   <div key={s.ip} className="flex justify-between border-b border-line/60 py-1 font-mono text-[12.5px] last:border-0">
