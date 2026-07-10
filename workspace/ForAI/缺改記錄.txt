@@ -2688,3 +2688,10 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   處置:npm/pip 快取清+舊版 vscode-server/擴充/VSIX 刪(使用者授權)=釋 4.3G;pct resize 260
   rootfs +8G(local-lvm SSD,live)→ 8.7G/24G(39%)。hdd1 掛載點評估=不需要(非 log 非大宗
   冷資料);HDD-0 污染區不分配(使用者裁決)。
+【等待室體驗修正 worldfile.3 2026-07-10】使用者實測回報:①等待室不能移動只能轉視角——根因=
+  上游 StartupSessionHandler.onSpawn 呼叫 limboPlayer.disableFalling()(LimboAPI 防虛空無限
+  墜落設計,副作用=釘死玩家;虛空版看不出來,有建築就穿幫)②boss bar 走到 1/5 就進服——
+  estimatedStartupSeconds=75 純觀感參數(進度=經過/估值,封頂 95%,實際傳送靠真 ping),
+  實測 Fabric 冷啟僅 ~20s。修正:補丁加 limbo.allowMovement(true→enableFalling 放開走動)+
+  limbo.respawnBelowY(onMove 監測,掉出建築 y<40 即 teleport 拉回天台出生點,1s 防抖)
+  =worldfile.3;estimatedStartupSeconds 校準 22。部署全綠(Pasted→ready→enabled)。

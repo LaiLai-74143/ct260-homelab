@@ -26,10 +26,13 @@ worldFileOffsetX = 0
 worldFileOffsetY = 64
 worldFileOffsetZ = 0
 worldFileLightLevel = 15
+# 等待期間可走動逛房子;掉出建築(y<40,地面在 64)自動拉回天台出生點
+allowMovement = true
+respawnBelowY = 40.0
 readTimeout = 20000
 progressBar = true
-# 只驅動 boss bar 進度觀感,實際送入仍等真 ping(Fabric 冷啟實測值再校)
-estimatedStartupSeconds = 75
+# 只驅動 boss bar 進度觀感,實際送入仍等真 ping(2026-07-10 實測冷啟 ~20s,校準之)
+estimatedStartupSeconds = 22
 progressTitle = "<gold>伺服器喚醒中…</gold> <gray>(%time%s)</gray>"
 progressReadyTitle = "<green>就緒,進入中!</green>"
 
