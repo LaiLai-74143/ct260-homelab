@@ -2767,3 +2767,17 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 ⑥ WG break-glass 首測不通根因=wg0 零握手(封包未到達;WAN 規則/監聽埠皆確認正確)——
   最可能=在家 WiFi 測(endpoint 為 WAN IP,udp/44873 無 hairpin,內打外必死)。
   正確測法:關 WiFi 用行動網路+關 Tailscale(兩 VPN 都聲明 192.168.x 路由會衝突)。
+【WG 零握手根因+收尾 2026-07-10(同日第三輪)】
+① WG break-glass 首測不通真兇=portscan-autoban:手機 4G 為 CGNAT 共用出口 IP,banned_ipv4
+  (266 條,含 42.7x 台灣行動池)在 raw prerouting 先於一切丟包→fw4 44873 計數恆 0、wg 零
+  握手(手機端已傳送 296B/接收 0B、金鑰雙向核對無誤=典型「封包沒到」)。修=preraw 鏈 drop
+  前插「banned 來源仍放行 udp/44873」(比照蜜罐 22/23 豁免;WG 對無效金鑰靜默,豁免零風險;
+  break-glass 原則=救援通道不得依賴「沒被封」)+/usr/bin/portscan-autoban 建表段同步(重開機
+  持久,備份 .before-wg-exempt-*)。教訓:對外 UDP 服務上線必查 autoban 豁免,CGNAT 客戶端
+  「被別人連坐」是常態不是巧合。
+② finish-sweep-leftovers 使用者跑畢:CT203/204/205 sshd inactive ✔;pve24 孤兒 tailscaled
+  pkill 後 pgrep 仍見 PID 578096(疑 TERM 未死或多程序)→待 pkill -9 複殺確認。
+③ VM300 onboot=0(使用者裁決,qm set)——蜜罐轉手動開用,與省 RAM 意圖對齊。
+④ PC 加入 NUT 斷電關機(PC 端 Claude Code):WinNUT 2.2.8719+nut-watchdog.ps1(OB 120s;
+  詳待辦清單 ①段);登入畫面情境不涵蓋=已知限制。PC 端插曲:Claude Code 沙箱虛擬化
+  HKCU/使用者目錄寫入,首輪「看似成功實未落地」,改排程任務沙箱外執行後稽核通過。
