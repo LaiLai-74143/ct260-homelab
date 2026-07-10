@@ -1,9 +1,9 @@
 #!/bin/bash
 # finish-guest-portal-01-ct.sh — 建立 CT205 schedule(DMZ VLAN60),基礎環境 + systemd 骨架。
 #
-# 在哪跑:pve24(24Bay PVE)root 身份。SSH 到 pve24 後:
-#   sudo bash /root/finish-guest-portal-01-ct.sh
-#   (本檔由 CT260 交付到 pve24:/root/;見 handoff 說明)
+# 在哪跑:pve24(24Bay PVE),互動終端(sudo 要密碼):
+#   sudo bash /tmp/finish-guest-portal-01-ct.sh
+#   (本檔由 CT260 scp 到 pve24:/tmp/;別名使用者寫不進 /root)
 #
 # 做什麼:CTID 205 / hostname schedule / VLAN60 10.60.60.11 / 512M・1core・rootfs 4G,
 #   unprivileged;net0 的 bridge+tag 從 CT203 複製(不硬編);裝 python3、建目錄與 gp 服務帳號、

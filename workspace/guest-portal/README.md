@@ -39,10 +39,11 @@ scripts/          finish-* 部署腳本 + hl-guest / hl-write-guest / hl-guest-w
 
 **段B-1｜建 CT205（在 pve24,root）**
 ```
-# 先把腳本送到 pve24（在 CT260）:
-scp ~/workspace/guest-portal/scripts/finish-guest-portal-01-ct.sh pve24:/root/
-# 到 pve24 執行:
-ssh pve24 → sudo bash /root/finish-guest-portal-01-ct.sh
+# 先把腳本送到 pve24（在 CT260,codex 身份;別名使用者寫不進 /root → 用 /tmp）:
+scp ~/workspace/guest-portal/scripts/finish-guest-portal-01-ct.sh pve24:/tmp/
+# 到 pve24 執行(sudo 會要密碼,互動終端跑):
+ssh pve24
+sudo bash /tmp/finish-guest-portal-01-ct.sh
 ```
 建 CT205（VLAN60 10.60.60.11,512M/1core/4G,net 從 CT203 複製 bridge=vmbr0/tag=60,
 儲存 SSD-2,模板 debian-13),裝 python3、gp 服務帳號、SESSION_SECRET、systemd unit。
