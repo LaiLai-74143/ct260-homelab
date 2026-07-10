@@ -779,10 +779,10 @@ accept-routes=false:OpenWrt、24Bay PVE、DXP4800、CT260(內網節點不接受 
   24Bay:inactive+disabled ✔(但無 tailscale0 而殘留孤兒 tailscaled 程序,待清理)
   DXP:tailnet offline,但 last seen 晚於裁撤日,待 SSH 開窗核對主機端狀態
   RouterPVE:保留=break-glass 救援;★tailnet IP 現為 100.100.1.0(002-router-pve),非 V6 所載 1.21
-★ owned set 待修:ctdmz owned_v4 現={100.100.1.1,.4,.6,.7,.21}——仍含殭屍 1.21(正是「已裁 IP
-  防回收重分配」要防的對象),且未含 RouterPVE 現值 1.0 → break-glass 節點打 CT203 自身服務會被
-  input 鏈當外人擋。修法=改 CT260 ~/.config/homelab/authelia/ctdmz.nft 的 owned_v4(1.21→1.0)後
-  重載(會清空 ts_authed_v4 通行證=需重驗,屬安全預設)。
+★ owned set 已修(2026-07-10):owned_v4 殭屍 1.21→1.0(002-router-pve 現值入列;v6 實測未變
+  =fd7a:…:5c34:4f4a 沿用),ctdmz.nft 升 v3.1 重載(通行證清空重驗)。順帶盤點:netmap 現無
+  任何 ShareeNode=true 裝置(朋友 share 無活躍設備);識別法=tailscale status --json 的
+  ShareeNode 欄位 / tailscale whois <100.x>。
 ★ ctdmz.nft 起手為 delete-recreate(flush table 不清 set elements 的 bug 已修,見缺改記錄)。
 
 CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct dev0):
@@ -796,9 +796,11 @@ CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct d
     phone(蜂巢 v6)↔CT203 v6 direct。41642 v4 鏈路保留(對未來可 v4 直連的 peer 有用)。
     在家 Wi-Fi 時 --until-direct 回 via 192.168.50.x(本地直連);外出蜂巢才驗得 v6 direct。
 
-  動態閘門(nft inet ctdmz v3;/etc/nftables.d/ctdmz.nft + ctdmz-nft.service):
+  動態閘門(nft inet ctdmz v3.1;/etc/nftables.d/ctdmz.nft + ctdmz-nft.service):
     - FORWARD:媒體豁免兩條(免驗證,靠服務自身帳密):tailnet→30.3:8096 Jellyfin(含 Share node
-      朋友)、tailnet→20.70:4533 Navidrome。其餘 tailnet→內網須來源 IP ∈ @ts_authed_v4
+      朋友)、tailnet→20.70:4533 Navidrome;其後「非 @owned_v4 來源一律 drop」(v3.1
+      2026-07-10:share/未知節點結構性鎖死在媒體兩條,與 console ACL 互為獨立雙層)。
+      其餘 tailnet→內網須來源 IP ∈ @ts_authed_v4
       (timeout set)——Authelia 帳密+TOTP 過後由 ts-gate 寫入,效期到台北當日 00:00 嚴格失效;
       不符者 tcp reject / 其他 drop。tailscale0 的 IPv6 轉發一律 drop(閘門僅 v4;路由皆 v4)。
       ★ ctdmz-nft 重啟或 CT203 重開機=白名單清空(要重驗,安全預設)。
@@ -813,9 +815,16 @@ CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct d
 
   ★★ 安全模型尾註:OpenWrt 對 10.60.60.10 是「靜態 proto-all 常開」(8 條 TSGate 只匹配 saddr),
     tailnet→內網的唯一把關全在 ctdmz forward 鏈。兩個已知弱點:
-    (W1 fail-open)forward policy=accept、deny 綁 iifname tailscale0;若 ctdmz-nft.service 開機
-      載入失敗=整表消失 → 未驗證直穿內網。已補 ctdmz_gate_up 指標 + CtdmzGateDown 告警守護
-      (§10.7 + 監控告警.txt)。
+    (W1 fail-open→已封 2026-07-10)原弱點:表載入失敗=未驗證直穿。現=fail-closed 綁定:
+      ctdmz-nft.service 改 Before=tailscaled(舊 After/Wants=tailscaled 依賴方向是反的——
+      每次開機 tailscaled 先起有數秒裸窗,已一併消滅;nft iifname 按名字串匹配、介面不存在
+      也能先載表)+ tailscaled drop-in(tailscaled.service.d/10-ctdmz-failclosed.conf)
+      Requires=+After=ctdmz-nft → 表載入失敗 tailscaled 不啟動(實測:缺檔 restart→gate
+      failed+tailscaled inactive;復原=還原檔後 systemctl start tailscaled 會自動先拉閘門)。
+      連帶語意:restart/stop ctdmz-nft 傳播到 tailscaled(數秒隧道中斷+重驗;portal M3/TG
+      「重啟閘門」按鈕同此)。殘餘窗口=運行中表被手動刪(systemd 看不見)→仍靠 ctdmz_gate_up
+      + CtdmzGateDown 告警(§10.7 + 監控告警.txt)。unit 源檔副本=CT260
+      ~/.config/homelab/authelia/{ctdmz-nft.service, tailscaled-dropin-10-ctdmz-failclosed.conf}。
     (W2 主機自身不受閘門管制)ctdmz 無 output 鏈;CT203 被打穿即有 proto-all 橫移 8 內段能力。
       安全模型=「完全信任 CT203」,緩解靠 unprivileged LXC/Wazuh(★sshd 實況見 §10.7)。
       進一步收斂選項:把 8 條 proto-all 收成實際用到的目的服務埠(least-privilege,未做)。

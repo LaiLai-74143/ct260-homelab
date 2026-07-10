@@ -2700,3 +2700,23 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   ②讀條改自適應:新增 StartupHistory(ServerManager 量測「發動啟動→首次 ping 通」,滾動保留
   近 5 次,存 plugins/limboautoserver/startup-history.txt,fail-open 壞檔=無歷史);boss bar
   估值=歷史平均,無歷史退回 estimatedStartupSeconds(墊底 22s)。部署全綠。
+【DMZ tailnet 閘門加固 2026-07-10】使用者風險提問（DMZ 全網轉發＋入口失效疊加登入繞過怎麼辦）
+  →評估裁決：不新增 Tailscale 節點（角色搬家不解 W1/W2、備援已有 wg0＋RouterPVE）；OpenWrt
+  proto-all 收斂（W2 least-privilege）使用者裁「先不做」。施作三件：
+  ① W1 fail-open→fail-closed：查核發現 ctdmz-nft.service 原為 After/Wants=tailscaled——依賴
+    方向是反的，每次開機 tailscaled 先起有數秒無表裸窗（nft iifname 按名字串匹配，介面不存在
+    也能先載表，「等介面」屬多餘且有害）。改 Before=tailscaled ＋ tailscaled drop-in
+    （10-ctdmz-failclosed.conf）Requires=+After=ctdmz-nft：表載入失敗→tailscaled 不啟動。
+    實測：缺檔 restart→gate failed＋tailscaled inactive；復原=還原檔後 systemctl start
+    tailscaled 自動先拉閘門；NO-CYCLE。連帶：portal M3/TG「重啟閘門」按鈕現會彈 tailscaled
+    數秒（desc 文案未改，行為以文件為準）。
+  ② ctdmz.nft v3.1：forward 媒體豁免兩條之後插「非 @owned_v4 一律 drop」——share/未知節點
+    結構性鎖死在 Jellyfin/Navidrome，為 console ACL（autogroup:shared 僅 8096）之外完全在
+    本地掌握的第二層。實測 netmap 現無 ShareeNode=true 裝置=零現役影響。
+  ③ owned_v4 殭屍修正：1.21→1.0（002-router-pve 現值；v6 實測未變沿用）。
+  驗證全綠：restart 傳播（tailscaled ActiveEnterTimestamp 跟動）、fail-closed、ctdmz_gate_up=1、
+  Jellyfin 豁免綁定=1（測試窗口<30s，未觸 CtdmzGateDown for:2m）。
+  回滾：pct snapshot 203 before-failclosed-20260710＋CT203 /root/_backups/{ctdmz.nft,
+  ctdmz-nft.service}.before-*＋CT260 ~/_backups/ctdmz.nft.before-v31-20260710。
+  源檔 SoT：CT260 ~/.config/homelab/authelia/{ctdmz.nft, ctdmz-nft.service,
+  tailscaled-dropin-10-ctdmz-failclosed.conf}。
