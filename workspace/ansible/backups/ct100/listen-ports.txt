@@ -1,0 +1,9 @@
+tcp 0.0.0.0:25580 python3
+tcp [::1]:25 master
+tcp 127.0.0.1:25 master
+tcp *:22 sshd
+tcp *:23333 node
+tcp *:24444 node
+tcp *:43271 promtail
+tcp *:9080 promtail
+tcp *:9100 prometheus-node

@@ -1,0 +1,14 @@
+tcp 0.0.0.0:1514 docker-proxy
+tcp 0.0.0.0:1515 docker-proxy
+tcp 0.0.0.0:443 docker-proxy
+tcp 0.0.0.0:55000 docker-proxy
+tcp 0.0.0.0:9200 docker-proxy
+tcp [::1]:25 master
+tcp 127.0.0.1:25 master
+tcp [::]:1514 docker-proxy
+tcp [::]:1515 docker-proxy
+tcp [::]:443 docker-proxy
+tcp [::]:55000 docker-proxy
+tcp [::]:9200 docker-proxy
+udp 0.0.0.0:514 docker-proxy
+udp [::]:514 docker-proxy

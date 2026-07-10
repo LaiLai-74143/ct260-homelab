@@ -1,0 +1,13 @@
+tcp [::1]:25 master
+tcp 127.0.0.1:20241 cloudflared
+tcp 127.0.0.1:25 master
+tcp 127.0.0.1:40895 containerd
+tcp 127.0.0.1:6379 redis-server
+tcp 127.0.0.1:9091 authelia
+tcp 127.0.0.1:9092 python3
+tcp *:443 caddy
+tcp *:8082 caddy
+tcp *:80 caddy
+tcp *:9100 node_exporter
+tcp *:9959 authelia
+udp *:443 caddy

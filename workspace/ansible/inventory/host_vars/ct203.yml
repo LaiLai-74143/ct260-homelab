@@ -1,3 +1,5 @@
 # ct-dmz-proxy:Caddy + authelia compose(排除 .before-* 歷史檔)
 # 排除 authelia configuration.yml / users 檔(jwt/session secrets、密碼雜湊集中檔)
-backup_find_cmd: "find /opt/authelia -maxdepth 2 -name 'docker-compose.yml' 2>/dev/null; find /etc/caddy -maxdepth 2 -type f -size -256k ! -name '*.before*' ! -name '*before-*' 2>/dev/null"
+# 排除 /etc/caddy/certs/(2026-07-10:LE hl-privkey.pem 落此,scan-secrets 攔到;
+# 憑證 SoT=CT260 acme.sh,不需備份)
+backup_find_cmd: "find /opt/authelia -maxdepth 2 -name 'docker-compose.yml' 2>/dev/null; find /etc/caddy -maxdepth 2 -type f -size -256k ! -name '*.before*' ! -name '*before-*' ! -path '*/certs/*' 2>/dev/null"

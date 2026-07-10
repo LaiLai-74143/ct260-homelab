@@ -1,0 +1,15 @@
+tcp 0.0.0.0:4533 docker-proxy
+tcp 0.0.0.0:8000 docker-proxy
+tcp 0.0.0.0:8080 docker-proxy
+tcp 0.0.0.0:8082 docker-proxy
+tcp 0.0.0.0:8123 python3
+tcp 127.0.0.1:18554 go2rtc
+tcp 127.0.0.1:25 master
+tcp *:18555 go2rtc
+tcp *:22 sshd
+tcp *:39243 promtail
+tcp [::]:8123 python3
+tcp *:9080 promtail
+tcp *:9100 node_exporter
+udp 0.0.0.0:1900 python3
+udp 0.0.0.0:5353 python3

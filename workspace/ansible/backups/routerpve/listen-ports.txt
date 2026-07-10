@@ -1,0 +1,16 @@
+tcp 0.0.0.0:111 rpcbind
+tcp 0.0.0.0:22 sshd
+tcp 100.100.1.0:35759 tailscaled
+tcp [::]:111 rpcbind
+tcp [::1]:25 master
+tcp 127.0.0.1:25 master
+tcp 127.0.0.1:85 pvedaemon worke
+tcp [::]:22 sshd
+tcp *:3128 spiceproxy work
+tcp *:8006 pveproxy worker
+tcp *:9100 prometheus-node
+tcp [fd7a:115c:a1e0::5c34:4f4a]:61210 tailscaled
+udp 0.0.0.0:111 rpcbind
+udp [::]:111 rpcbind
+udp 127.0.0.1:323 chronyd
+udp [::1]:323 chronyd

@@ -151,3 +151,46 @@
         sed -i -E "s/^(\s*option (private_key|preshared_key)) '.*'/\1 '**REDACTED**'/" \
           {{ backup_root }}/openwrt/etc/config/network 2>/dev/null || true
       changed_when: true
+
+- name: 監聽埠基線收集(B4 漂移偵測,2026-07-10)
+  # 正規化=「proto local:port proc」排序去重,PID 剝除;UDP 高位埠(>=32768)屬
+  # client/暫態 socket,濾掉防日更假 diff(例外:44873=WG break-glass 常駐監聽)。
+  # pve24 無 root(sudo 白名單無 ss):埠全列但 proc 名多為 '-',逐日穩定即可。
+  # 漂移偵測在 hl-ansible-backup:入庫前 git diff listen-ports.txt,有差→TG 一次性
+  # 告警;23:30 hl-git-autocommit 入庫=新基線自動接受。VM300 蜜罐維持不入(污染區)。
+  hosts: all:!manual:!wazuhct
+  gather_facts: false
+  vars:
+    backup_root: "{{ playbook_dir }}/../backups"
+    listen_cmd_ss: |
+      ss -tulnpH 2>/dev/null | awk '{
+        proc="-";
+        if (match($0, /users:\(\("[^"]+"/)) proc=substr($0, RSTART+9, RLENGTH-10);
+        n=split($5, a, ":"); port=a[n];
+        if ($1 ~ /^udp/ && port+0 >= 32768 && port+0 != 44873) next;
+        print $1, $5, proc
+      }' | sort -u
+    listen_cmd_netstat: |
+      netstat -tulnp 2>/dev/null | awk '/^(tcp|udp)/{
+        prog=$NF; sub(/^[0-9]+\//, "", prog);
+        n=split($4, a, ":"); port=a[n];
+        if ($1 ~ /^udp/ && port+0 >= 32768 && port+0 != 44873) next;
+        print $1, $4, prog
+      }' | sort -u
+  tasks:
+    - name: 收集監聽埠(openwrt=busybox netstat,其餘=iproute2 ss)
+      ansible.builtin.raw: "{{ listen_cmd_netstat if inventory_hostname == 'openwrt' else listen_cmd_ss }}"
+      register: ports
+      changed_when: false
+    - name: 建目錄
+      ansible.builtin.file:
+        path: "{{ backup_root }}/{{ inventory_hostname }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+    - name: 存基線
+      ansible.builtin.copy:
+        content: "{{ (ports.stdout_lines | map('trim') | select() | join('\n')) ~ '\n' }}"
+        dest: "{{ backup_root }}/{{ inventory_hostname }}/listen-ports.txt"
+        mode: "0644"
+      delegate_to: localhost

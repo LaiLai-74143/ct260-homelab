@@ -1,0 +1,6 @@
+tcp [::1]:25 master
+tcp 127.0.0.1:25 master
+tcp *:22 sshd
+tcp *:25565 java
+tcp *:9100 prometheus-node
+udp *:19132 java
