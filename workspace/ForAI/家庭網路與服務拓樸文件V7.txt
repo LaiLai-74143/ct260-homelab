@@ -30,7 +30,7 @@
 設定類(V6 寫錯或未同步,現實如此):
 - trusted zone input=REJECT(V6 表誤寫 ACCEPT)。
 - OpenWrt 25.12.4 r32933 / kernel 6.12.87(V6 主敘述停在 25.12.2 / 6.12.74)。
-- RouterPVE tailnet IP=100.100.1.0(非 1.21);CT203 owned_v4 仍含殭屍 1.21、未含 1.0
+- RouterPVE tailnet IP=100.100.1.0(非 1.21);CT203 owned_v4 殭屍已修(2026-07-10,見 §4.8)
   → break-glass 節點會被 CT203 input 鏈當外人擋,待修(§4.8)。
 - CT203/CT204「無 SSH」不成立:CT203 sshd active 於 *:22、CT204 ssh.socket active 於 *:22
   (皆無 authorized_keys、root 密碼鎖,實際無登入途徑,但 listener 存在;§10.7/§10.8)。
@@ -1630,11 +1630,11 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
 - CT202 systemd-journald 故障(243/CREDENTIALS 自 2026-07-01)journal 空轉待修。
 - CT102 promtail 未鋪(要收再比照 CT100 模式)。
 - Nas(24Bay cifs storage)命名偏舊,待整理。
-- DXP4800 NAS 備份盤點待 SSH 開窗後補(見備份索引)。
+- ✔DXP4800 NAS 備份盤點——已結(2026-07-09 待辦37,入備份索引 §1/§5)。
 2026-07-07 稽核新增:
 - VM300 stopped(onboot=1)——查明原因並決定是否重啟。
-- DXP node_exporter down(connection refused)——開窗檢查 user systemd linger。
-- ctdmz owned_v4:殭屍 100.100.1.21 移除、補 RouterPVE 現值 100.100.1.0(break-glass 修復)。
+- ✔DXP node_exporter down——已根治(2026-07-09 待辦37:base unit 綁 legacy IP+textfile 灌爆,finish-37-exporter.sh 全綠)。
+- ✔ctdmz owned_v4 殭屍——已修(2026-07-10:1.21→1.0,ctdmz.nft v3.1,見 §4.8)。
 - CT203 sshd / CT204 ssh.socket 監聽 *:22——裁決關閉或文件定案接受。
 - pve24 孤兒 tailscaled 程序清理。
 - DMZ DHCPv4 正式停用(uci dhcp.dmz),消除單層防護。
