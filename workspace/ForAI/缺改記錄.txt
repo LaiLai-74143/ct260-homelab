@@ -2781,3 +2781,12 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 ④ PC 加入 NUT 斷電關機(PC 端 Claude Code):WinNUT 2.2.8719+nut-watchdog.ps1(OB 120s;
   詳待辦清單 ①段);登入畫面情境不涵蓋=已知限制。PC 端插曲:Claude Code 沙箱虛擬化
   HKCU/使用者目錄寫入,首輪「看似成功實未落地」,改排程任務沙箱外執行後稽核通過。
+
+### 2026-07-10 收尾三確認(使用者回報)
+① pve24 孤兒 tailscaled:pkill -9 複殺完成,pgrep gone(V7 §4.4 打掃窗段 ✔)。
+② WireGuard break-glass:autoban udp/44873 豁免上線後,使用者 4G 重測「正常生效」
+   ——待辦24 全鏈收案(a-d 全✔)。首測零握手真兇=portscan-autoban banned_ipv4
+   CGNAT 連坐(手機行動網路出口 IP 與陌生人共用,池友掃黑即整 IP 連坐 6h;
+   raw prerouting 早於一切放行規則)。原則入檔:break-glass 通道不得依賴「沒被封」。
+③ WG 收案連帶:缺改上段⑥「最可能=在家 WiFi 測」推測作廢,真因如上(截圖
+   已傳送 296B/接收 0B+fw4 44873 計數 0 為定案證據)。

@@ -683,7 +683,7 @@ Allow-DMZProxy-TSGate-To-Router-Web  dmz/10.60.60.10 -> router input tcp/80,443,
   allow_pc40_router_ssh);新增 Block-Honeypot-To-WAN(REJECT,蜜罐出網不再依賴 zone 預設);
   dhcp.dmz.ignore='1'。回歸=Kuma 全綠+portal 200+VLAN40-Hairpin 存活(PC 端 MC 公網名連線
   請使用者順手驗一次)。CT203/204/205 sshd 停用 ✔(2026-07-10 使用者跑 finish-sweep-
-  leftovers.sh,三台 inactive);pve24 孤兒 tailscaled ◐=pkill 後 pgrep 仍見 PID(待 -9 複殺)。
+  leftovers.sh,三台 inactive);pve24 孤兒 tailscaled ✔(2026-07-10 使用者 pkill -9 複殺,pgrep gone)。
 ```
 
 ### 4.5 portscan-autoban
@@ -694,7 +694,8 @@ NFT:inet portscanban / banned_ipv4(raw prerouting 封鎖)
 Honeypot exempt:WAN tcp/22,23(被封來源仍只能進 VM300 Cowrie)
 WG exempt:WAN udp/44873(2026-07-10:break-glass 不受 autoban 影響——手機 4G=CGNAT,
   共用出口 IP 被池友掃黑即封,首測 wg 零握手根因;WG 對無效金鑰靜默,豁免零風險。
-  live 規則+/usr/bin/portscan-autoban 建表段皆已加,備份 .before-wg-exempt-*)
+  live 規則+/usr/bin/portscan-autoban 建表段皆已加,備份 .before-wg-exempt-*;
+  豁免後使用者 4G 重測 ✔「正常生效」=待辦24 全鏈收案)
 Tripwire 排除:TCP 44444,49169 / UDP 43915,44444
 Metrics:http://10.80.80.1:9105/metrics.txt   每日 reset:台灣午夜(CST-8)
 ```

@@ -544,17 +544,18 @@
 23. 用戶評估後刪除
 
 -------------------------------------------------------------------------------
-◐24. WireGuard break-glass —— 伺服端完成(2026-07-08),握手驗證待使用者手機匯入
+✔24. WireGuard break-glass —— 全鏈驗通(2026-07-10 使用者 4G 實測「正常生效」)
     a✔ wg0=10.66.0.1/24 udp/44873 + Allow-WAN-WireGuard-44873(family ipv4)。
        ★偏離:本機為 apk 世代無 opkg;netifd 啟動早於 proto 安裝→拉不起 wg0,
        因遊戲在線不跑 network restart(PPPoE 重撥+介面閃斷),手動 ip link/wg set
        拉起與 uci 同值,重開機後 netifd 原生接管;zone 加顯式 device wg0(fw4 實測綁上)。
     b✔ zone wg input/forward REJECT+8 條具名放行(router:52438/53/443;forward:
        pve24 8006+22、CT260 22、RouterPVE 8006+22)——「必需項」取管理面最小集。
-    c◐ phone peer 已建(preshared+AllowedIPs=10.66/24+infra+servers,DNS=10.66.0.1
-       AGH 綁 0.0.0.0):conf 在 CT260 ~/.config/homelab/wg-phone-breakglass.conf,
-       ★待使用者:手機 WireGuard app 匯入(QR:ssh openwrt "qrencode -t ansiutf8
-       < /etc/wireguard/phone.conf")→行動網路實測握手+ssh pve24 一次回報。
+    c✔ phone peer 已建+手機匯入+4G 實測通(2026-07-10):conf 在 CT260
+       ~/.config/homelab/wg-phone-breakglass.conf。首測零握手根因=portscan-autoban
+       banned_ipv4 CGNAT 連坐(4G 出口 IP 池友掃黑即封,raw prerouting 比一切早);
+       修=udp/44873 break-glass 豁免(live+建表段持久,V7 §4.5)。教訓:救援通道
+       不得依賴「沒被封」。
     d✔ 常態啟用不使用+季檢紀律入 V7 §4.9;三設定檔雙側備份;uci wg 私鑰=ansible
        backup redact+scan-secrets 1b 雙保險(明文不入庫)。
 
