@@ -12,9 +12,9 @@ level = "INFO"
 dimension = "OVERWORLD"
 gameMode = "ADVENTURE"
 worldTime = 1000
-# 出生點=Modern House 下層地板(貼圖原點 0,64,0;中心柱可站面:schem y=31 屋頂/14 主層/5 下層;
-# 使用者 2026-07-10:屋頂→主層→再下一層,現=schem y=5 圓石層 → 世界站面 70)
-posX = 38.5
+# 出生點=使用者親選(2026-07-10 遊戲內 F3 定點 52 70 59,下層石磚地板;
+# 貼圖原點 0,64,0;中心柱可站面參考:schem y=31 屋頂/14 主層/5 下層)
+posX = 52.5
 posY = 70.2
 posZ = 59.5
 yaw = 0.0
