@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom'
 import { grafanaUrl, useHostDetail } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import Spark from '../components/Spark'
 import type { AlertItem } from '../types'
@@ -54,12 +55,12 @@ export default function Host() {
               此機為 textfile/SNMP/pve 視角數據源,無 node_exporter 指標圖。
             </div>
           ) : (
-            <div className="mb-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <Reveal stagger className="mb-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard label="CPU" unit="%" data={d.metrics_6h.cpu} />
               <MetricCard label="RAM" unit="%" data={d.metrics_6h.mem} />
               <MetricCard label="DISK /" unit="%" data={d.metrics_6h.disk} />
               <MetricCard label="NET" unit=" KB/s" data={d.metrics_6h.net} />
-            </div>
+            </Reveal>
           )}
 
           {d.services.length > 0 && (
@@ -73,6 +74,7 @@ export default function Host() {
             </section>
           )}
 
+          <Reveal>
           <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">相關告警</div>
             {d.related_alerts.length === 0 && (
@@ -89,7 +91,9 @@ export default function Host() {
               </div>
             ))}
           </section>
+          </Reveal>
 
+          <Reveal>
           <section className="rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">日誌尾巴(近 15 分鐘,Loki)</div>
             {d.log_tail === null && (
@@ -111,6 +115,7 @@ export default function Host() {
               </div>
             )}
           </section>
+          </Reveal>
         </>
       )}
     </>

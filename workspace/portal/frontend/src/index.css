@@ -83,11 +83,54 @@ body {
 /* 按鈕壓下感:瞬時位移非動效,reduced-motion 不需豁免 */
 .btn-press:active { transform: translateY(1px); }
 
+/* ---- 滾動進場(0.11.0):板塊滑入視口一次性 fade+上滑;
+   class 由 Reveal.tsx 掛(reduced-motion/kiosk 時整組不掛,內容直接可見,
+   絕不出現「JS 沒跑=內容藏死」) ---- */
+/* 進場走 animation 而非 transition:card-hover 的 transition 簡寫(同優先度、
+   檔案序在後)會整組蓋掉 transition 型進場(0.11.0 審查 CONFIRMED——首頁卡
+   淡入全滅);animation 與 transition 是獨立機制,互不搶簡寫 */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(12px); }
+}
+.reveal { opacity: 0; }
+.reveal.reveal-in {
+  opacity: 1;
+  animation: reveal-up 0.5s ease backwards;
+}
+/* stagger 版:容器不動,網格子元素級聯跟進(最多 12 格,之後同 12 檔);
+   backwards=延遲期間停在 from 態,不會先閃現再播 */
+.reveal-stagger > * { opacity: 0; }
+.reveal-stagger.reveal-in > * {
+  opacity: 1;
+  animation: reveal-up 0.45s ease backwards;
+}
+.reveal-stagger.reveal-in > *:nth-child(2) { animation-delay: 45ms; }
+.reveal-stagger.reveal-in > *:nth-child(3) { animation-delay: 90ms; }
+.reveal-stagger.reveal-in > *:nth-child(4) { animation-delay: 135ms; }
+.reveal-stagger.reveal-in > *:nth-child(5) { animation-delay: 180ms; }
+.reveal-stagger.reveal-in > *:nth-child(6) { animation-delay: 225ms; }
+.reveal-stagger.reveal-in > *:nth-child(7) { animation-delay: 270ms; }
+.reveal-stagger.reveal-in > *:nth-child(8) { animation-delay: 315ms; }
+.reveal-stagger.reveal-in > *:nth-child(9) { animation-delay: 360ms; }
+.reveal-stagger.reveal-in > *:nth-child(10) { animation-delay: 405ms; }
+.reveal-stagger.reveal-in > *:nth-child(11) { animation-delay: 450ms; }
+.reveal-stagger.reveal-in > *:nth-child(n+12) { animation-delay: 495ms; }
+
+/* 卡片互動(0.11.0):hover 浮起 2px、按下回彈——撒在可點卡片/連結上 */
+.card-hover {
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.card-hover:hover { transform: translateY(-2px); }
+.card-hover:active { transform: translateY(0) scale(0.99); }
+
 @media (prefers-reduced-motion: reduce) {
   .dot-crit-breathe, .skeleton, .data-flash, .toast-in, .toast-out, .dialog-in,
   .route-fade { animation: none !important; }
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
+  /* reveal 的隱藏態由 Reveal.tsx 在 reduced 時整組不掛;這裡雙保險直接顯示 */
+  .reveal, .reveal-stagger > * { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .card-hover:hover, .card-hover:active { transform: none; }
   * { transition-duration: 0.01ms !important; }
 }
 

@@ -2,6 +2,7 @@ import { usePower } from '../api'
 import Dot from '../components/Dot'
 import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 
 function fmtRuntime(s?: number): string {
@@ -33,7 +34,7 @@ export default function Power() {
       )}
       {d && !d.pending && (
         <>
-          <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
+          <Reveal stagger className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
             <div className="rounded-card border border-line bg-panel px-4 py-3.5">
               <div className="mb-1 flex items-center gap-2 text-[12px] text-muted">
                 <Dot state={d.on_battery ? 'crit' : 'ok'} />電源
@@ -62,7 +63,8 @@ export default function Power() {
               <div className="mb-1 text-[12px] text-muted">輸入電壓</div>
               <div className="font-mono text-2xl font-semibold"><Num value={String(d.input_v ?? '—')} unit=" V" /></div>
             </div>
-          </div>
+          </Reveal>
+          <Reveal>
           <section className="rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">近 7 天事件</div>
             {(d.events_7d ?? []).length === 0 && <div className="text-[13px] text-muted">無事件。</div>}
@@ -72,6 +74,7 @@ export default function Power() {
               </div>
             ))}
           </section>
+          </Reveal>
         </>
       )}
     </>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IS_HL, useServices } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import type { ServiceItem } from '../types'
 
@@ -90,12 +91,15 @@ export default function Services() {
         </div>
       )}
       {!sv.data && !sv.isError && <PageSkeleton rows={5} />}
+      {/* stagger 打在 groups 容器:過濾打字時容器已 shown,新出現的組不重播 */}
+      <Reveal stagger>
       {groups.map((g) => (
         <section key={g.group} className="mb-4">
           <div className="mb-2 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">{g.group.toUpperCase?.() || g.group}</div>
           {g.items.map((i) => <Row key={i.name} i={i} />)}
         </section>
       ))}
+      </Reveal>
       {sv.data && groups.length === 0 && (
         <div className="rounded-card border border-dashed border-line p-6 text-center text-[13.5px] text-muted">
           沒有符合「{q}」的服務。

@@ -918,8 +918,8 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.9.2 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.10.0 絲滑包已備妥待使用者部署,見版本史尾;
+portal        8088   portal:0.10.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.11.0 滾動進場已備妥待使用者部署,見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1067,7 +1067,23 @@ portal        8088   portal:0.9.2 本地 build(python:3.13.5-slim+pin;待辦49 M
               中繼值起跳、cowrie 數字補接 Num);Playwright mock 走查 12 斷言全過
               (含「樂觀更新不等 HTTP 返回」「骨架先現後消」行為級驗證)。
               部署 finish-portal-0100.sh(分類器攔 force-recreate→交使用者跑,
-              compose 錨點 0.9.2→0.10.0,回滾兩層同慣例)
+              compose 錨點 0.9.2→0.10.0,回滾兩層同慣例;2026-07-10 使用者已跑
+              全綠,11 端點 200);
+              0.11.0(2026-07-10 施工,使用者點名「展示頁式滾動過渡+互動性」):
+              ①滾動進場——components/Reveal.tsx(IntersectionObserver 一次性,
+              rootMargin -8%/threshold .05,unobserve 不重播),板塊滑入視口
+              fade+上滑,網格卡片級聯(nth-child 遞增 animation-delay 45ms/格,
+              12 格封頂);豁免三態(reduced-motion/kiosk 輪播/無 IO)=整組不掛
+              class 內容直接可見,不存在 JS 沒跑內容藏死;StatusBanner 告警橫幅
+              與 Alerts firing 列刻意不進場(緊急資訊不延遲);②卡片互動
+              card-hover(hover 浮起 2px+按壓回彈,撒在模塊卡/主機卡/入口連結)。
+              ★不變式:ConfirmDialog(fixed 全屏遮罩)掛載點(GameControls/
+              AlertActions)不可套 Reveal——transform≠none 祖先會截斷 fixed
+              定位(審查 minor,已註解釘住)。審查 CONFIRMED 修 1:card-hover
+              的 transition 簡寫同優先度整組蓋掉 stagger 的 transition 型進場
+              (首頁卡淡入全滅)→進場改 CSS animation(與 transition 互不搶簡寫);
+              走查加「動畫真的在播」斷言(computed animationName)防同類回歸。
+              部署 finish-portal-0110.sh(錨點 0.10.0→0.11.0)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

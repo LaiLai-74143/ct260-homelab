@@ -4,6 +4,7 @@ import Bar from '../components/Bar'
 import Dot from '../components/Dot'
 import GrafanaPanel from '../components/GrafanaPanel'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 
 const DEV_DASH = 'http://10.80.80.11:3002/d/homelab-overview/homelab-overview'
@@ -25,13 +26,13 @@ export default function Devices({ embeds = true }: { embeds?: boolean }) {
         </div>
       )}
       {!ov.data && !ov.isError && <PageSkeleton tiles={8} />}
-      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4 md:grid-cols-3 md:gap-3">
+      <Reveal stagger className="grid grid-cols-2 gap-2.5 xl:grid-cols-4 md:grid-cols-3 md:gap-3">
         {hosts.map((h) => (
           <Link
             key={h.slug}
             to={`/host/${h.slug}`}
             viewTransition
-            className={`block rounded-card border border-line bg-panel px-3.5 py-[13px] transition-colors duration-150 hover:border-amber ${h.up === 'unk' ? 'opacity-55' : ''}`}
+            className={`card-hover block rounded-card border border-line bg-panel px-3.5 py-[13px] hover:border-amber ${h.up === 'unk' ? 'opacity-55' : ''}`}
           >
             <div className="mb-0.5 flex items-center gap-2">
               <Dot state={h.up} />
@@ -45,12 +46,13 @@ export default function Devices({ embeds = true }: { embeds?: boolean }) {
             <div className="mt-[7px] font-mono text-[10px] text-muted">uptime {h.uptime}</div>
           </Link>
         ))}
-      </div>
+      </Reveal>
 
       {/* 嵌入圖表(2026-07-09 使用者點名改版):拔掉現況型 bargauge,只留趨勢折線。
           上方主機卡牆已呈現即時值;此區看走勢——CPU/記憶體/磁碟讀寫/網路/溫度,沿
           dashboard 預設 6h。panelId 對照 grafana-overview-gen.py 流水號(生成器檔頭有警語)*/}
       {embeds && (
+      <Reveal>
       <section className="mt-3.5">
         <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">
           GRAFANA 趨勢圖表(6 小時;空白=SSO 未登入或連不到 Grafana)
@@ -64,11 +66,12 @@ export default function Devices({ embeds = true }: { embeds?: boolean }) {
           <GrafanaPanel dash={DEV_SOLO} panelId={20} title="溫度趨勢" h={280} />
         </div>
       </section>
+      </Reveal>
       )}
 
       {/* 完整視圖入口:即時 bargauge 比較、網路傳送/swap 趨勢與設備總覽表在 dashboard 本尊 */}
       <a href={grafanaUrl(DEV_DASH)} target="_blank" rel="noreferrer"
-         className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+         className="card-hover mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] hover:border-amber">
         設備圖表與趨勢(CPU/記憶體/磁碟/溫度)→ <span className="font-mono text-[12px] text-muted">Grafana 設備總覽 (Homelab) ↗</span>
       </a>
     </>

@@ -5,6 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Dot from '../components/Dot'
 import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import { useToast } from '../components/Toast'
 import type { Game as GameData } from '../types'
@@ -164,10 +165,11 @@ export default function Game() {
             </div>
           </div>
 
-          {/* 控制鍵(2026-07-09 使用者點名):走 MCSM 優雅開/停/重啟,非粗暴殺進程 */}
+          {/* 控制鍵(2026-07-09 使用者點名):走 MCSM 優雅開/停/重啟,非粗暴殺進程。
+              不可套 Reveal:內含 ConfirmDialog(fixed 全屏遮罩)仰賴無 transform 祖先 */}
           <GameControls d={d} />
 
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+          <Reveal stagger className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
             {d.hosts.map((h) => (
               <div key={h.name} className={`rounded-card border border-line bg-panel px-3.5 py-[13px] ${h.up ? '' : 'opacity-55'}`}>
                 <div className="mb-2 flex items-center gap-2">
@@ -178,14 +180,14 @@ export default function Game() {
                 <Bar k="mem" v={h.mem} />
               </div>
             ))}
-          </div>
+          </Reveal>
 
           {/* MCSM 網頁終端機(2026-07-09 使用者點名):LAN 嵌入,portal.hl 連結 */}
           <GameTerminal d={d} />
 
           {/* 唯一 MCSM 入口:面板(實例管理+網頁終端都在裡面);PC40 直達,手機發證後可達 */}
           <a href={MCSM_BASE} target="_blank" rel="noreferrer"
-             className="mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+             className="card-hover mt-3.5 block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] hover:border-amber">
             MCSManager 面板(實例管理／網頁終端)→ <span className="font-mono text-[12px] text-muted">10.70.70.20:23333 ↗</span>
           </a>
         </>

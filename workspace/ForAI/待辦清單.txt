@@ -897,8 +897,15 @@
     Bar 過渡/Toast 離場/Dialog 進場)。全 reduced-motion 相容(順手補漏 .route-fade
     既有缺口)。審查 workflow 16 agents:3 CONFIRMED 全修+3 minor 修;mock 走查
     12 斷言全過。版本三處同步 0.10.0;細節見 V7 §5 portal 版本史。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0100.sh
-      (分類器攔正式服務換版;體感驗收五點見腳本尾註)→ 反饋。
+    ▶ ✔ 0.10.0 已上線(2026-07-10 使用者親跑全綠;手機初驗「看不出效果」根因=
+      5% 電量省電模式觸發 prefers-reduced-motion → 全動效按設計靜默,屬預期)。
+    【進度 2026-07-10(0.11.0 滾動進場,使用者點名「展示頁式過渡+互動性」)】
+    ①Reveal.tsx 滾動進場(板塊滑入視口 fade+上滑、網格卡片級聯;reduced-motion/
+    kiosk 豁免=內容直接可見;告警橫幅/firing 列不延遲);②card-hover 卡片互動
+    (hover 浮起+按壓回彈)。審查 CONFIRMED 修 1(card-hover transition 簡寫蓋掉
+    stagger 進場→改 CSS animation 脫鉤);走查 15 斷言全過(含「動畫真的在播」)。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0110.sh
+      (分類器攔正式服務換版;體感驗收三點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

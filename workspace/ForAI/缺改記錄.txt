@@ -2924,3 +2924,20 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   樂觀更新在 HTTP 拖 3s 下仍 <800ms 轉過渡卡、startViewTransition 實被呼叫)。
 - 部署:finish-portal-0100.sh 備妥(錨點 0.9.2→0.10.0),分類器攔正式服務
   force-recreate→交使用者在 CT260 跑;體感驗收五點寫在腳本尾註。
+
+## 2026-07-10 portal 0.11.0 滾動進場+互動性(使用者點名)+0.10.0 上線收案
+- 0.10.0 使用者親跑 finish-portal-0100.sh 全綠(11 端點 200、portal:0.10.0 Up);
+  手機初驗「看不出效果」根因=5% 電量省電模式 → Android 關系統動畫 → Chrome 回報
+  prefers-reduced-motion:reduce → 全動效按設計靜默。教訓:動效類驗收先確認
+  裝置省電/減少動態設定,已寫進 0110 腳本尾註。
+- 0.11.0:Reveal.tsx(IntersectionObserver 一次性進場,unobserve 不重播)+
+  reveal/reveal-stagger(nth-child 級聯 45ms/格)+card-hover。設計三原則:
+  豁免=不掛 class(內容永不藏死)、告警類不進場(緊急資訊不延遲)、
+  ConfirmDialog 掛載點不可套 Reveal(transform 祖先截斷 fixed,註解釘住)。
+- 審查(2 鏡頭 5 agents)CONFIRMED 修 1:card-hover 的 transition 簡寫與
+  .reveal-stagger > * 同優先度、檔案序在後 → 整組蓋掉進場 transition,首頁
+  模塊卡/設備主機牆/生活快捷卡淡入全滅只剩 150ms 硬彈(覆核者用 Playwright
+  量 computed transitionProperty 坐實)。修=進場改 CSS animation(reveal-up
+  keyframe+animation-delay 級聯),與 transition 機制脫鉤。
+- 流程教訓:走查斷言「class 有掛」≠「動畫在播」——補 computed animationName
+  斷言防同類回歸(walkthrough 15/15)。

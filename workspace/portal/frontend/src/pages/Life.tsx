@@ -4,6 +4,7 @@ import Dot from '../components/Dot'
 import GuestPanel from '../components/GuestPanel'
 import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import type { DebtTx, Life as LifeData } from '../types'
 
@@ -245,6 +246,7 @@ export default function Life() {
               <span className="font-mono">🔒</span> 僅顯示件數;行程標題與借貸金額需經 portal.hl 登入後查看。
             </div>
           )}
+          <Reveal>
           <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">今日行程</div>
             {(d.calendar_today ?? []).length === 0 && <div className="text-[13.5px] text-muted">今日無行程。</div>}
@@ -255,8 +257,9 @@ export default function Life() {
               </div>
             ))}
           </section>
-          <UpcomingCard items={d.calendar_upcoming} />
-          <DebtsCard d={d} />
+          </Reveal>
+          <Reveal><UpcomingCard items={d.calendar_upcoming} /></Reveal>
+          <Reveal><DebtsCard d={d} /></Reveal>
           <div className="rounded-card border border-dashed border-line px-4 py-3 text-[12.5px] text-muted">
             RSS 訊息:待辦 30 落地後接入,本期不留假位。
           </div>
@@ -264,16 +267,16 @@ export default function Life() {
       )}
 
       {/* 跳轉入口:portal 唯讀,新增/編輯去源頭(行事曆=Google Calendar;記帳=NocoDB 借貸) */}
-      <div className="mt-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2">
+      <Reveal stagger className="mt-3.5 grid grid-cols-1 gap-2.5 md:grid-cols-2">
         <a href="https://calendar.google.com/" target="_blank" rel="noreferrer"
-           className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+           className="card-hover block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] hover:border-amber">
           行事曆(Google Calendar)→ <span className="font-mono text-[12px] text-muted">calendar.google.com ↗</span>
         </a>
         <a href="http://192.168.20.70:8080" target="_blank" rel="noreferrer"
-           className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+           className="card-hover block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] hover:border-amber">
           記帳(NocoDB)→ <span className="font-mono text-[12px] text-muted">192.168.20.70:8080 ↗</span>
         </a>
-      </div>
+      </Reveal>
 
       {/* 行程共享帳號管理(待辦50;僅 portal.hl 顯示,BFF 再驗 Remote-User) */}
       {IS_HL && <GuestPanel />}

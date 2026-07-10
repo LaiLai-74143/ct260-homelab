@@ -2,6 +2,7 @@ import { useAlerts, useBrief, useDataLag, useOverview } from '../api'
 import StatusBanner from '../components/StatusBanner'
 import BriefCard from '../components/BriefCard'
 import ModuleCard, { type ModuleCardData } from '../components/ModuleCard'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import { MODULES } from '../modules'
 import { SITE_GROUPS } from '../sites'
@@ -67,21 +68,23 @@ export default function Home() {
         <PageSkeleton banner tiles={7} />
       ) : (
         <>
+          {/* 告警橫幅不進 Reveal:緊急資訊不能被進場動畫延遲 */}
           <StatusBanner state={ov.data.summary.state} text={ov.data.summary.text} lag={lag} />
-          {br.data && <BriefCard brief={br.data} />}
+          {br.data && <Reveal><BriefCard brief={br.data} /></Reveal>}
           {br.isError && (
             <div className="mb-[22px] rounded-card border border-line bg-panel p-4 text-[13.5px] text-muted">
               晨報尚未送達(brief.json 待 CT260 投遞)。
             </div>
           )}
           <div className="mb-2.5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">MODULES</div>
-          <div className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
+          <Reveal stagger className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
             {cards.map((c) => <ModuleCard key={c.route} m={c} />)}
-          </div>
+          </Reveal>
         </>
       )}
 
       {/* 常用網站(Homepage bookmarks 搬遷,Homepage 退役前置) */}
+      <Reveal>
       <div className="mb-2.5 ml-0.5 mt-6 font-mono text-[11px] tracking-[.12em] text-muted">SITES · 常用網站</div>
       <div className="rounded-card border border-line bg-panel px-4 py-2.5">
         {SITE_GROUPS.map((g) => (
@@ -102,6 +105,7 @@ export default function Home() {
           </div>
         ))}
       </div>
+      </Reveal>
     </>
   )
 }

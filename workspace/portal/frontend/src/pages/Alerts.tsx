@@ -4,6 +4,7 @@ import { useActions, useAlerts } from '../api'
 import AlertActions from '../components/AlertActions'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import Timeline from '../components/Timeline'
 import type { AlertItem } from '../types'
@@ -54,6 +55,8 @@ export default function Alerts() {
           <Dot state="ok" /> 目前無 firing / pending 告警。
         </div>
       )}
+      {/* firing 列不套 Reveal:AlertActions 內含 ConfirmDialog(fixed 全屏遮罩)
+          仰賴無 transform 祖先;且告警是緊急資訊,不做進場延遲 */}
       {firing.map((a) => (
         <Row
           key={`f-${a.name}-${a.instance}`}
@@ -71,7 +74,7 @@ export default function Alerts() {
       )}
 
       {silences.length > 0 && (
-        <>
+        <Reveal>
           <div className="mb-2 mt-5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">ACTIVE SILENCES</div>
           {silences.map((s) => (
             <div key={s.comment + s.ends_at} className="mb-2 rounded-card border border-line bg-panel px-4 py-3 text-[12.5px] text-muted">
@@ -79,13 +82,15 @@ export default function Alerts() {
               <span className="ml-2 font-mono text-[11px]">至 {s.ends_at}</span>
             </div>
           ))}
-        </>
+        </Reveal>
       )}
 
+      <Reveal>
       <section className="mt-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
         <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">近 24H 告警時間軸(firing 數)</div>
         <Timeline data={al.data?.timeline_24h ?? []} />
       </section>
+      </Reveal>
     </>
   )
 }

@@ -3,6 +3,7 @@ import Dot from '../components/Dot'
 import GrafanaPanel from '../components/GrafanaPanel'
 import Num from '../components/Num'
 import PageHead from '../components/PageHead'
+import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
 import Spark from '../components/Spark'
 
@@ -39,7 +40,7 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
       {!d && !se.isError && <PageSkeleton tiles={3} rows={2} />}
       {d && (
         <>
-          <div className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
+          <Reveal stagger className="mb-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
             <Tile label="autoban 封鎖中 IP" big={String(d.autoban_today)} unit=" 個"
                   state={d.autoban_today > 0 ? 'ok' : 'unk'} />
             <Tile label="SSH22 絆線(今日)" big={String(d.tripwire.today)} unit=" 事件"
@@ -48,13 +49,16 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
                   big={d.tripwire.days_clean == null ? '—' : d.tripwire.days_clean >= 30 ? '≥30' : String(d.tripwire.days_clean)}
                   unit={d.tripwire.days_clean == null ? '(無數據)' : ' 天'}
                   state={d.tripwire.days_clean == null ? 'unk' : 'ok'} />
-          </div>
+          </Reveal>
 
+          <Reveal>
           <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">AUTOBAN 24H 趨勢(封鎖中 IP 數)</div>
             <Spark data={d.autoban_trend_24h} height={64} />
           </section>
+          </Reveal>
 
+          <Reveal>
           <section className="mb-3.5 rounded-card border border-line bg-panel px-4 py-3.5">
             <div className="mb-2 flex items-center gap-2 font-mono text-[11px] tracking-[.12em] text-muted">
               COWRIE 蜜罐
@@ -76,6 +80,7 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
               </>
             )}
           </section>
+          </Reveal>
 
         </>
       )}
@@ -84,6 +89,7 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
           不依賴 BFF,放 {d && …} 外——/api/security 掛掉時圖表照常(審查確認項)。
           時間範圍拉 24h 與上方 AUTOBAN 24H 卡對齊(dashboard 本身預設 6h) */}
       {embeds && (
+        <Reveal>
         <section className="mb-3.5">
           <div className="mb-2 font-mono text-[11px] tracking-[.12em] text-muted">
             GRAFANA 即時圖表(空白=SSO 未登入或連不到 Grafana)
@@ -95,11 +101,12 @@ export default function Security({ embeds = true }: { embeds?: boolean }) {
             <GrafanaPanel dash={SEC_SOLO} panelId={6} title="防火牆誘捕記錄速率" from="now-24h" h={240} />
           </div>
         </section>
+        </Reveal>
       )}
 
       {/* 完整視圖入口:防火牆審計與攻擊地圖同屬 openwrt-portscan-autoban 一張 dashboard */}
       <a href={grafanaUrl(SEC_DASH)} target="_blank" rel="noreferrer"
-         className="block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] transition-colors duration-150 hover:border-amber">
+         className="card-hover block rounded-card border border-line bg-panel px-4 py-3.5 text-[13.5px] hover:border-amber">
         防火牆審計、攻擊地圖與完整安全視圖 → <span className="font-mono text-[12px] text-muted">Grafana OpenWrt 防火牆審計與 Cowrie 蜜罐 ↗</span>
       </a>
     </>
