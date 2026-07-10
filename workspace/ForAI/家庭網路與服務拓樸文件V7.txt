@@ -1076,8 +1076,21 @@ DXP /volume1/docker/bitwarden
 ### CT102 mc-proxy
 
 ```text
-CTID 102   hostname mc-proxy   IP 10.70.70.10/24   GW 10.70.70.1   RAM 1G   DNS 10.70.70.1
+CTID 102   hostname mc-proxy   IP 10.70.70.10/24   GW 10.70.70.1   RAM 2G(1G→2G 2026-07-10)
+DNS 10.70.70.1
 用途:Velocity / Geyser proxy;velocity.toml 後端指 10.70.70.20:25565
+Velocity 3.5.0-SNAPSHOT(systemd velocity.service,User=velocity,/opt/velocity)
+插件(mc-autosleep 2026-07-10):limboapi 1.1.27-SNAPSHOT + limboautoserver 1.0.0-beta.1 +
+  velocitywhitelist 1.1.0-SNAPSHOT(jar 與設定在 /opt/velocity/plugins/)
+  · LimboAutoServer:玩家 join 停機後端→進 proxy 內建等待室(boss bar 進度)→
+    start/stop 指令=/opt/velocity/mc-gate.sh(curl CT100 :25580,token 在
+    /opt/velocity/mc-gate.env 600 velocity)→後端 ping 通自動送入;
+    無人 600s(autoShutdownDelay)自動休眠。設定 plugins/limboautoserver/config.toml。
+  · VelocityWhitelist:proxy 層白名單(servers.VelocityProxy.enabled=true,9 人名單
+    鏡像 CT100 whitelist.json)——非白名單者 LoginEvent 即拒,連等待室都進不去,
+    無法觸發喚醒。設定 plugins/velocitywhitelist/config.yml(改完可 /vwl reload)。
+velocity.toml motd 改為「休眠中,進入即喚醒」(ping-passthrough=all:後端在線時
+  透傳後端 MOTD,只有休眠時才顯示此字樣);回滾備份 /root/_backups/velocity.toml.before-autosleep-*
 ```
 
 ### CT100 MC-server
@@ -1089,14 +1102,27 @@ Backend IP   10.70.70.20/24   GW 10.70.70.1   DNS 10.70.70.1
 RAM 16G   CPU 4 cores(cpuset 2-5)
 用途:Minecraft backend;MCSManager web 10.70.70.20:23333 / daemon :24444
   MCSManager 實例 Fabric-MC autoStart=true(配合 UPS 復電自動爬起;server.properties
-  server-ip=10.70.70.20,25565 綁定生效)
+  server-ip=10.70.70.20,25565 綁定生效;autoRestart=false——自動休眠不會被 MCSM 拉回)
+mc-autosleep(2026-07-10,使用者裁決:無人 10 分鐘關服、開機只由玩家活動決定):
+  mc-gate hook(/root/mc-gate.py,systemd mc-gate.service,:25580,stdlib 零依賴):
+    收 CT102 LimboAutoServer 的 start/stop(Bearer token /root/mc-gate.env 600),
+    與 /root/mc-safe-backup.sh 共用 /var/lock/mc-safe-backup.lock——備份中喚醒等鎖
+    (上限 300s,備份完才開機=備份期間嚴格不啟動),休眠等鎖 45s 拿不到即跳過;
+    動作走 MCSM protected_instance open/stop(憑證複用 /root/mcsm.env),
+    stop 前 mcping 雙保險(有人在線拒關);稽核標記 MC-GATE →journald→promtail→Loki,
+    CT260 hl-mc-watch(cron */2)發 TG(喚醒含首位進入玩家名/休眠/撞備份窗/錯 token)。
+  mc-safe-backup.sh 語義變更(2026-07-10):備份前記 WAS_RUNNING,備份前睡著→備份後
+    保持關機(不再無條件重啟);flock -n → flock -w 120。
+    回滾備份 /root/_backups/mc-safe-backup.sh.before-autosleep-*。
 本機 nft(/etc/nftables.conf mc_backend_guard):
   放行 Velocity 10.70.70.10 -> 25565 + icmp echo-request;CT201 10.70.70.11 -> tcp/23333 +
   tcp/9100(node_exporter)+ icmp(監控);PC40 192.168.40.4 + 發證後手機(CT203 masq
   10.60.60.10)-> tcp/23333(MCSM 網頁)+ tcp/24444(MCSM daemon ws 即時終端;待辦49
   2026-07-08,回滾備份 /root/nftables.conf.before-mcsm-* / before-24444-* + CT260 ~/_backups);
   iifname "lo" -> 10.70.70.20:25565(本機 MCSM daemon mcping 放行,兜底 drop 未限介面會誤丟;
-  待辦49 2026-07-08,回滾備份 /root/nftables.conf.before-mcping-*)。
+  待辦49 2026-07-08,回滾備份 /root/nftables.conf.before-mcping-*);
+  10.70.70.10 -> tcp/25580(mc-gate hook,mc-autosleep 2026-07-10,回滾備份
+  /root/_backups/nftables.conf.before-mcgate-*)。
   ★ 24444 只到 CT100 本機 nft 才是把關層:OpenWrt dmz->game proto-all 已放行手機到全部埠,
   但 CT100 本機 nft 白名單制,埠未點名即被兜底 drop(兩層防護,主機層為實際閘門)。
 promtail 3.6.11(原生 systemd):journal + /root/minecraft/logs/latest.log +

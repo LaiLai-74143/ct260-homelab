@@ -2638,3 +2638,33 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   今日/近期;calendar_today 形狀不變=相容)→life.json 加 calendar_upcoming→BFF _redact_life
   對 upcoming 同步遮蔽 title(未經 portal.hl 只見日期時間)→前端 UpcomingCard。
   finish-portal-091.sh 部署全綠(近期進包+全回歸);live /api/life 實收 7 筆近期。
+【MC 自動休眠 mc-autosleep 2026-07-10,待辦51】無人 10 分鐘關服、白名單玩家 join 喚醒(等待室
+  吊住不踢)、備份期間嚴格不開機、喚醒/關服 TG。使用者裁決:10 分鐘門檻/等待室方案/不自動重啟
+  (開機只由玩家活動決定)/Bedrock 相容性不考慮(Java 為主)。
+  架構(全走 MCSM protected_instance,不碰 Java 進程):
+  CT102(RAM 1G→2G):Velocity 3.5.0 + limboapi 1.1.27-SNAPSHOT + limboautoserver 1.0.0-beta.1
+    (join→proxy 內建虛空等待室 boss bar→start 指令→後端 ping 通自動送入;無人 600s→stop 指令;
+    start/stop=/opt/velocity/mc-gate.sh→curl CT100:25580,token /opt/velocity/mc-gate.env 600)
+    + velocitywhitelist 1.1.0-SNAPSHOT(proxy 層 VelocityProxy.enabled=true,9 人鏡像 CT100
+    whitelist.json;非白名單 LoginEvent 即拒=碰不到喚醒)。velocity.toml motd 改「休眠中,
+    進入即喚醒」(ping-passthrough=all→僅休眠時顯示)。
+  CT100:mc-gate hook(/root/mc-gate.py stdlib,mc-gate.service,:25580 Bearer)——與
+    mc-safe-backup.sh 共用 /var/lock/mc-safe-backup.lock=備份互斥核心:備份中喚醒等鎖
+    (上限 300s,備份完才開機),休眠等鎖 45s 拿不到即跳過;stop 前 mcping 雙保險(有人拒關);
+    open 送出即放鎖(不佔鎖陪開機,03:10 備份 flock -w 120 等得到);busy/stopping 先等落定。
+    nft 加 10.70.70.10→tcp/25580(備份 nftables.conf.before-mcgate-*)。
+    mc-safe-backup.sh:WAS_RUNNING 記備份前狀態→睡著不叫醒;flock -n→-w 120
+    (備份 mc-safe-backup.sh.before-autosleep-*)。
+  CT260:hl-mc-watch(cron */2,Loki 游標增量,查 {job="journal",host="ct100",unit="mc-gate.service"}
+    MC-GATE 標記):喚醒 TG 延後≤4 分關聯 latest.log「joined the game」帶首位進入玩家名;
+    休眠/撞備份窗/錯 token 即報。
+  E2E 實測全綠:CT102→nft→hook token 矩陣(401+auth-fail 標記/202);wake skip status=3;
+    sleep ok→MCSM 優雅停機;停機態跑備份腳本=不發 stop、tar 完成、保持關機(WAS_RUNNING=0 路徑);
+    喚醒 wake ok→Fabric 全起(status3+mcping);持鎖 40s 發 start→hook 阻塞等鎖後才動作
+    (journal 時間差證明);哨兵 dry-run 對 live Loki 撿到 auth-fail/sleep 標記。
+  已知取捨:①等待室訊息為靜態設定檔文字,無法動態顯示「備份中」(要就得自寫 Java 插件,不值);
+    訊息寫死含「備份時段多等片刻」提示 ②喚醒等鎖逾 300s 時 deferred(玩家重連即再觸發)
+    ③LimboAutoServer 為 beta.1(2026-06-30),行為異常時回滾=刪三 jar+還原 velocity.toml 重啟,
+    hook/備份腳本改動獨立可留 ④pgrep 教訓再現:檢查指令含 pattern 原文會自匹配,用 [j]ava 寫法。
+  待使用者終驗:白名單帳號實際 join 走等待室進服;非白名單被拒訊息;MC 客戶端 server list 見
+    休眠 MOTD。SoT=~/workspace/mc-autosleep/(jars/ct100/ct102/ct260)。

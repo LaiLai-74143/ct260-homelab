@@ -24,6 +24,8 @@
 !/workspace/ops
 # guest-portal 對外唯讀分享站(待辦50;node_modules/dist 由 guest-portal/.gitignore 排除)
 !/workspace/guest-portal
+# mc-autosleep MC 自動休眠/喚醒(待辦51;jar 不入庫由 mc-autosleep/.gitignore 排除)
+!/workspace/mc-autosleep
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local

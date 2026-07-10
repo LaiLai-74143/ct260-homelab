@@ -1,0 +1,44 @@
+# CT102 /opt/velocity/plugins/limboautoserver/config.toml(mc-autosleep 2026-07-10)
+# 玩家 join 停機後端 -> 進 proxy 內建等待室 -> start 指令(mc-gate.sh -> CT100 hook -> MCSM open)
+# -> 後端 ping 通自動送入;無人 600s(使用者裁決 10 分鐘)-> stop 指令同路徑休眠。
+
+maintenanceInterval = 5
+responsivenessTimeout = 1000
+
+[logging]
+level = "INFO"
+
+[limbo]
+dimension = "OVERWORLD"
+gameMode = "ADVENTURE"
+worldTime = 1000
+posX = 0.0
+posY = 100.0
+posZ = 0.0
+yaw = 0.0
+pitch = 0.0
+readTimeout = 20000
+progressBar = true
+# 只驅動 boss bar 進度觀感,實際送入仍等真 ping(Fabric 冷啟實測值再校)
+estimatedStartupSeconds = 75
+progressTitle = "<gold>伺服器喚醒中…</gold> <gray>(%time%s)</gray>"
+progressReadyTitle = "<green>就緒,進入中!</green>"
+
+[messages]
+prefix = "<gray>[</gray><gold>24Bay</gold><gray>]</gray> "
+starting = "<yellow>伺服器喚醒中,請稍候(約 1 分鐘;逢每日 03:10 備份會多等片刻)…</yellow>"
+failed = "<red>伺服器啟動失敗,請通知管理員。</red>"
+notify = "<green>伺服器就緒,正在送入…</green>"
+
+[servers]
+
+[servers.mc]
+workingDirectory = "./"
+start = "bash /opt/velocity/mc-gate.sh start"
+stop = "bash /opt/velocity/mc-gate.sh stop"
+startupDelay = 5
+shutdownDelay = 60
+# 無人 10 分鐘自動休眠(使用者裁決 2026-07-10)
+autoShutdownDelay = 600
+autoShutdownRequiresEmptyProxy = true
+preserveQuotes = true

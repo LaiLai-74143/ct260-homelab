@@ -1,0 +1,17 @@
+# CT100 /etc/systemd/system/mc-gate.service(mc-autosleep 2026-07-10)
+# stdout->journald(SyslogIdentifier=mc-gate),promtail journal job 收走供 CT260 哨兵
+[Unit]
+Description=MC gate hook (LimboAutoServer -> MCSM, backup-lock aware)
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /root/mc-gate.py
+Restart=on-failure
+RestartSec=5
+SyslogIdentifier=mc-gate
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

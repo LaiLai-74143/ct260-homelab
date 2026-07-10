@@ -881,6 +881,18 @@
       免自製面板。hl-guest 改 NocoDB-backed(add 自動建人、rm 只清登入欄保留列)。
       記賬/登入共用同一庫;取捨=scrypt 雜湊進 NocoDB(見缺改記錄)。
 
+51. ✔ MC 伺服器自動休眠/喚醒(mc-autosleep,2026-07-10 上線)
+    使用者裁決:①無人 10 分鐘關服 ②等待室吊玩家(exaroton 式,不踢出)③開機只由
+    玩家活動決定(備份完不重啟)④備份期間嚴格不開機 ⑤喚醒/關服發 TG ⑥Bedrock 相容性不考慮。
+    架構:CT102 Velocity 插件 LimboAPI+LimboAutoServer(join→等待室 boss bar→自動送入;
+    無人 600s 發 stop)+ VelocityWhitelist(proxy 層白名單,非名單者連等待室都進不去)
+    → start/stop 統一打 CT100 mc-gate hook(:25580,stdlib,token)→ MCSM protected_instance
+    穩定路徑;hook 與 mc-safe-backup.sh 共用 flock 鎖=備份互斥核心(備份中喚醒等鎖,
+    備份完才開機);mc-safe-backup.sh 改 WAS_RUNNING(睡著不叫醒)+flock -w 120;
+    CT260 hl-mc-watch(cron */2,Loki 游標)發 TG(喚醒+首位進入玩家名/休眠/撞備份窗/錯 token)。
+    詳見 V7 §7 與缺改記錄。
+    ▶ 待使用者終驗:實際 join 走等待室(白名單內)+ 非白名單帳號被拒;MOTD 休眠字樣。
+
 ===============================================================================
 ## 已決策不做（勿再重複建議）
 
