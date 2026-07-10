@@ -28,7 +28,9 @@
 # ★ 零風險原則：只「加」schedule 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
 :80 {
 	# 健康端點（Uptime Kuma / 內部探活）—— 任何 host 的 /health 都回 OK
-	handle /health /healthz {
+	# （handle 只收單一 matcher,兩個 path 需具名 matcher——20260710 validate 教訓）
+	@health path /health /healthz
+	handle @health {
 		respond "OK" 200
 	}
 

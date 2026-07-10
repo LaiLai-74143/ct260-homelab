@@ -8,6 +8,7 @@
 # 冪等:重跑=滾動更新;失敗保留舊版(.old 自癒挪回)。
 # 回滾:pct exec 205 -- systemctl stop guest-portal;或推回上一版 bundle。
 set -euo pipefail
+cd "$HOME"   # pct enter→su codex 會把 cwd 留在 /root(codex 無權限),find 等工具還原 cwd 會炸
 
 CTID=205
 ROOT=~/workspace/guest-portal

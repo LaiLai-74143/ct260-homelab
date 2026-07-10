@@ -9,6 +9,7 @@
 #   2) 之後 cron 每 30 分同步、每 5 分查登入異常
 # 冪等:重跑=覆蓋腳本 + 去重 cron。
 set -euo pipefail
+cd "$HOME"   # 同 02-deploy:防 su codex 後 cwd=/root
 
 SRC=~/workspace/guest-portal/scripts
 BIN=~/.local/bin
