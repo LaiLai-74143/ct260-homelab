@@ -48,3 +48,16 @@ groups:
         annotations:
           summary: "CT203 Jellyfin 免驗證豁免綁定異動"
           description: "ctdmz_jellyfin_exemption_pinned==0:綁死 192.168.30.3:8096 的唯一免驗證豁免規則不在預期狀態(被放寬/移除/改址?),請核對 CT203 ctdmz.nft。"
+
+      # 2026-07-10 事故後補:宿主 pkill 連坐殺死 CT203 tailscaled(exit 0 不觸發
+      # Restart=on-failure),閘門指標只盯 nft 表故全程靜默,使用者先於監控發現。
+      # fail-closed 情境(閘門壞→tailscaled 被連帶擋)會與 CtdmzGateDown 同響,皆為真。
+      - alert: CtdmzTailscaledDown
+        expr: ctdmz_tailscaled_up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CT203 tailscaled 未運行——tailnet 入口斷"
+          description: "ctdmz_tailscaled_up==0 for 5m:Jellyfin share/portal.hl 等 tailnet 遠端存取全斷(無直穿風險,閘門另有 CtdmzGateDown 盯)。修復:pct exec 203 -- systemctl start tailscaled(fail-closed 綁定會先確保閘門)。"
+          priority: "6"

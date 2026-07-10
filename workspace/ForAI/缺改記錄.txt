@@ -2876,3 +2876,22 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   驗證段改本機執行避免三層引號——首版巢狀 heredoc 在 ssh 雙引號層炸掉的教訓)。
 - 驗證:11 端點 200;openwrt 4%/6%/0%/13d、dxp disk 73%、vm300 up=unk、switch3f
   8/28 埠+41d 回歸 OK。備份=portal-src-before-092-*+docker-compose.yml.before-portal092-*。
+
+## 2026-07-10 深夜:C 系列 C1/C2 上線(生活面)+ B4 tailscaled 誤報濾網
+- 使用者裁決:C 系列四項只做 C1/C2;C1 復用通知 bot(Kuma Monitor)、C2 無料之夜靜默。
+- C1 hl-tg-bridge:TG getUpdates 長輪詢(全系統唯一消費者,起第二個會互搶 409)→
+  chat_id 白名單→本機 life-chat :5002 /chat(portal 生活頁同一套後端)→提案
+  inline keyboard(callback_data 64B 上限→提案存本地短 id)→按確認打 /confirm。
+  本橋不持簽名金鑰;出站 only,零防火牆/零新 token。transcript 8 則/30min TTL;
+  cron @reboot+*/5 flock 自癒。上線驗證=webhook 空+poller 起機+flock 擋第二實例;
+  live E2E(使用者實發一句走完確認執行)上線當晚尚待使用者。
+- C2 hl-tomorrow-agent:cron 21:00 Taipei;確定性閘門(life-ops 本尊取明日行程/
+  prep/逾期/3日內到期,全空靜默)→Open-Meteo(座標=HA zone.home;HA 實查無
+  weather entity,故不走 HA)fail-open→claude -p Sonnet 5(復用 mcp-life-ro 唯讀
+  7 工具)→TG;claude 失敗降級模板照發。驗證:--dry-run --force 18s 全鏈通、
+  無料日靜默閘門實測、--force 實發一則使用者實收。
+- B4 濾網修正:tailscaled 綁 tailnet 位址(100.64/10、fd7a:)的 peerapi TCP 埠
+  每次重啟隨機換——今日 14:39 UTC 事故重啟後 23:15 收集即誤報(+60035/+43288;
+  基線播種時 tailscaled 正被誤殺,本來就沒有它)。config-backup.yml awk 加
+  proc==tailscaled × ^100./^[fd7a: 濾除,重收 ct203 歸零 git diff,趕在 23:30
+  autocommit 前;tailscaled 若改綁其他位址仍會被抓。B4 首次真實觸發=管線驗證成功。

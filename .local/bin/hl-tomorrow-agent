@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""hl-tomorrow-agent: 夜間明日代理(C 系列 C2,2026-07-10)。
+
+每晚 21:00(台北)交叉引用 明日行事曆 × 借貸到期 × 天氣,推一則「明日速覽」TG。
+晨報(homelab-notify --write-brief,06:00)是模板化清單;這裡是推理層——
+「明天見王五,你借他的書逾期 3 天,記得帶;午後有雨,騎車改捷運」。
+
+管線(確定性優先,AI 只做濃縮):
+  1. 前置閘門:import life-ops 本尊直取 明日行程/prep_check/逾期/3日內到期。
+     全空=無料之夜 → 靜默只留 log(使用者裁決 2026-07-10:不推報平安)。
+  2. 天氣:Open-Meteo(免金鑰;座標取自 HA zone.home 24.950,121.297)。
+     fail-open:取不到只註記,不擋推送。
+  3. claude -p(Sonnet 5)吃預取資料,復用 life-chat 的 mcp-life-ro 唯讀 7 工具
+     (可追查「明天見的人」的往來明細);零寫入能力、零新權限。
+  4. claude 失敗 → 降級成模板推送(資料照發,少了推理),不靜默失敗。
+
+設定(沿用,零新增):~/.config/homelab/notify-telegram.env、life-chat.env(CLAUDE_BIN/模型)
+狀態:~/.local/state/tomorrow-agent/agent.log
+排程:cron 0 13 * * *(UTC)=台北 21:00,flock 單實例
+用法:--dry-run 印不發;--force 無料也走完整管線(測試用)
+"""
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Taipei")
+except Exception:
+    TZ = timezone(timedelta(hours=8))
+
+HOME = Path(os.path.expanduser("~"))
+CONFIG_FILES = [
+    HOME / ".config/homelab/notify-telegram.env",
+    HOME / ".config/homelab/life-chat.env",
+]
+STATE_DIR = HOME / ".local/state/tomorrow-agent"
+LOG_FILE = STATE_DIR / "agent.log"
+MCP_CONFIG = HOME / ".config/homelab/mcp-life-ro.json"
+WORK_DIR = STATE_DIR / "work"   # claude -p 的 cwd:空目錄,無專案 CLAUDE.md
+LAT, LON = 24.950, 121.297      # HA zone.home(家),2026-07-10 讀取
+CLAUDE_TIMEOUT = 110
+DUE_SOON_DAYS = 3
+
+RO_TOOL_NAMES = ["calendar_agenda", "calendar_conflicts", "prep_check", "find_person",
+                 "list_debts", "balance_by_person", "overdue_debts"]
+
+# WMO weather code → 繁中(Open-Meteo daily weather_code)
+WMO = {0: "晴", 1: "大致晴", 2: "局部多雲", 3: "陰", 45: "霧", 48: "霧凇",
+       51: "毛毛雨", 53: "毛毛雨", 55: "毛毛雨", 61: "小雨", 63: "中雨", 65: "大雨",
+       66: "凍雨", 67: "凍雨", 71: "小雪", 73: "中雪", 75: "大雪", 77: "雪粒",
+       80: "陣雨", 81: "陣雨", 82: "強陣雨", 85: "陣雪", 86: "陣雪",
+       95: "雷雨", 96: "雷雨夾雹", 99: "雷雨夾雹"}
+
+DRY = "--dry-run" in sys.argv
+FORCE = "--force" in sys.argv
+
+
+def log(msg):
+    ts = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+    print(line, file=sys.stderr)
+
+
+def load_config():
+    cfg = {}
+    for cf in CONFIG_FILES:
+        if not cf.exists():
+            continue
+        for raw in cf.read_text().splitlines():
+            raw = raw.strip()
+            if not raw or raw.startswith("#") or "=" not in raw:
+                continue
+            k, v = raw.split("=", 1)
+            cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
+
+
+CFG = load_config()
+MODEL = CFG.get("LIFE_CHAT_MODEL", "claude-sonnet-5")
+CLAUDE_BIN = CFG.get("CLAUDE_BIN", str(HOME / ".npm-global/bin/claude"))
+
+
+def tg_send(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    token, chat = CFG.get("TELEGRAM_BOT_TOKEN"), CFG.get("TELEGRAM_CHAT_ID")
+    if not (token and chat):
+        log("無 TG 憑證,略過發送")
+        return
+    data = json.dumps({"chat_id": chat, "text": text[:4000],
+                       "disable_web_page_preview": True}).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=data, headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
+    except Exception as e:  # noqa: BLE001
+        log(f"tg send failed: {type(e).__name__}: {str(e)[:120]}")
+
+
+# ---------- 1. 確定性取數(import life-ops 本尊,同 life-chat /confirm 模式) ----------
+sys.path.insert(0, str(HOME / "life-ops-mcp"))
+import server as lifeops  # noqa: E402
+
+
+def gather():
+    now = datetime.now(TZ)
+    tmr = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    wd = "一二三四五六日"[(now + timedelta(days=1)).weekday()]
+    d = {"date": tmr, "wd": wd}
+    d["agenda"] = lifeops.DISPATCH["calendar_agenda"]({"from": tmr, "to": tmr})
+    d["prep"] = lifeops.DISPATCH["prep_check"](
+        {"from": tmr, "to": (now + timedelta(days=3)).strftime("%Y-%m-%d")})
+    d["overdue"] = lifeops.DISPATCH["overdue_debts"]({})
+    soon_end = (now + timedelta(days=DUE_SOON_DAYS)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    soon = []
+    for x in lifeops.allrecs("Transactions"):
+        if x.get("settled") or not x.get("due_date"):
+            continue
+        dd = lifeops.dpart(x["due_date"])
+        if today <= dd <= soon_end:
+            soon.append(f"[{x['Id']}] {dd} 到期 {x.get('direction')} "
+                        f"{lifeops.person_of(x)}: {x.get('amount') or x.get('item')}")
+    d["due_soon"] = "\n".join(soon) if soon else "沒有 3 日內到期的借貸。"
+
+    d["has_events"] = not d["agenda"].startswith("該範圍內沒有行程")
+    d["has_prep"] = not d["prep"].startswith("近期行程沒有")
+    d["has_overdue"] = not d["overdue"].startswith("沒有逾期")
+    d["has_due_soon"] = bool(soon)
+    return d
+
+
+# ---------- 2. 天氣(Open-Meteo,fail-open) ----------
+def weather_line():
+    url = ("https://api.open-meteo.com/v1/forecast"
+           f"?latitude={LAT}&longitude={LON}"
+           "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+           "precipitation_probability_max&timezone=Asia%2FTaipei&forecast_days=2")
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            dl = json.loads(r.read())["daily"]
+        return (f"{WMO.get(dl['weather_code'][1], '未知')},"
+                f"{round(dl['temperature_2m_min'][1])}–{round(dl['temperature_2m_max'][1])}°C,"
+                f"降雨機率 {dl['precipitation_probability_max'][1]}%")
+    except Exception as e:  # noqa: BLE001
+        log(f"weather fail-open: {type(e).__name__}")
+        return None
+
+
+# ---------- 3. claude -p 推理層 ----------
+def _prompt(d, wx):
+    return f"""以下是明天({d['date']} 週{d['wd']})的預取資料,請寫一則「明日速覽」推播:
+
+【明日行程】
+{d['agenda']}
+
+【近期需準備(3 日內)】
+{d['prep']}
+
+【逾期未結借貸】
+{d['overdue']}
+
+【{DUE_SOON_DAYS} 日內到期借貸】
+{d['due_soon']}
+
+【明日天氣】
+{wx or '(天氣資料取得失敗,略過天氣)'}
+
+要求:
+1. 繁體中文,3–6 行,無 markdown 標題;第一行固定「🌙 明日速覽({d['date']} 週{d['wd']})」。
+2. 交叉引用是你的價值:行程裡出現的人,用 balance_by_person/list_debts 查與其往來,
+   有未結的就提醒帶上/催收;借貸到期撞上行程日也點出來。查無往來就不要提。
+3. 天氣只在影響行動時給建議(有雨→帶傘/改通勤方式;無行程則一句帶過或省略)。
+4. 只根據資料與工具查證結果寫,禁止捏造;不確定就不寫。
+5. 結尾不加任何署名、問句或「祝你」類客套。"""
+
+
+def run_claude(d, wx):
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        CLAUDE_BIN, "-p",
+        "--model", MODEL,
+        "--output-format", "json",
+        "--strict-mcp-config", "--mcp-config", str(MCP_CONFIG),
+        "--allowedTools", ",".join(f"mcp__life__{t}" for t in RO_TOOL_NAMES),
+        "--disallowedTools", "Bash,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,"
+                             "Task,NotebookEdit,TodoWrite,KillShell,BashOutput",
+        "--append-system-prompt",
+        "你是夜間明日代理,產出將直接作為 Telegram 推播全文,除推播內容外不要輸出任何東西。",
+    ]
+    env = dict(os.environ)
+    env.setdefault("HOME", str(HOME))
+    env["PATH"] = f"{HOME}/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+    r = subprocess.run(cmd, input=_prompt(d, wx), text=True, capture_output=True,
+                       timeout=CLAUDE_TIMEOUT, cwd=str(WORK_DIR), env=env)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude rc={r.returncode}: {(r.stderr or r.stdout)[:200]}")
+    j = json.loads(r.stdout)
+    if j.get("is_error"):
+        raise RuntimeError(f"claude is_error: {str(j.get('result'))[:200]}")
+    out = str(j.get("result") or "").strip()
+    if not out.startswith("🌙"):
+        raise RuntimeError(f"輸出格式不符: {out[:120]!r}")
+    return out, j.get("num_turns")
+
+
+def fallback_text(d, wx):
+    parts = [f"🌙 明日速覽({d['date']} 週{d['wd']})(降級模板,AI 濃縮失敗)"]
+    if d["has_events"]:
+        parts.append("行程:\n" + d["agenda"])
+    if d["has_prep"]:
+        parts.append("準備:\n" + d["prep"])
+    if d["has_overdue"]:
+        parts.append("逾期:\n" + d["overdue"])
+    if d["has_due_soon"]:
+        parts.append("將到期:\n" + d["due_soon"])
+    if wx:
+        parts.append(f"天氣:{wx}")
+    return "\n".join(parts)
+
+
+def main():
+    try:
+        d = gather()
+    except Exception as e:  # noqa: BLE001
+        log(f"gather FAIL: {type(e).__name__}: {str(e)[:200]}")
+        tg_send(f"🌙 明日代理:取數失敗({type(e).__name__}),今晚缺席。")
+        sys.exit(1)
+    if not (d["has_events"] or d["has_prep"] or d["has_overdue"]
+            or d["has_due_soon"] or FORCE):
+        log(f"無料之夜({d['date']}),靜默。")
+        return
+    wx = weather_line()
+    try:
+        text, turns = run_claude(d, wx)
+        log(f"claude OK turns={turns} len={len(text)}")
+    except Exception as e:  # noqa: BLE001
+        log(f"claude FAIL,降級模板: {type(e).__name__}: {str(e)[:200]}")
+        text = fallback_text(d, wx)
+    tg_send(text)
+    log(f"sent({d['date']}) events={d['has_events']} overdue={d['has_overdue']} "
+        f"due_soon={d['has_due_soon']} wx={'ok' if wx else 'fail'}")
+
+
+if __name__ == "__main__":
+    main()

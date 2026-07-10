@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""hl-guest-watch — guest-portal 登入異常哨兵(CT260,cron */5)。
+
+從 CT205 拉 audit.jsonl 增量(游標),按情景發 TG(比照 hl-cert-watch,token 經 curl -K stdin):
+  ① 未知帳號嘗試(login_unknown)—— 即報,附密碼原文(蜜罐情報)
+  ② 已知帳號 fail 累計達門檻(fails==3 跨門檻)或觸發鎖定(locked)
+  ③ 帳號從「沒見過的 IP」成功登入(login_ok，新 IP)
+  ④ 任何事件來自非 TW 國別(CF-IPCountry)
+
+游標=已處理行數(檔案縮短=判定輪替→歸零重讀);只處理新行=不重複告警。
+CT205 讀不到=靜默略過(避免重啟期噪音;可用性另由 Kuma/人工察覺)。
+手動:hl-guest-watch [--dry-run](不發 TG、不推進游標)
+"""
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+STATE = HOME / ".local/state/homelab-notify"
+CURSOR = STATE / "guest-watch.cursor"
+SEEN_IPS = STATE / "guest-seen-ips.json"
+TG_ENV = HOME / ".config/homelab/notify-telegram.env"
+HL_RUN = HOME / ".local/bin/hl-run"
+REMOTE_LOG = "/opt/guest-portal/data/audit.jsonl"
+FAIL_ALERT_AT = 3  # 已知帳號 fail 累計到此值即報(跨門檻一次)
+DRY = "--dry-run" in sys.argv
+
+
+def load_env(path: Path) -> dict:
+    env = {}
+    try:
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def tg(text: str):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = load_env(TG_ENV)
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("hl-guest-watch: 無 TG 憑證,略過發送", file=sys.stderr)
+        return
+    # token 經 curl -K stdin,不進 argv
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True,
+    )
+
+
+def pull_log() -> list[str] | None:
+    """回傳 audit.jsonl 全部行;CT205 讀不到回 None(靜默略過)。"""
+    try:
+        r = subprocess.run([str(HL_RUN), "ct205", f"cat {REMOTE_LOG} 2>/dev/null || true"],
+                           capture_output=True, text=True, timeout=30)
+    except Exception:  # noqa: BLE001
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout.splitlines()
+
+
+def read_cursor() -> int:
+    try:
+        return int(CURSOR.read_text().strip())
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def write_cursor(n: int):
+    STATE.mkdir(parents=True, exist_ok=True)
+    CURSOR.write_text(str(n))
+
+
+def load_seen() -> dict:
+    try:
+        return json.loads(SEEN_IPS.read_text())
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def save_seen(d: dict):
+    STATE.mkdir(parents=True, exist_ok=True)
+    SEEN_IPS.write_text(json.dumps(d, ensure_ascii=False))
+
+
+def main():
+    lines = pull_log()
+    if lines is None:
+        return  # CT205 不可達,靜默
+    total = len(lines)
+    cursor = read_cursor()
+    if cursor > total:
+        cursor = 0  # 檔案變短=輪替,重讀
+    new = lines[cursor:]
+
+    seen = load_seen()
+    alerts: list[str] = []
+    seen_dirty = False
+
+    for raw in new:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            e = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            continue
+        ev = e.get("event", "")
+        ip = e.get("ip", "?")
+        user = e.get("user", "")
+        country = e.get("country", "??")
+        ts = e.get("ts", "")
+        cflag = f" 🌍{country}" if country not in ("TW", "??", "") else ""
+
+        if ev == "login_unknown":
+            pw = e.get("pw", "")
+            alerts.append(f"🚨 未知帳號嘗試 [{ts}]\n  帳號『{user}』密碼『{pw}』\n  來源 {ip}{cflag}")
+        elif ev == "locked":
+            alerts.append(f"🔒 帳號鎖定 [{ts}]\n  『{user}』來源 {ip} 連續失敗達上限{cflag}")
+        elif ev == "login_fail":
+            if e.get("fails") == FAIL_ALERT_AT:
+                reason = e.get("reason", "")
+                tail = "(帳號已停用)" if reason == "disabled" else ""
+                alerts.append(f"⚠️ 密碼連錯 [{ts}]\n  『{user}』來源 {ip} 已錯 {FAIL_ALERT_AT} 次{tail}{cflag}")
+        elif ev == "login_ok":
+            ips = seen.get(user, [])
+            if ip not in ips:
+                first = "(此帳號首次登入)" if not ips else "(新 IP)"
+                alerts.append(f"✅ 成功登入·新位置 [{ts}]\n  『{user}』來源 {ip}{cflag} {first}")
+                seen[user] = ips + [ip]
+                seen_dirty = True
+        # 非 TW 但屬其他事件(未涵蓋上面)不獨立告警,已在各情景以 🌍 標註
+
+    if alerts:
+        head = f"guest-portal 登入告警({len(alerts)} 則)\n" + "─" * 12 + "\n"
+        # 分批發送避免單則過長(每 6 則一封)
+        for i in range(0, len(alerts), 6):
+            chunk = alerts[i:i + 6]
+            tg((head if i == 0 else "") + "\n\n".join(chunk))
+
+    if not DRY:
+        if seen_dirty:
+            save_seen(seen)
+        write_cursor(total)
+    print(f"hl-guest-watch: 新 {len(new)} 行,告警 {len(alerts)} 則"
+          + (" (dry-run)" if DRY else ""))
+
+
+if __name__ == "__main__":
+    main()

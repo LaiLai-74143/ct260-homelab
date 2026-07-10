@@ -158,6 +158,8 @@
   # pve24 無 root(sudo 白名單無 ss):埠全列但 proc 名多為 '-',逐日穩定即可。
   # 漂移偵測在 hl-ansible-backup:入庫前 git diff listen-ports.txt,有差→TG 一次性
   # 告警;23:30 hl-git-autocommit 入庫=新基線自動接受。VM300 蜜罐維持不入(污染區)。
+  # tailscaled 綁 tailnet 位址(100.64/10、fd7a:)的 peerapi TCP 埠每次重啟隨機換,
+  # 一律濾除(2026-07-10 事故重啟誤報一次);它若改綁其他位址仍會被抓。
   hosts: all:!manual:!wazuhct
   gather_facts: false
   vars:
@@ -168,6 +170,7 @@
         if (match($0, /users:\(\("[^"]+"/)) proc=substr($0, RSTART+9, RLENGTH-10);
         n=split($5, a, ":"); port=a[n];
         if ($1 ~ /^udp/ && port+0 >= 32768 && port+0 != 44873) next;
+        if (proc == "tailscaled" && ($5 ~ /^100\./ || $5 ~ /^\[fd7a:/)) next;
         print $1, $5, proc
       }' | sort -u
     listen_cmd_netstat: |

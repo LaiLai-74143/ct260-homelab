@@ -664,34 +664,6 @@ config nat
 	option target 'SNAT'
 	option snat_ip '10.66.66.1'
 
-config redirect
-	option name 'Trusted-Hairpin-Minecraft-Java-PC40-To-Velocity'
-	option src 'trusted'
-	option src_ip '192.168.40.4'
-	option src_dip '125.228.123.224'
-	option src_dport '49169'
-	option proto 'tcp'
-	option dest 'game'
-	option dest_ip '10.70.70.10'
-	option dest_port '25565'
-	option target 'DNAT'
-	option family 'ipv4'
-	option enabled '1'
-
-config redirect
-	option name 'Trusted-Hairpin-Minecraft-Bedrock-PC40-To-Geyser'
-	option src 'trusted'
-	option src_ip '192.168.40.4'
-	option src_dip '125.228.123.224'
-	option src_dport '43915'
-	option proto 'udp'
-	option dest 'game'
-	option dest_ip '10.70.70.10'
-	option dest_port '19132'
-	option target 'DNAT'
-	option family 'ipv4'
-	option enabled '1'
-
 config rule 'allow_portscan_metrics'
 	option name 'Allow-CT201-To-OpenWrt-Portscan-Metrics'
 	option src 'service'
@@ -1099,8 +1071,8 @@ config redirect 'hairpin_mc_bedrock_pc40'
 	option family 'ipv4'
 	option enabled '1'
 
-config rule 'temp_allow_pc40_to_openwrt_ssh'
-	option name 'Allow-PC40-To-OpenWrt-SSH'
+config rule 'allow_pc40_router_ssh'
+	option name 'Allow-PC40-To-Router-SSH-52438'
 	option src 'trusted'
 	option src_ip '192.168.40.4'
 	option dest_ip '192.168.40.1'
@@ -1134,8 +1106,6 @@ config rule
 	option proto 'tcp'
 	option dest_port '45123'
 	option target 'ACCEPT'
-
-config rule
 
 config rule
 	option name 'Allow-PC40-To-OpenWrt-Web'
@@ -2152,4 +2122,31 @@ config rule 'allow_monitor_to_ct260_lifechat'
 	option dest_port '5002'
 	option proto 'tcp'
 	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-Monitor-To-CT270-Paperless-8000'
+	option src 'service'
+	option src_ip '10.80.80.11'
+	option dest 'servers'
+	option dest_ip '192.168.20.70'
+	option dest_port '8000'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-Monitor-To-CT270-Navidrome-4533'
+	option src 'service'
+	option src_ip '10.80.80.11'
+	option dest 'servers'
+	option dest_ip '192.168.20.70'
+	option dest_port '4533'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Block-Honeypot-To-WAN'
+	option src 'honeypot'
+	option dest 'wan'
+	option proto 'all'
+	option target 'REJECT'
 

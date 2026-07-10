@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""hl-mc-watch —— MC 自動休眠事件哨兵(CT260,cron */2;mc-autosleep 2026-07-10)。
+
+從 Loki 查 CT100 mc-gate 的 MC-GATE 標記(游標增量,比照 hl-guest-watch 模式):
+  wake ok            -> TG「MC 已喚醒」;延後最多 ~4 分鐘關聯 latest.log 的
+                        「joined the game」帶出首位進入玩家名(誰喚醒的)
+  sleep ok           -> TG「MC 已休眠(無人 10 分鐘)」
+  wake deferred / sleep skip backup-lock -> TG 提示撞上備份窗(資訊性)
+  auth-fail          -> TG 告警(有人拿錯 token 打 hook)
+
+Loki:CT201 10.80.80.11:3100(CT260 直達,既有放行);TG token 經 curl -K stdin。
+狀態檔:~/.local/state/homelab-notify/mc-watch.json(游標 ns + pending wake)。
+"""
+import json
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+TG_ENV = HOME / ".config/homelab/notify-telegram.env"
+STATE = HOME / ".local/state/homelab-notify/mc-watch.json"
+LOKI = "http://10.80.80.11:3100"
+GATE_QUERY = '{job="journal", host="ct100", unit="mc-gate.service"} |= "MC-GATE"'
+JOIN_QUERY = '{job="minecraft", host="ct100"} |= "joined the game"'
+JOIN_WAIT_NS = 240 * 10**9   # 喚醒後等 join 關聯的上限(2 個 cron tick)
+DRY = "--dry-run" in sys.argv
+
+
+def load_env(path: Path) -> dict:
+    env = {}
+    try:
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def tg(text: str):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = load_env(TG_ENV)
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("hl-mc-watch: 無 TG 憑證,略過發送", file=sys.stderr)
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True,
+    )
+
+
+def loki_lines(query: str, start_ns: int, end_ns: int) -> list[tuple[int, str]]:
+    """[(ts_ns, line), …] 時間升冪;Loki 失聯回空(靜默,下輪補查)。"""
+    qs = urllib.parse.urlencode({
+        "query": query, "start": str(start_ns), "end": str(end_ns),
+        "limit": "500", "direction": "forward",
+    })
+    try:
+        with urllib.request.urlopen(f"{LOKI}/loki/api/v1/query_range?{qs}", timeout=10) as r:
+            d = json.loads(r.read())
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for stream in (d.get("data") or {}).get("result") or []:
+        for ts, line in stream.get("values") or []:
+            out.append((int(ts), line))
+    out.sort()
+    return out
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(st: dict):
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps(st))
+
+
+def first_join_after(ts_ns: int) -> str | None:
+    for _, line in loki_lines(JOIN_QUERY, ts_ns, ts_ns + JOIN_WAIT_NS):
+        # 形如「…: PlayerName joined the game」
+        head = line.split(" joined the game", 1)[0]
+        name = head.rsplit(" ", 1)[-1].strip()
+        if name:
+            return name
+    return None
+
+
+def main():
+    now_ns = time.time_ns()
+    st = load_state()
+    cursor = int(st.get("cursor", now_ns - 10 * 60 * 10**9))  # 首跑只回看 10 分鐘
+    pending = st.get("pending_wakes", [])
+
+    for ts, line in loki_lines(GATE_QUERY, cursor + 1, now_ns):
+        cursor = max(cursor, ts)
+        msg = line.split("MC-GATE", 1)[-1].strip()
+        if msg.startswith("wake ok"):
+            pending.append(ts)  # 延後發送,等 join 關聯玩家名
+        elif msg.startswith("sleep ok"):
+            tg("😴 MC 伺服器已休眠(無人 10 分鐘,LimboAutoServer→mc-gate)")
+        elif msg.startswith("wake deferred") or msg.startswith("sleep skip backup-lock"):
+            tg(f"⏳ MC 開停機撞上備份窗:{msg}(備份完成後玩家重連即可)")
+        elif msg.startswith("auth-fail"):
+            tg(f"🚨 mc-gate 收到錯誤 token 請求:{msg}")
+        # wake/sleep skip status=N 屬正常競態,只留 Loki 不發 TG
+
+    still_pending = []
+    for ts in pending:
+        name = first_join_after(ts)
+        if name:
+            tg(f"⏰ MC 伺服器已喚醒(等待室觸發);首位進入:{name}")
+        elif now_ns - ts < JOIN_WAIT_NS:
+            still_pending.append(ts)  # join 還沒出現,下一輪再看
+        else:
+            tg("⏰ MC 伺服器已喚醒(等待室觸發;4 分鐘內未見玩家進入——"
+               "可能還在等待室或已離開)")
+
+    save_state({"cursor": cursor, "pending_wakes": still_pending})
+
+
+if __name__ == "__main__":
+    main()

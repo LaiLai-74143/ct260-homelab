@@ -1285,6 +1285,24 @@ mcp-life-ro.json;log ~/.local/state/life-chat/life-chat.log;cron @reboot+*/5 flo
 源=~/workspace/life-chat/(含 finish-life-chat-infra.sh);
 來源=OpenWrt Allow-Monitor-To-CT260-LifeChat-5002(§4.4)。
 
+★hl-tg-bridge(C1 生活助理 TG 雙向橋,2026-07-10):~/.local/bin/hl-tg-bridge——
+Telegram getUpdates 長輪詢(全系統唯一消費者;日後別再起第二個,會互搶 409),
+chat_id 白名單=TELEGRAM_CHAT_ID(其餘來訊丟棄+log 不回應),文字轉本機 life-chat
+:5002 /chat(同 portal 生活頁一套後端與規則);提案→inline keyboard 確認鈕
+(callback_data 64B 上限→提案本體存本地短 id,~/.local/state/tg-bridge/proposals.json),
+按〔確認〕才打 /confirm(HMAC 驗簽+15min TTL 照舊)。本橋不持簽名金鑰、無執行能力;
+出站 only(api.telegram.org+127.0.0.1:5002),零防火牆/零新 token。transcript
+最近 8 則/30min TTL(/reset 手動重開);log ~/.local/state/tg-bridge/bridge.log;
+cron @reboot+*/5 flock 自癒(hl-tg-bridge-run.sh)。bot=通知共用那顆(Kuma Monitor)。
+
+★hl-tomorrow-agent(C2 夜間明日代理,2026-07-10):~/.local/bin/hl-tomorrow-agent,
+cron 21:00 Taipei(13:00 UTC)。確定性前置閘門(import life-ops 本尊取明日行程/
+prep_check/逾期/3日內到期;全空=靜默不推,使用者裁決)→Open-Meteo 天氣(免金鑰,
+座標=HA zone.home 24.950,121.297;fail-open)→claude -p(Sonnet 5,復用 mcp-life-ro
+唯讀 7 工具,可追查行程人物往來)寫 3–6 行「明日速覽」→TG;claude 失敗降級模板
+照發不靜默。與晨報(06:00 清單)互補=前一晚推理層。--dry-run/--force 測試用;
+log ~/.local/state/tomorrow-agent/agent.log。
+
 git 統一 repo:root=/home/codex(branch main),.gitignore 白名單納管 workspace/ForAI/ +
 ~/.local/bin/ 自製腳本 + life-ops-mcp/;秘鑰全域排除,機密只在 ~/.config/homelab/*.env(不入庫)。
 cron 每日 23:30 Taipei hl-git-autocommit(無變更跳過;remote 未就緒僅 commit)。
@@ -1301,7 +1319,9 @@ scan-secrets.sh gate(明文秘鑰擋);hl-ansible-backup 包裝(gate 失敗回滾
 cron 23:15 Taipei(排在 23:30 autocommit 前)。
 ★B4 監聽埠基線漂移(2026-07-10):config-backup.yml 末段新 play 收全站(all:!manual:!wazuhct,
   含 ct260/ct205)監聽埠正規化快照 backups/<host>/listen-ports.txt(openwrt=busybox netstat、
-  其餘 ss;剝 PID;UDP≥32768 濾暫態,44873 WG 例外);hl-ansible-backup 入庫前 git diff,
+  其餘 ss;剝 PID;UDP≥32768 濾暫態,44873 WG 例外;tailscaled 綁 tailnet 位址
+  (100.64/10、fd7a:)的 peerapi TCP 埠每次重啟隨機換,一律濾除——2026-07-10 事故
+  重啟誤報一次後補,tailscaled 改綁其他位址仍會被抓);hl-ansible-backup 入庫前 git diff,
   漂移→TG 一次性列 +新增/-消失(23:30 autocommit=新基線自動接受)。反向殼/私開服務的
   落地第一訊號。同日補:inventory 加 ct205、pve24 play ct_ids 補 204/205、ct203
   backup_find_cmd 排除 /etc/caddy/certs/(LE 私鑰被 slurp,scan-secrets 攔下後根治)。

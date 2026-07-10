@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""hl-tg-bridge: 生活助理 Telegram 雙向橋(C 系列 C1,2026-07-10)。
+
+「李四還我500」一句話隨手記:TG 私聊 bot → 本橋轉 life-chat(127.0.0.1:5002,
+與 portal 生活頁同一套後端:Sonnet 5 唯讀工具+提案單+HMAC 驗簽)→ 提案以
+inline keyboard 出確認鈕,按〔確認〕才由 life-chat /confirm 確定性執行。
+
+安全邊界:
+  - chat_id 白名單=TELEGRAM_CHAT_ID(bot 任何人可搜到;其餘來訊丟棄+log,不回應)
+  - 本橋不持簽名金鑰、無任何執行能力;寫入仍過 life-chat 提案白名單(7 個
+    生活動作)+HMAC 驗簽+15 分鐘 TTL,與 portal 入口同一道關
+  - 出站 only(api.telegram.org 長輪詢+本機 :5002),零防火牆變更、零新 token
+  - getUpdates 全系統唯一消費者=本橋(homelab-notify/hl-mc-watch 只出站,
+    2026-07-10 已盤;若日後另起消費者會互搶 409)
+  - callback_data 上限 64B 放不下簽名提案 → 提案本體存本地檔,按鈕只帶短 id
+
+設定(沿用,零新增):~/.config/homelab/notify-telegram.env(BOT_TOKEN/CHAT_ID)
+                     ~/.config/homelab/life-chat.env(LIFE_CHAT_TOKEN/PORT)
+狀態:~/.local/state/tg-bridge/(offset / transcript.json / proposals.json / bridge.log)
+啟動:cron @reboot + */5 自癒,經 hl-tg-bridge-run.sh(flock 單實例)
+指令:/start 說明;/reset 重開話題(清空帶給模型的近況上下文)
+"""
+import json
+import os
+import secrets
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Asia/Taipei")
+except Exception:
+    TZ = timezone(timedelta(hours=8))
+
+HOME = Path(os.path.expanduser("~"))
+CONFIG_FILES = [
+    HOME / ".config/homelab/notify-telegram.env",
+    HOME / ".config/homelab/life-chat.env",
+]
+STATE_DIR = HOME / ".local/state/tg-bridge"
+LOG_FILE = STATE_DIR / "bridge.log"
+OFFSET_FILE = STATE_DIR / "offset"
+TRANSCRIPT_FILE = STATE_DIR / "transcript.json"
+PROPOSALS_FILE = STATE_DIR / "proposals.json"
+
+POLL_TIMEOUT = 50        # getUpdates 長輪詢秒數
+CHAT_HTTP_TIMEOUT = 135  # life-chat CHAT_TIMEOUT=110s,留餘裕
+TRANSCRIPT_KEEP = 8      # 帶給 life-chat 的最近訊息數(其上限 40)
+TRANSCRIPT_TTL = 1800    # 30 分鐘沒動靜=自動重開話題
+PROPOSAL_PRUNE = 1800    # 本地提案暫存清理(執行時效以 life-chat 15 分鐘 TTL 為準)
+MAX_MSG = 3800           # 訊息長度上限(TG 4096 / life-chat 單則 4000)
+
+HELP_TEXT = (
+    "生活助理(行事曆+記帳),跟 portal 生活頁同一顆腦。直接說:\n"
+    "  「明天下午三點看牙」\n"
+    "  「李四還我500」\n"
+    "  「我這週有什麼行程」「王五還欠我多少」\n"
+    "寫入動作會出確認鈕,按〔確認〕才真的執行。\n"
+    "/reset 重開話題(30 分鐘沒對話也會自動重開)。"
+)
+
+
+def log(msg):
+    ts = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+    print(line, file=sys.stderr)
+
+
+def load_config():
+    cfg = {}
+    for cf in CONFIG_FILES:
+        if not cf.exists():
+            continue
+        for raw in cf.read_text().splitlines():
+            raw = raw.strip()
+            if not raw or raw.startswith("#") or "=" not in raw:
+                continue
+            k, v = raw.split("=", 1)
+            cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
+
+
+CFG = load_config()
+BOT = CFG.get("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = str(CFG.get("TELEGRAM_CHAT_ID", ""))
+LIFE_PORT = CFG.get("LIFE_CHAT_PORT", "5002")
+LIFE_TOKEN = CFG.get("LIFE_CHAT_TOKEN", "")
+
+
+def _http_json(url, body, headers, timeout):
+    """回 (status, dict);連線層失敗回 (None, {})。"""
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", **headers})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode() or "{}")
+        except Exception:
+            return e.code, {}
+    except Exception as e:  # noqa: BLE001
+        log(f"http fail {url.split('/')[-1].split('?')[0]}: {type(e).__name__}")
+        return None, {}
+
+
+def tg(method, timeout=25, **params):
+    """Telegram Bot API;回 result 或 None。log 絕不落 token。"""
+    st, j = _http_json(f"https://api.telegram.org/bot{BOT}/{method}",
+                       params, {}, timeout)
+    if st == 200 and j.get("ok"):
+        return j.get("result")
+    if st is not None:
+        log(f"tg {method} st={st} desc={str(j.get('description'))[:120]}")
+    return None
+
+
+def life(path, body):
+    return _http_json(f"http://127.0.0.1:{LIFE_PORT}{path}", body,
+                      {"Authorization": f"Bearer {LIFE_TOKEN}"}, CHAT_HTTP_TIMEOUT)
+
+
+# ---------- 狀態檔 ----------
+def _load(path, default):
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return default
+
+
+def _save(path, obj):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False))
+    tmp.replace(path)
+
+
+def transcript_get():
+    t = _load(TRANSCRIPT_FILE, {})
+    if time.time() - t.get("last", 0) > TRANSCRIPT_TTL:
+        return []
+    return t.get("messages", [])
+
+
+def transcript_set(messages):
+    _save(TRANSCRIPT_FILE, {"last": int(time.time()),
+                            "messages": messages[-TRANSCRIPT_KEEP:]})
+
+
+def proposals_all():
+    store = _load(PROPOSALS_FILE, {})
+    now = time.time()
+    store = {k: v for k, v in store.items()
+             if now - v.get("created", 0) < PROPOSAL_PRUNE}
+    return store
+
+
+# ---------- 訊息處理 ----------
+def handle_text(text):
+    text = text.strip()[:MAX_MSG]
+    if text in ("/start", "/help"):
+        tg("sendMessage", chat_id=CHAT_ID, text=HELP_TEXT)
+        return
+    if text == "/reset":
+        _save(TRANSCRIPT_FILE, {"last": 0, "messages": []})
+        tg("sendMessage", chat_id=CHAT_ID, text="🧹 已重開話題。")
+        return
+    log(f"MSG {text[:60]!r}")
+    ph = tg("sendMessage", chat_id=CHAT_ID, text="💭 思考中…")
+    msgs = transcript_get() + [{"role": "user", "content": text}]
+    st, j = life("/chat", {"messages": msgs})
+
+    def edit(t):
+        if ph:
+            tg("editMessageText", chat_id=CHAT_ID,
+               message_id=ph["message_id"], text=t[:4090])
+        else:
+            tg("sendMessage", chat_id=CHAT_ID, text=t[:4090])
+
+    if st is None:
+        edit("⚠️ 後端連不上或逾時(動作可能仍在處理),稍後再試。")
+        return
+    if st == 429:
+        edit("🐢 說太快了(6 次/分),稍等再說。")
+        return
+    if st == 409:
+        edit("⏳ 上一輪還在思考中,等它回完再說。")
+        return
+    if st != 200 or not j.get("ok"):
+        edit(f"⚠️ 後端錯誤:{str(j.get('error'))[:200]}")
+        log(f"CHAT FAIL st={st} err={str(j.get('error'))[:160]}")
+        return
+
+    reply = (j.get("reply") or "").strip() or "(無回覆)"
+    msgs.append({"role": "assistant", "content": reply[:MAX_MSG]})
+    transcript_set(msgs)
+    edit(reply)
+    if j.get("rejected"):
+        log(f"REJECTED {len(j['rejected'])}: {str(j['rejected'])[:200]}")
+
+    store = proposals_all()
+    for p in j.get("proposals") or []:
+        pid = secrets.token_hex(4)
+        m = tg("sendMessage", chat_id=CHAT_ID,
+               text=f"📋 {p['summary']}\n動作:{p['action']}",
+               reply_markup={"inline_keyboard": [[
+                   {"text": "✅ 確認", "callback_data": f"ok:{pid}"},
+                   {"text": "❌ 取消", "callback_data": f"no:{pid}"}]]})
+        store[pid] = {"proposal": p, "created": int(time.time()),
+                      "message_id": m["message_id"] if m else None}
+        log(f"PROPOSE {pid} {p['action']} {p['summary'][:60]!r}")
+    _save(PROPOSALS_FILE, store)
+
+
+def handle_callback(cb):
+    tg("answerCallbackQuery", callback_query_id=cb["id"])
+    data = cb.get("data") or ""
+    verb, _, pid = data.partition(":")
+    store = proposals_all()
+    ent = store.pop(pid, None)
+    _save(PROPOSALS_FILE, store)
+    mid = (cb.get("message") or {}).get("message_id")
+
+    def edit(t):
+        if mid:
+            tg("editMessageText", chat_id=CHAT_ID, message_id=mid, text=t[:4090])
+        else:
+            tg("sendMessage", chat_id=CHAT_ID, text=t[:4090])
+
+    if ent is None or verb not in ("ok", "no"):
+        edit("⌛ 這張提案卡已失效,請重新對話產生。")
+        return
+    p = ent["proposal"]
+    if verb == "no":
+        log(f"CANCEL {pid} {p['action']}")
+        edit(f"❌ 已取消:{p['summary']}")
+        _note(f"(使用者取消了提案:{p['summary']})")
+        return
+    log(f"CONFIRM {pid} {p['action']}")
+    st, j = life("/confirm", p)
+    if st == 200 and j.get("ok"):
+        edit(f"✅ 已執行:{p['summary']}\n{str(j.get('result'))[:400]}")
+        _note(f"(已執行:{p['summary']})")
+    elif st == 410:
+        edit(f"⌛ 提案已過期(15 分鐘):{p['summary']}\n請重新對話產生。")
+    else:
+        edit(f"⚠️ 執行失敗:{str(j.get('error'))[:300]}")
+        log(f"CONFIRM FAIL st={st} err={str(j.get('error'))[:160]}")
+
+
+def _note(text):
+    """執行/取消結果補進 transcript,讓追問(「剛剛那筆改成600」)有上下文。"""
+    msgs = transcript_get()
+    if msgs:
+        msgs.append({"role": "assistant", "content": text})
+        transcript_set(msgs)
+
+
+# ---------- 主迴圈 ----------
+def main():
+    for k, v in (("TELEGRAM_BOT_TOKEN", BOT), ("TELEGRAM_CHAT_ID", CHAT_ID),
+                 ("LIFE_CHAT_TOKEN", LIFE_TOKEN)):
+        if not v:
+            log(f"missing {k}; aborting")
+            sys.exit(1)
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(STATE_DIR, 0o700)
+    wh = tg("getWebhookInfo") or {}
+    if wh.get("url"):
+        log(f"WARN bot 已設 webhook={wh['url']!r},getUpdates 會 409;需人工裁決")
+    offset = int(_load(OFFSET_FILE, 0) or 0)
+    log(f"tg-bridge up offset={offset} life=127.0.0.1:{LIFE_PORT}")
+    while True:
+        st, j = _http_json(
+            f"https://api.telegram.org/bot{BOT}/getUpdates",
+            {"timeout": POLL_TIMEOUT, "offset": offset,
+             "allowed_updates": ["message", "callback_query"]},
+            {}, POLL_TIMEOUT + 15)
+        if st is None:
+            time.sleep(5)
+            continue
+        if st == 409:
+            log("getUpdates 409(另有消費者/webhook);60s 後重試")
+            time.sleep(60)
+            continue
+        if st != 200 or not j.get("ok"):
+            log(f"getUpdates st={st} desc={str(j.get('description'))[:120]}")
+            time.sleep(10)
+            continue
+        for u in j.get("result") or []:
+            offset = u["update_id"] + 1
+            try:
+                if "message" in u:
+                    m = u["message"]
+                    src = str((m.get("chat") or {}).get("id"))
+                    if src != CHAT_ID:
+                        log(f"DENY chat_id={src} from={str((m.get('from') or {}).get('username'))[:32]}")
+                        continue
+                    if m.get("text"):
+                        handle_text(m["text"])
+                    else:
+                        tg("sendMessage", chat_id=CHAT_ID, text="目前只支援文字訊息。")
+                elif "callback_query" in u:
+                    cb = u["callback_query"]
+                    src = str(((cb.get("message") or {}).get("chat") or {}).get("id"))
+                    if src != CHAT_ID:
+                        log(f"DENY callback chat_id={src}")
+                        continue
+                    handle_callback(cb)
+            except Exception as e:  # noqa: BLE001
+                log(f"handler 例外:{type(e).__name__}: {str(e)[:200]}")
+        _save(OFFSET_FILE, offset)
+
+
+if __name__ == "__main__":
+    main()

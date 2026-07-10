@@ -1,0 +1,26 @@
+# CT102 /opt/velocity/plugins/velocitywhitelist/config.yml(mc-autosleep 2026-07-10)
+# VelocityProxy = proxy 層閘門:非白名單者 LoginEvent 即拒,連等待室都進不去
+# -> 唯有白名單成員能觸發喚醒(使用者需求);名單取自 CT100 whitelist.json(9 人)。
+# servers.mc 留 disabled:後端自身 white-list=true 續作第二道閘。
+file-version: 2
+config: true
+lang: en
+kick-message: '&7You are not whitelisted on the &b{server} &7server.'
+proxy-kick-message: '&c未在白名單內——請聯絡管理員新增後再進入。'
+prefix: '&9&l[24Bay]'
+servers:
+  VelocityProxy:
+    enabled: true
+    whitelisted:
+    - ken2
+    - ken
+    - LaiLai74143
+    - .LaiLai74143
+    - ahgahgflshfa
+    - Alex
+    - MrBr_tw
+    - Palmo_Snow
+    - Umi21983
+  mc:
+    enabled: false
+    whitelisted: []

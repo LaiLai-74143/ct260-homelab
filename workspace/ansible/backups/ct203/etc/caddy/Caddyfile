@@ -1,9 +1,12 @@
 # ct-dmz-proxy (CT203, VLAN60 10.60.60.10) — reverse proxy 入口
 # 待辦 #2 + #3。Caddy 2.6.2 (Debian pkg, apt-mark hold)。
-# 角色：cloudflared -> Caddy(:80) -> 後端；內部 SSO 站走 :443 tls internal。
-# auto_https disable_redirects：內部站要 tls internal 自動發證（auto_https off 會連
-#   憑證自動化一併關掉、TLS 握手失敗——2026-07-04 實測），只關 80->443 轉址；
-#   :80 站帶明確埠、本就不受 auto_https 影響，對外 pw.* 仍由 Cloudflare 邊緣終結 TLS。
+# 角色：cloudflared -> Caddy(:80) -> 後端；內部 SSO 站走 :443（LE wildcard 憑證，檔案式）。
+# TLS（2026-07-09 起）：*.hl.lailai74143.com = Let's Encrypt wildcard（DNS-01/Cloudflare；
+#   CT260 acme.sh 簽發 → hl-deploy-hl-cert 推送 /etc/caddy/certs/ + restart，見 le-cert/）。
+#   舊 tls internal 自簽已退役（裝置端 root.crt 可移除）。
+# auto_https disable_redirects 維持：只關 80->443 轉址；內部站為顯式檔案憑證不觸發自動發證，
+#   :80 站帶明確埠本就不受影響，對外 pw.* 仍由 Cloudflare 邊緣終結 TLS。
+#   （歷史坑：auto_https off 會把 tls internal 的發證一併關掉——2026-07-04 實測；現已無此依賴。）
 # ★ admin off + systemd reload 不相容（reload 走 admin API:2019）→ 改設定一律 systemctl restart caddy。
 # 編輯此源檔後以 pct push 覆蓋 /etc/caddy/Caddyfile，caddy validate 後 restart。
 {
@@ -11,24 +14,45 @@
 	auto_https disable_redirects
 }
 
-# ===== 對外（cloudflared -> :80，pw.* = Vaultwarden）=====
-:80 {
-	# 健康端點（Uptime Kuma / 內部探活）
-	@health path /health /healthz
-	respond @health "OK" 200
-
-	# Vaultwarden：cloudflared -> Caddy -> DXP（目前 :80 只有 pw.* 流量，維持 catch-all）
-	reverse_proxy 192.168.30.3:50303
+# LE wildcard 憑證（*.hl.lailai74143.com）。檔案由 CT260 hl-deploy-hl-cert 推送，
+# caddy 使用者需可讀（root:caddy 640）。續簽=CT260 acme.sh cron（~60 天緩衝）。
+(hl_tls) {
+	tls /etc/caddy/certs/hl-fullchain.pem /etc/caddy/certs/hl-privkey.pem
 }
 
-# ===== 內部 SSO（待辦③）：hl.lailai74143.com 內部子域，AGH split-DNS -> 10.60.60.10 =====
+# ===== 對外（cloudflared -> :80）=====
+# 兩條對外服務共用 :80，以 Host 分流（handle 區塊互斥、由上而下）：
+#   /health*                     -> 探活「OK」（Kuma / 內部）
+#   schedule.lailai74143.com     -> guest-portal（CT205 DMZ，對外唯讀分享站；行程+借貸）
+#   其餘（含 pw.* Vaultwarden）    -> DXP:50303（catch-all 維持現況，不需知道 VW 確切 hostname）
+# ★ 零風險原則：只「加」schedule 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
+:80 {
+	# 健康端點（Uptime Kuma / 內部探活）—— 任何 host 的 /health 都回 OK
+	# （handle 只收單一 matcher,兩個 path 需具名 matcher——20260710 validate 教訓）
+	@health path /health /healthz
+	handle @health {
+		respond "OK" 200
+	}
+
+	# guest-portal（對外分享站）：cloudflared -> Caddy -> CT205:8300
+	@schedule host schedule.lailai74143.com
+	handle @schedule {
+		reverse_proxy 10.60.60.11:8300
+	}
+
+	# Vaultwarden 及其餘：cloudflared -> Caddy -> DXP（catch-all，維持現況）
+	handle {
+		reverse_proxy 192.168.30.3:50303
+	}
+}
+
+# ===== 內部 SSO（待辦③）：hl.lailai74143.com 內部子域，split-DNS -> 100.100.1.2/10.60.60.10 =====
 # home.arpa 是 public suffix，Authelia 4.38+ 拒作 cookie domain，故用自有網域內部子域。
-# TLS 為 Caddy internal CA（自簽）；根憑證在 CT203
-#   /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt（客戶端可安裝以消警告）。
+# TLS = LE wildcard（import hl_tls，見檔頭）；hl.* 零公網 record，DNS-01 純出站簽發。
 
 # Authelia 入口
 https://auth.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	reverse_proxy 127.0.0.1:9091
 }
 
@@ -36,7 +60,7 @@ https://auth.hl.lailai74143.com {
 # 寫入 nft ts_authed_v4（到台北當日 00:00）。後端 ts-gate.service（127.0.0.1:9092）。
 # X-Gate-Client 由此處覆寫，客戶端不可偽造。
 https://gate.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
@@ -54,7 +78,7 @@ http://:8082 {
 
 # 受保護服務 #1：Prometheus（CT201，原生無認證 -> 首個收編對象）
 https://prometheus.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
@@ -63,9 +87,12 @@ https://prometheus.hl.lailai74143.com {
 }
 
 # 受保護服務 #2：Grafana（CT201 10.80.80.11:3002）。forward_auth 前置一層 SSO；
-#   Grafana 自身登入保留（雙層，零回歸；日後要免二次登入再配 grafana.ini [auth.proxy]）。
+#   ★ 2026-07-09（portal 0.7.0 圖表嵌入）：Grafana 開匿名 Viewer（compose GF_AUTH_ANONYMOUS_*），
+#   內層「Grafana 自身登入」對讀取面已塌成匿名——過 Authelia 即可讀全 org dashboard 與
+#   任意唯讀查詢（/api/ds/query）；admin/編輯面仍要 Grafana 登入。曝險界定見
+#   portal/scripts/finish-grafana-embed.sh 檔頭與監控告警.txt §7。
 https://grafana.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
@@ -75,7 +102,7 @@ https://grafana.hl.lailai74143.com {
 
 # 受保護服務 #3：Uptime Kuma（CT201 10.80.80.11:3001；SPA + websocket，Caddy 自動處理 Upgrade）。
 https://kuma.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
@@ -85,7 +112,7 @@ https://kuma.hl.lailai74143.com {
 
 # 受保護服務 #4：Homepage 入口牆面（CT201 10.80.80.11:3000，gethomepage；本身無認證 -> 該收編）。
 https://homepage.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
@@ -97,7 +124,7 @@ https://homepage.hl.lailai74143.com {
 #   portal 程式碼零認證，身份全靠此層（Authelia default two_factor）；
 #   /api/stream 為 SSE（text/event-stream），Caddy 對 event-stream 自動即時 flush。
 https://portal.hl.lailai74143.com {
-	tls internal
+	import hl_tls
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name

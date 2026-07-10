@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""hl-guest — guest-portal 帳號管理(CT260;帳號併入 NocoDB People 表,與記賬共用同一庫)。
+
+★ 2026-07-10 改版(使用者裁決):帳號不再存本地 JSON,改寫進 NocoDB People 表三欄:
+    portal_user_hash  身分證字號 scrypt 雜湊
+    portal_pw_hash    密碼(管制標籤號)scrypt 雜湊
+    portal_enabled    啟用(Checkbox)
+  → 記賬/登入共用同一庫;圖形化管理 = NocoDB 內建 UI(PC40 開 :8080)。
+  新增帳號時人名若不在 People,自動建該員(等於「記賬也新增該員」)。
+  身分證字號與密碼皆單向雜湊,連 NocoDB UI 也讀不回明文。
+
+用法(CT260):
+  hl-guest setup                                     # 一次性:在 People 加三欄(冪等)
+  hl-guest add <身分證字號> <記賬人名> [--ask-pass]  # 兩者皆雜湊;人名不存在自動建列
+  hl-guest passwd <記賬人名> [--ask-pass]            # 重設密碼
+  hl-guest disable / enable <記賬人名>               # 停用 / 啟用
+  hl-guest rm <記賬人名>                             # 移除登入(清三欄;People 列本身保留=仍是記賬對象)
+  hl-guest list                                      # 列出有帳號的人(不顯示身分證字號)
+選項:
+  --ask-pass   add/passwd 互動輸入自訂密碼(getpass 不回顯、不經 argv/ps)。
+  --no-push    變更後不自動推送(預設觸發 hl-write-guest 推 CT205)。
+"""
+import base64
+import getpass
+import hashlib
+import json
+import os
+import secrets
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+NOCODB_ENV = HOME / ".config/homelab/nocodb.env"
+WRITE_GUEST = HOME / ".local/bin/hl-write-guest"
+
+_N, _R, _P, _DKLEN = 2 ** 14, 8, 1, 32
+_PW_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
+COL_USER, COL_PW, COL_EN = "portal_user_hash", "portal_pw_hash", "portal_enabled"
+
+
+def die(msg: str, code: int = 1):
+    print(f"hl-guest: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+class NCError(Exception):
+    """NocoDB / 邏輯錯誤——人類 CLI 轉 die,svc 模式轉 JSON。"""
+    def __init__(self, msg: str, code: int = 1):
+        super().__init__(msg)
+        self.msg, self.code = msg, code
+
+
+def load_env(path: Path) -> dict:
+    env = {}
+    try:
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k] = v.strip().strip('"').strip("'")
+    except OSError as e:
+        die(f"讀不到 {path}: {e}")
+    return env
+
+
+def hash_secret(s: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.scrypt(s.encode(), salt=salt, n=_N, r=_R, p=_P, dklen=_DKLEN)
+    return f"scrypt${_N}${_R}${_P}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
+
+
+def gen_password(nchars: int = 12) -> str:
+    return "".join(secrets.choice(_PW_ALPHABET) for _ in range(nchars))
+
+
+def prompt_password() -> str:
+    if not sys.stdin.isatty():
+        die("--ask-pass 需要互動終端(輸入不回顯);管線呼叫請改用隨機密碼")
+    pw = getpass.getpass("  自訂密碼(輸入不回顯): ")
+    if not pw:
+        die("密碼不可為空")
+    if getpass.getpass("  再輸一次核對: ") != pw:
+        die("兩次輸入不一致")
+    if len(pw) < 6:
+        print("  ⚠️ 密碼短於 6 字元——有鎖定+哨兵擋暴力,但仍偏弱,自行斟酌。")
+    return pw
+
+
+# ── NocoDB ──
+class NC:
+    def __init__(self):
+        c = load_env(NOCODB_ENV)
+        self.url = c["NC_URL"].rstrip("/")
+        self.tok = c["NC_TOKEN"]
+        self.base = c.get("NC_BASE", "ppralaha4e76q5o")
+        self._tid = None
+        self._cols = None
+
+    def _req(self, method: str, path: str, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            self.url + path, data=data, method=method,
+            headers={"xc-token": self.tok, "Content-Type": "application/json"})
+        try:
+            r = urllib.request.urlopen(req, timeout=25)
+            raw = r.read()
+            return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            raise NCError(f"NocoDB {method} {path} 失敗 {e.code}: {e.read().decode()[:200]}")
+        except Exception as e:  # noqa: BLE001 — 連線/逾時等
+            raise NCError(f"NocoDB {method} {path} 連線失敗:{type(e).__name__}: {e}")
+
+    def people_tid(self) -> str:
+        if self._tid:
+            return self._tid
+        for t in self._req("GET", f"/api/v1/db/meta/projects/{self.base}/tables")["list"]:
+            if t["title"] == "People":
+                self._tid = t["id"]
+                return self._tid
+        raise NCError("NocoDB 無 People 表")
+
+    def columns(self) -> list[str]:
+        if self._cols is None:
+            meta = self._req("GET", f"/api/v1/db/meta/tables/{self.people_tid()}")
+            self._cols = [c["title"] for c in meta["columns"]]
+        return self._cols
+
+    def ensure_columns(self):
+        tid = self.people_tid()
+        have = self.columns()
+        specs = [(COL_USER, "SingleLineText"), (COL_PW, "SingleLineText"), (COL_EN, "Checkbox")]
+        added = 0
+        for title, uidt in specs:
+            if title in have:
+                print(f"  ✓ 欄位 {title} 已存在,跳過")
+                continue
+            self._req("POST", f"/api/v1/db/meta/tables/{tid}/columns", {"title": title, "uidt": uidt})
+            print(f"  ✓ 已加欄位 {title}({uidt})")
+            added += 1
+        self._cols = None
+        return added
+
+    def rows(self) -> list[dict]:
+        tid, out = self.people_tid(), []
+        while True:
+            r = self._req("GET", f"/api/v2/tables/{tid}/records?limit=200&offset={len(out)}")
+            batch = r.get("list", [])
+            out += batch
+            if not batch or r.get("pageInfo", {}).get("isLastPage", True):
+                break
+        return out
+
+    def create_person(self, name: str) -> dict:
+        tid = self.people_tid()
+        rec = self._req("POST", f"/api/v2/tables/{tid}/records", {"name": name})
+        # 回傳可能是 {Id:..} 或 [{Id:..}];統一取單筆
+        if isinstance(rec, list):
+            rec = rec[0]
+        return rec
+
+    def patch(self, row_id, fields: dict):
+        tid = self.people_tid()
+        self._req("PATCH", f"/api/v2/tables/{tid}/records", {"Id": row_id, **fields})
+
+
+def find_row(rows: list[dict], name: str) -> dict | None:
+    for r in rows:
+        if r.get("name") == name:
+            return r
+    return None
+
+
+def has_account(row: dict) -> bool:
+    return bool(row.get(COL_USER))
+
+
+def require_columns(nc: NC):
+    cols = nc.columns()
+    missing = [c for c in (COL_USER, COL_PW, COL_EN) if c not in cols]
+    if missing:
+        raise NCError(f"People 表缺欄位 {missing};先跑一次 hl-guest setup", code=2)
+
+
+def push(no_push: bool):
+    if no_push:
+        print("（--no-push:略過推送;稍後手動 hl-write-guest)")
+        return
+    if not WRITE_GUEST.exists():
+        print(f"（注意:{WRITE_GUEST} 不存在,未推送)")
+        return
+    r = subprocess.run([str(WRITE_GUEST)], capture_output=True, text=True, timeout=120)
+    tail = (r.stdout + r.stderr).strip().splitlines()
+    print("  " + (tail[-1] if tail else f"hl-write-guest rc={r.returncode}"))
+    if r.returncode != 0:
+        print("  ⚠️ 推送失敗;帳號變更已寫 NocoDB,修好後手動跑 hl-write-guest")
+
+
+# ── 子命令 ──
+def cmd_setup(_a, _np):
+    nc = NC()
+    n = nc.ensure_columns()
+    print(f"✓ setup 完成(新增 {n} 欄)。可在 NocoDB UI(People 表)看到 {COL_USER}/{COL_PW}/{COL_EN}。")
+
+
+def cmd_add(args, no_push, ask_pass=False):
+    if len(args) < 2:
+        die("用法:hl-guest add <身分證字號> <記賬人名> [--ask-pass]")
+    login_id, person = args[0], args[1]
+    nc = NC(); require_columns(nc)
+    rows = nc.rows()
+    row = find_row(rows, person)
+    if row is None:
+        row = nc.create_person(person)
+        print(f"  ⓘ 記賬 People 無『{person}』,已自動新增該員")
+    elif has_account(row):
+        die(f"『{person}』已有登入帳號(改密碼用 hl-guest passwd)")
+    pw = prompt_password() if ask_pass else gen_password()
+    nc.patch(row["Id"], {COL_USER: hash_secret(login_id), COL_PW: hash_secret(pw), COL_EN: True})
+    print(f"✓ 已為『{person}』建立登入(身分證字號與密碼皆雜湊寫入 NocoDB,不留明文)")
+    if ask_pass:
+        print("  (自訂密碼已設定,不回顯)")
+    else:
+        print(f"\n  登入名:{login_id}\n  密碼:{pw}\n  ↑ 僅顯示這一次,請立刻交給對方。")
+    push(no_push)
+
+
+def cmd_passwd(args, no_push, ask_pass=False):
+    if not args:
+        die("用法:hl-guest passwd <記賬人名> [--ask-pass]")
+    person = args[0]
+    nc = NC(); require_columns(nc)
+    row = find_row(nc.rows(), person)
+    if not row or not has_account(row):
+        die(f"『{person}』沒有登入帳號")
+    pw = prompt_password() if ask_pass else gen_password()
+    nc.patch(row["Id"], {COL_PW: hash_secret(pw)})
+    if ask_pass:
+        print(f"✓ 已重設『{person}』密碼(自訂,不回顯)")
+    else:
+        print(f"✓ 已重設『{person}』密碼\n\n  新密碼:{pw}\n  ↑ 僅顯示一次。")
+    push(no_push)
+
+
+def cmd_toggle(args, enable: bool, no_push):
+    if not args:
+        die(f"用法:hl-guest {'enable' if enable else 'disable'} <記賬人名>")
+    person = args[0]
+    nc = NC(); require_columns(nc)
+    row = find_row(nc.rows(), person)
+    if not row or not has_account(row):
+        die(f"『{person}』沒有登入帳號")
+    nc.patch(row["Id"], {COL_EN: enable})
+    print(f"✓ 『{person}』已{'啟用' if enable else '停用'}")
+    push(no_push)
+
+
+def cmd_rm(args, no_push):
+    if not args:
+        die("用法:hl-guest rm <記賬人名>")
+    person = args[0]
+    nc = NC(); require_columns(nc)
+    row = find_row(nc.rows(), person)
+    if not row or not has_account(row):
+        die(f"『{person}』沒有登入帳號")
+    # 只清登入三欄,保留 People 列本身(此人可能仍是借貸對象)
+    nc.patch(row["Id"], {COL_USER: None, COL_PW: None, COL_EN: False})
+    print(f"✓ 已移除『{person}』的登入(記賬 People 列保留)")
+    push(no_push)
+
+
+def cmd_list(_a, _np):
+    nc = NC(); require_columns(nc)
+    accts = [r for r in nc.rows() if has_account(r)]
+    if not accts:
+        print("（尚無登入帳號;hl-guest add <身分證字號> <記賬人名>）")
+        return
+    print(f"{'記賬人':<16}{'狀態':<8}建立")
+    for r in accts:
+        st = "啟用" if r.get(COL_EN) else "停用"
+        print(f"{r.get('name',''):<16}{st:<8}{(r.get('CreatedAt') or '')[:10]}")
+    print("（身分證字號/密碼皆雜湊儲存,不顯示明文;圖形化管理見 NocoDB People 表)")
+
+
+# ── svc:機器介面(stdin JSON → stdout JSON;secrets 全程不進 argv/ps,供 portal 生活頁面板用)──
+def _svc_dispatch(req: dict) -> dict:
+    op = req.get("op")
+    nc = NC()
+    if op == "setup":
+        return {"ok": True, "added": nc.ensure_columns()}
+    require_columns(nc)
+    if op == "list":
+        accts = [{"person": r.get("name"), "enabled": bool(r.get(COL_EN)),
+                  "created": (r.get("CreatedAt") or "")[:10]}
+                 for r in nc.rows() if has_account(r)]
+        accts.sort(key=lambda a: a["person"] or "")
+        return {"ok": True, "accounts": accts}
+    if op == "add":
+        login_id = (req.get("login_id") or "").strip()
+        person = (req.get("person") or "").strip()
+        pw = req.get("password") or ""
+        if not login_id or not person or not pw:
+            return {"ok": False, "error": "缺 login_id / person / password"}
+        rows = nc.rows()
+        row = find_row(rows, person)
+        created = False
+        if row is None:
+            row = nc.create_person(person)
+            created = True
+        elif has_account(row):
+            return {"ok": False, "error": f"『{person}』已有登入帳號"}
+        nc.patch(row["Id"], {COL_USER: hash_secret(login_id),
+                             COL_PW: hash_secret(pw), COL_EN: True})
+        return {"ok": True, "person": person, "created_person": created}
+    if op == "passwd":
+        person = (req.get("person") or "").strip()
+        pw = req.get("password") or ""
+        if not person or not pw:
+            return {"ok": False, "error": "缺 person / password"}
+        row = find_row(nc.rows(), person)
+        if not row or not has_account(row):
+            return {"ok": False, "error": f"『{person}』沒有登入帳號"}
+        nc.patch(row["Id"], {COL_PW: hash_secret(pw)})
+        return {"ok": True, "person": person}
+    if op in ("enable", "disable"):
+        person = (req.get("person") or "").strip()
+        row = find_row(nc.rows(), person)
+        if not row or not has_account(row):
+            return {"ok": False, "error": f"『{person}』沒有登入帳號"}
+        nc.patch(row["Id"], {COL_EN: op == "enable"})
+        return {"ok": True, "person": person}
+    if op == "rm":
+        person = (req.get("person") or "").strip()
+        row = find_row(nc.rows(), person)
+        if not row or not has_account(row):
+            return {"ok": False, "error": f"『{person}』沒有登入帳號"}
+        nc.patch(row["Id"], {COL_USER: None, COL_PW: None, COL_EN: False})
+        return {"ok": True, "person": person}
+    return {"ok": False, "error": f"未知 op:{op}"}
+
+
+def cmd_svc(_args, no_push):
+    try:
+        req = json.loads(sys.stdin.read() or "{}")
+    except Exception:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": "bad json"})); return
+    try:
+        res = _svc_dispatch(req)
+    except NCError as e:
+        res = {"ok": False, "error": e.msg}
+    except Exception as e:  # noqa: BLE001
+        res = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    # 成功的變更操作觸發推送(list/setup 不需)
+    if res.get("ok") and req.get("op") in ("add", "passwd", "enable", "disable", "rm") and not no_push:
+        try:
+            r = subprocess.run([str(WRITE_GUEST)], capture_output=True, text=True, timeout=120)
+            res["pushed"] = r.returncode == 0
+        except Exception:  # noqa: BLE001
+            res["pushed"] = False
+    print(json.dumps(res, ensure_ascii=False))
+
+
+def main():
+    argv = sys.argv[1:]
+    no_push = "--no-push" in argv
+    ask_pass = "--ask-pass" in argv
+    argv = [x for x in argv if x not in ("--no-push", "--ask-pass")]
+    if not argv:
+        die("用法:hl-guest {setup|add|passwd|enable|disable|rm|list|svc} … [--ask-pass] [--no-push]", 2)
+    cmd, rest = argv[0], argv[1:]
+    table = {
+        "setup": lambda: cmd_setup(rest, no_push),
+        "add": lambda: cmd_add(rest, no_push, ask_pass),
+        "passwd": lambda: cmd_passwd(rest, no_push, ask_pass),
+        "enable": lambda: cmd_toggle(rest, True, no_push),
+        "disable": lambda: cmd_toggle(rest, False, no_push),
+        "rm": lambda: cmd_rm(rest, no_push),
+        "list": lambda: cmd_list(rest, no_push),
+        "svc": lambda: cmd_svc(rest, no_push),
+    }
+    fn = table.get(cmd)
+    if not fn:
+        die(f"未知子命令『{cmd}』", 2)
+    try:
+        fn()
+    except NCError as e:  # 人類 CLI:NocoDB/邏輯錯誤轉友善訊息
+        die(e.msg, e.code)
+
+
+if __name__ == "__main__":
+    main()

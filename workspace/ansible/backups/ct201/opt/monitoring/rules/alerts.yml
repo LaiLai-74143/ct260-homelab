@@ -31,8 +31,24 @@ groups:
 
   - name: targets
     rules:
+      # B1 依賴抑制(2026-07-10):OpenWrt=跨 VLAN 路由樞紐,它不可達時 CT201 對
+      # servers/dmz/mc/honeypot 各網段的 scrape 全滅,十幾條 TargetDown 全是影子。
+      # AM inhibit:RouterDown 壓全部 TargetDown(不設等值鍵——路由斷=全斷)。
+      # for 2m 刻意短於 TargetDown 的 3m,確保抑制源先 firing。
+      - alert: RouterDown
+        expr: up{job="openwrt-system"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenWrt 不可達——跨 VLAN 路由可能停擺"
+          description: "CT201 連不上 OpenWrt(10.80.80.1:9105)超過 2 分鐘,全站跨 VLAN 監控失明,其餘 TargetDown 已抑制。排查順序:Switch3F 電源/線路 → routerpve(192.168.10.2:8006)→ qm status 101(OpenWrt VM)→ PPPoE。"
+          priority: "9"
+
+      # VM300 蜜罐排除(2026-07-10 使用者裁決 onboot=0 手動開機,常態關機非故障;
+      # 開機時段 up==1 自動恢復觀測。代價=蜜罐運行中 crash 不告警,接受)
       - alert: TargetDown
-        expr: up == 0
+        expr: up{job!~"vm300-honeypot-node|cowrie-exporter"} == 0
         for: 3m
         labels:
           severity: warning

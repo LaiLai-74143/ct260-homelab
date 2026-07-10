@@ -99,6 +99,7 @@ config dhcp 'dmz'
 	option ra_slaac '1'
 	option ra_flags 'none'
 	option ra_default '1'
+	option ignore '1'
 
 config dhcp 'game_services'
 	option interface 'game_services'

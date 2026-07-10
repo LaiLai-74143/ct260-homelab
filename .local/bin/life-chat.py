@@ -332,8 +332,35 @@ class Handler(BaseHTTPRequestHandler):
             self._chat()
         elif self.path == "/confirm":
             self._confirm()
+        elif self.path == "/guest":
+            self._guest()
         else:
             self._reply(404, {"ok": False, "error": "not found"})
+
+    def _guest(self):
+        # guest-portal 帳號管理(待辦50;portal 生活頁面板 → 這裡 → hl-guest svc → NocoDB)。
+        # 密碼/身分證字號經 stdin 交 hl-guest,不進 argv;log 只記 op+person,絕不記 secrets。
+        body = self._auth_body()
+        if body is None:
+            return
+        op = body.get("op")
+        if op not in ("list", "add", "passwd", "enable", "disable", "rm"):
+            self._reply(400, {"ok": False, "error": "op 不在白名單"})
+            return
+        try:
+            r = subprocess.run(
+                [str(HOME / ".local/bin/hl-guest"), "svc"],
+                input=json.dumps(body), text=True, capture_output=True, timeout=140)
+        except Exception as e:  # noqa: BLE001
+            log(f"GUEST op={op} ERR {type(e).__name__}")
+            self._reply(502, {"ok": False, "error": f"hl-guest 執行失敗:{type(e).__name__}"})
+            return
+        log(f"GUEST op={op} person={body.get('person', '')} rc={r.returncode}")
+        try:
+            out = json.loads((r.stdout or "").strip() or "{}")
+        except Exception:  # noqa: BLE001
+            out = {"ok": False, "error": "hl-guest 輸出異常"}
+        self._reply(200 if out.get("ok") else 400, out)
 
     def _chat(self):
         body = self._auth_body()

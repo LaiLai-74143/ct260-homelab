@@ -13,13 +13,13 @@ groups:
           priority: "5"
 
       - alert: PveGuestUnexpectedStop
-        expr: pve_up{id=~"(lxc|qemu)/.+", id!="lxc/250"} == 0
+        expr: pve_up{id=~"(lxc|qemu)/.+", id!~"lxc/250|qemu/300"} == 0
         for: 3m
         labels:
           severity: critical
         annotations:
           summary: "PVE guest 非預期停止: {{ $labels.id }}"
-          description: "{{ $labels.instance }} 上的 {{ $labels.id }} 已停止超過 3 分鐘 (pve_up==0)。CT250 常態關機已排除,其餘 CT/VM 皆應常駐。"
+          description: "{{ $labels.instance }} 上的 {{ $labels.id }} 已停止超過 3 分鐘 (pve_up==0)。CT250 常態關機、VM300 蜜罐手動開機(2026-07-10 裁決 onboot=0)已排除,其餘 CT/VM 皆應常駐。"
           priority: "8"
 
       - alert: PveStorageAlmostFull

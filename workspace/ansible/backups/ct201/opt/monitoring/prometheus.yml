@@ -12,12 +12,17 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # node 標籤(2026-07-10 B1 依賴抑制):此 exporter「物理上」跑在哪台機器
+  # (pve24/openwrt/routerpve/nas/switch3f),供按宿主聚合與 inhibit 等值鍵;新增 target 必帶。
+  # 注意:監控棧本身在 pve24(CT201)——pve24 整機倒時 Prometheus/AM 一起死、無告警可發,
+  # 該盲區由外部哨兵覆蓋(watchdog-ct201、ct260-deadman、hl-log-liveness)。
   - job_name: "prometheus"
     static_configs:
       - targets:
           - "prometheus:9090"
         labels:
           device: "Prometheus"
+          node: "pve24"
           order: "19"
 
   - job_name: "monitor-node"
@@ -26,6 +31,7 @@ scrape_configs:
           - "host.docker.internal:9100"
         labels:
           device: "CT201 監控"
+          node: "pve24"
           order: "03"
 
   - job_name: "pve-node"
@@ -34,6 +40,7 @@ scrape_configs:
           - "pve24-server.home.arpa:9100"
         labels:
           device: "24Bay PVE"
+          node: "pve24"
           order: "09"
   - job_name: "mc-server-node"
     static_configs:
@@ -41,6 +48,7 @@ scrape_configs:
           - "mc-backend.home.arpa:9100"
         labels:
           device: "CT100 MC伺服器"
+          node: "pve24"
           order: "01"
 
   - job_name: "openwrt-portscan-autoban"
@@ -51,6 +59,7 @@ scrape_configs:
           - "10.80.80.1:9105"
         labels:
           device: "OpenWrt 自動封禁"
+          node: "openwrt"
           order: "13"
 
   - job_name: "portscan-geoip"
@@ -60,6 +69,7 @@ scrape_configs:
           - "host.docker.internal:9115"
         labels:
           device: "Portscan GeoIP"
+          node: "pve24"
           order: "17"
 
   - job_name: "cowrie-exporter"
@@ -69,6 +79,7 @@ scrape_configs:
           - "10.66.66.10:9116"
         labels:
           device: "Cowrie 蜜罐exporter"
+          node: "pve24"
           order: "15"
 
   - job_name: "cowrie-geoip"
@@ -78,6 +89,7 @@ scrape_configs:
           - "10.80.80.11:9117"
         labels:
           device: "Cowrie GeoIP"
+          node: "pve24"
           order: "16"
 
   - job_name: "openwrt-cowrie-quarantine"
@@ -88,6 +100,7 @@ scrape_configs:
           - "10.80.80.1:9105"
         labels:
           device: "OpenWrt 蜜罐隔離"
+          node: "openwrt"
           order: "14"
 
   - job_name: "ct102-mc-proxy-node"
@@ -96,6 +109,7 @@ scrape_configs:
           - "10.70.70.10:9100"
         labels:
           device: "CT102 MC代理"
+          node: "pve24"
           order: "02"
 
   - job_name: "ct260-codex-ops-node"
@@ -104,6 +118,7 @@ scrape_configs:
           - "192.168.20.60:9100"
         labels:
           device: "CT260 維運"
+          node: "pve24"
           order: "06"
 
   - job_name: "n95-router-pve-node"
@@ -112,6 +127,7 @@ scrape_configs:
           - "router-pve.home.arpa:9100"
         labels:
           device: "N95 路由PVE"
+          node: "routerpve"
           order: "11"
 
   - job_name: "openwrt-system"
@@ -122,6 +138,7 @@ scrape_configs:
           - "10.80.80.1:9105"
         labels:
           device: "OpenWrt 系統"
+          node: "openwrt"
           order: "12"
 
   - job_name: "dxp4800-node"
@@ -129,6 +146,7 @@ scrape_configs:
       - targets: ["nas.home.arpa:9100"]
         labels:
           device: "DXP4800 NAS"
+          node: "nas"
           order: "10"
 
   - job_name: "vm300-honeypot-node"
@@ -136,6 +154,7 @@ scrape_configs:
       - targets: ["10.66.66.10:9100"]
         labels:
           device: "VM300 蜜罐"
+          node: "pve24"
           order: "08"
 
   - job_name: "ct270-life-ops-node"
@@ -144,6 +163,7 @@ scrape_configs:
           - "192.168.20.70:9100"
         labels:
           device: "CT270 生活維運"
+          node: "pve24"
           order: "07"
 
   - job_name: "ct-dmz-proxy-node"
@@ -152,6 +172,7 @@ scrape_configs:
           - "10.60.60.10:9100"
         labels:
           device: "CT203 DMZ反代"
+          node: "pve24"
           order: "05"
 
   - job_name: "ct202-fwdproxy-node"
@@ -160,6 +181,7 @@ scrape_configs:
           - "10.80.80.10:9100"
         labels:
           device: "CT202 出站代理"
+          node: "pve24"
           order: "04"
 
   - job_name: "authelia"
@@ -169,6 +191,7 @@ scrape_configs:
           - "10.60.60.10:9959"
         labels:
           device: "Authelia SSO"
+          node: "pve24"
           order: "18"
   - job_name: "loki"
     static_configs:
@@ -176,6 +199,7 @@ scrape_configs:
           - "loki:3100"
         labels:
           device: "Loki 日誌庫"
+          node: "pve24"
           order: "20"
   - job_name: "pve"
     metrics_path: /pve
@@ -187,12 +211,14 @@ scrape_configs:
         labels:
           __param_module: "pve24"
           device: "24Bay PVE API"
+          node: "pve24"
           order: "21"
       - targets:
           - "router-pve.home.arpa"
         labels:
           __param_module: "routerpve"
           device: "N95 路由PVE API"
+          node: "routerpve"
           order: "22"
     relabel_configs:
       - source_labels: [__address__]
@@ -214,6 +240,7 @@ scrape_configs:
           - "192.168.10.21"
         labels:
           device: "Switch3F 交換機"
+          node: "switch3f"
           order: "23"
     relabel_configs:
       - source_labels: [__address__]

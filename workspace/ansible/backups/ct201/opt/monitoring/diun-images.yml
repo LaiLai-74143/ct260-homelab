@@ -111,3 +111,10 @@
   max_tags: 5
   sort_tags: semver
   include_tags: ["^\\d+\\.\\d+\\.\\d+$"]
+
+# --- CT270 freshrss(待辦30 部署 2026-07-09;B5 對帳補入 2026-07-10) ---
+- name: freshrss/freshrss:1.29.1
+  watch_repo: true
+  max_tags: 5
+  sort_tags: semver
+  include_tags: ["^\d+\.\d+\.\d+$"]
