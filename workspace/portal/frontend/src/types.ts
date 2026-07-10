@@ -280,3 +280,24 @@ export interface LifeChatInfo {
   scope: string
   generated_at: string
 }
+
+// ---- guest-portal 帳號管理(待辦50;生活頁面板) ----
+export interface GuestAccount {
+  person: string
+  enabled: boolean
+  created: string
+}
+
+export interface GuestListResult {
+  ok: boolean
+  accounts?: GuestAccount[]
+  error?: string
+}
+
+export interface GuestOpResult {
+  ok: boolean
+  person?: string
+  created_person?: boolean
+  pushed?: boolean
+  error?: string
+}

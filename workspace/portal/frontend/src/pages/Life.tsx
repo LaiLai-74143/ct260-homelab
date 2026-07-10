@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useLife } from '../api'
+import { IS_HL, useLife } from '../api'
 import Dot from '../components/Dot'
+import GuestPanel from '../components/GuestPanel'
 import LifeChat from '../components/LifeChat'
 import PageHead from '../components/PageHead'
 import type { DebtTx, Life as LifeData } from '../types'
@@ -227,6 +228,9 @@ export default function Life() {
           記帳(NocoDB)→ <span className="font-mono text-[12px] text-muted">192.168.20.70:8080 ↗</span>
         </a>
       </div>
+
+      {/* 行程共享帳號管理(待辦50;僅 portal.hl 顯示,BFF 再驗 Remote-User) */}
+      {IS_HL && <GuestPanel />}
 
       {/* 生活助理:Sonnet 5 對話框(唯讀工具+寫入提案單,僅 portal.hl) */}
       <LifeChat />

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, GameActionResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -191,6 +191,28 @@ export function useLifeConfirmMutation() {
     retry: 0,
     mutationFn: (p) => postJson('/api/life/confirm', p),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['life'] }) },
+  })
+}
+
+// ---- guest-portal 帳號管理(待辦50;BFF /api/life/guest → CT260 life-chat → hl-guest svc) ----
+
+/** 帳號清單(只回人名/狀態/建立日,無雜湊) */
+export function useGuestAccounts() {
+  return useQuery<GuestListResult>({
+    queryKey: ['guestAccounts'],
+    queryFn: () => getJson('/api/life/guest'),
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+/** 帳號操作(add/passwd/enable/disable/rm);成功後刷新清單 */
+export function useGuestMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: GuestOpResult }, ActionHttpError, Record<string, unknown>>({
+    retry: 0,
+    mutationFn: (body) => postJson('/api/life/guest', body),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['guestAccounts'] }) },
   })
 }
 

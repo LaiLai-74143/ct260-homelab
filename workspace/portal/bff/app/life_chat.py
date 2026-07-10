@@ -132,6 +132,60 @@ async def confirm(body: dict, remote_user: str | None) -> tuple[int, dict]:
     return _map(r, "確認執行回應異常")
 
 
+# ---- guest-portal 帳號管理(待辦50;生活頁面板 → CT260 life-chat /guest → hl-guest svc) ----
+_GUEST_OPS = ("list", "add", "passwd", "enable", "disable", "rm")
+_GUEST_TIMEOUT = httpx.Timeout(150.0, connect=5.0)  # add/passwd 含 scrypt + 推送,留餘裕
+_mock_guest: list[dict] = [
+    {"person": "小明", "enabled": True, "created": "2026-07-01"},
+    {"person": "老王", "enabled": False, "created": "2026-07-05"},
+]
+
+
+async def guest(body: dict, remote_user: str | None) -> tuple[int, dict]:
+    """轉發帳號管理到 CT260。secrets(身分證字號/密碼)只在 body 內轉發,BFF 不落日誌。"""
+    _gate(remote_user)
+    op = body.get("op")
+    if op not in _GUEST_OPS:
+        raise ChatError(400, "op 不在白名單", f"允許:{'/'.join(_GUEST_OPS)}")
+    if MODE == "mock":
+        return 200, _mock_guest_op(op, body)
+    try:
+        r = await _post("/guest", body, _GUEST_TIMEOUT)
+    except httpx.TimeoutException:
+        raise ChatError(504, "帳號服務無回應(timeout)", "稍候重試;或檢查 CT260 :5002")
+    except httpx.HTTPError as e:
+        raise ChatError(504, "life-chat 連線失敗",
+                        f"{type(e).__name__};檢查 CT260 :5002 或 Allow-Monitor-To-CT260-LifeChat-5002")
+    try:
+        rb = r.json()
+    except ValueError:
+        rb = {}
+    if r.status_code in (401, 403):
+        raise ChatError(502, "帳號服務拒絕", "檢查 LIFE_CHAT_TOKEN")
+    # hl-guest 的業務錯誤(重複帳號/查無人等)以 400+ok:false 帶回,原樣透傳給前端顯示
+    return (200 if rb.get("ok") else 400), rb
+
+
+def _mock_guest_op(op: str, body: dict) -> dict:
+    if op == "list":
+        return {"ok": True, "accounts": list(_mock_guest)}
+    person = (body.get("person") or "").strip()
+    if op == "add":
+        person = person or "(未填)"
+        if any(a["person"] == person for a in _mock_guest):
+            return {"ok": False, "error": f"『{person}』已有登入帳號"}
+        _mock_guest.append({"person": person, "enabled": True, "created": "2026-07-10"})
+        return {"ok": True, "person": person, "created_person": True, "pushed": True}
+    for a in _mock_guest:
+        if a["person"] == person:
+            if op in ("enable", "disable"):
+                a["enabled"] = op == "enable"
+            elif op == "rm":
+                _mock_guest.remove(a)
+            return {"ok": True, "person": person, "pushed": True}
+    return {"ok": False, "error": f"『{person}』沒有登入帳號"}
+
+
 async def _mock_chat(msgs: list) -> dict:
     """mock:UI 走查用——問句含「記」「新增」「加」出提案卡,其餘純文字回覆。"""
     await asyncio.sleep(0.8)

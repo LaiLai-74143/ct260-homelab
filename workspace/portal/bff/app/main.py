@@ -21,7 +21,7 @@ BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.8.2", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.9.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -213,6 +213,32 @@ async def life_confirm(request: Request):
         return _err(400, "body 須為 JSON 物件", "提案五欄位原樣帶回:action/args/summary/ts/sig")
     try:
         status, payload = await life_chat.confirm(body, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except life_chat.ChatError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+# ---- guest-portal 帳號管理(待辦50;生活頁面板,僅 portal.hl 經 Remote-User) ----
+
+@app.get("/api/life/guest")
+async def life_guest_list(request: Request):
+    try:
+        status, payload = await life_chat.guest({"op": "list"}, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except life_chat.ChatError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.post("/api/life/guest")
+async def life_guest_op(request: Request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"op": "add", "login_id": "...", "person": "...", "password": "..."}')
+    try:
+        status, payload = await life_chat.guest(body, request.headers.get("Remote-User"))
         return JSONResponse(payload, status_code=status)
     except life_chat.ChatError as e:
         return _err(e.status, e.error, e.hint)
