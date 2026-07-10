@@ -5,7 +5,7 @@
 BFF(CT205)零憑證、零出站,只讀這份快照。
 
 內容:
-  accounts —— 本地 ~/.config/homelab/guest-accounts.json(username/person/hash/enabled)
+  accounts —— NocoDB People 表 portal_* 三欄(2026-07-10 起帳號併入記賬庫;見 hl-guest)
   calendar —— GCal 未來 14 天議程(全體共用,展示屋主行程,完整標題)
   debts    —— 逐帳號:該 person 的未結明細 + 淨額(屋主視角)+ 最近已結 10 筆
 
@@ -22,7 +22,6 @@ import urllib.request
 from pathlib import Path
 
 HOME = Path.home()
-ACCT = HOME / ".config/homelab/guest-accounts.json"
 GCAL_ENV = HOME / ".config/homelab/gcal.env"
 NOCODB_ENV = HOME / ".config/homelab/nocodb.env"
 STATE = HOME / ".local/state/homelab-notify"
@@ -30,6 +29,7 @@ OUT = STATE / "guest.json"
 PUSH = HOME / ".local/bin/hl-push"
 CAL_DAYS = 14
 SETTLED_PER_PERSON = 10
+COL_USER, COL_PW, COL_EN = "portal_user_hash", "portal_pw_hash", "portal_enabled"
 
 
 def log(msg: str):
@@ -46,21 +46,41 @@ def load_env(path: Path) -> dict:
     return env
 
 
-# ---- accounts(本地檔;非「資料源」,缺檔=空帳號不算失敗)----
+# ---- accounts(NocoDB People 表 portal_* 三欄;失敗=資料源失敗,整次不投遞)----
 
-def load_accounts() -> list[dict]:
-    if not ACCT.exists():
+def nocodb_accounts() -> list[dict]:
+    c = load_env(NOCODB_ENV)
+    url, tok = c["NC_URL"].rstrip("/"), c["NC_TOKEN"]
+    base = c.get("NC_BASE", "ppralaha4e76q5o")
+
+    def api(path: str) -> dict:
+        req = urllib.request.Request(url + path, headers={"xc-token": tok})
+        return json.loads(urllib.request.urlopen(req, timeout=20).read())
+
+    tid = None
+    for t in api(f"/api/v1/db/meta/projects/{base}/tables")["list"]:
+        if t["title"] == "People":
+            tid = t["id"]
+            break
+    if tid is None:
+        raise RuntimeError("NocoDB 無 People 表")
+    # 欄位未建=尚未 hl-guest setup:視為零帳號(非錯誤)
+    cols = [col["title"] for col in api(f"/api/v1/db/meta/tables/{tid}")["columns"]]
+    if COL_USER not in cols:
         return []
-    doc = json.loads(ACCT.read_text())
-    # 只帶 BFF 需要的欄位:username_hash(登入名 scrypt)+person+hash(密碼 scrypt)+enabled。
-    # created/pw_changed 不外送。相容舊格式(若還有 username 明文則就地雜湊——理論上不會有)。
-    out = []
-    for a in doc.get("accounts", []):
-        uh = a.get("username_hash")
+    rows, out = [], []
+    while True:
+        r = api(f"/api/v2/tables/{tid}/records?limit=200&offset={len(rows)}")
+        batch = r["list"]
+        rows += batch
+        if not batch or r.get("pageInfo", {}).get("isLastPage", True):
+            break
+    for r in rows:
+        uh = r.get(COL_USER)
         if not uh:
-            continue  # 無 username_hash 的殘缺紀錄跳過(舊格式請 rm 後重 add)
-        out.append({"username_hash": uh, "person": a.get("person") or "",
-                    "hash": a["hash"], "enabled": bool(a.get("enabled", True))})
+            continue  # 無登入帳號的一般 People 列跳過
+        out.append({"username_hash": uh, "person": r.get("name") or "",
+                    "hash": r.get(COL_PW) or "", "enabled": bool(r.get(COL_EN))})
     return out
 
 
@@ -185,7 +205,11 @@ def nocodb_debts_by_person(persons_wanted: set[str]) -> dict[str, dict]:
 
 
 def main():
-    accounts = load_accounts()
+    try:
+        accounts = nocodb_accounts()
+    except Exception as e:  # noqa: BLE001
+        log(f"NocoDB 帳號讀取失敗 {type(e).__name__}: {e}")
+        sys.exit(1)
     persons = {a["person"] for a in accounts if a.get("enabled", True)}
 
     try:

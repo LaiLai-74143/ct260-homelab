@@ -36,7 +36,8 @@ echo "   ✓ cron 已更新:"
 crontab -l | grep -E 'hl-write-guest|hl-guest-watch' | sed 's/^/     /'
 
 echo
-echo "✅ 管線就緒。接著:"
-echo "   hl-guest add <username> [記賬人名]   # 建第一個帳號,密碼會印出一次"
-echo "   hl-guest list                        # 檢視"
-echo "   hl-write-guest --dry-run             # 手動驗一次(不推送,看資料對不對)"
+echo "✅ 管線就緒。接著(帳號存 NocoDB People,與記賬共用同庫):"
+echo "   hl-guest setup                              # 一次性:People 加 portal 三欄(冪等)"
+echo "   hl-guest add <身分證字號> <記賬人名> --ask-pass  # 建帳號(人名不存在自動建員)"
+echo "   hl-guest list                               # 檢視;圖形化管理見 NocoDB People 表"
+echo "   hl-write-guest --dry-run                    # 手動驗一次(不推送)"

@@ -2600,3 +2600,27 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 待使用者執行(P1 live/CF 帳號不經 Agent):finish-guest-portal-{01-ct(pve24 root),02-deploy,
   04-pipeline,03-caddy}.sh + hl-guest add + CF 加 public hostname。SoT=~/workspace/guest-portal/。
 新增節點登錄:hl-run 加 ct205(pct 205);其餘節點對照表 hl-工具箱.txt 待同步(下次)。
+
+【上線實錄 2026-07-10】使用者實跑:段B-1 建 CT205 全綠、段B-2 部署(我跑)、段C 管線+cron、
+  段D Caddy 分流(我修 2 個 bug 後全綠:①02/04 腳本 su codex 後 cwd=/root→find 炸,加 cd $HOME
+  ②Caddyfile handle 收單一 matcher,兩 path /health /healthz 要具名 @health matcher,先 validate 再推)。
+  CF:使用者誤建第二條空 tunnel「Schedule」(Inactive 零 connector)→更正=在既有「Home」tunnel
+  (connector=ct-dmz-proxy)加 published route schedule→localhost:80;撞 DNS record(空 tunnel 殘留
+  CNAME)→刪舊 record 再存。登入頁外網已達。
+【認證強化 2026-07-10,使用者裁決三連】
+  ①登入頁:欄位註記(身分證字號/管制標籤號)、移除「僅限受邀者」footer、差異化錯誤
+    (帳號不符→「查無此帳號·聯絡管理員新增」;帳號符密碼錯→「密碼錯誤」)——刻意放棄帳號枚舉
+    防護(內部同事友善提示優先);移除原時序等化 DUMMY_HASH。
+  ②登入名(身分證字號)也 scrypt 雜湊:store.find_by_login 逐一比對 username_hash(O(N) 掃完不早退);
+    session 存 person 非身分證字號;審計已知帳號記 person 不落身分證字號,未知才記輸入原文(蜜罐)。
+  ③帳號併入 NocoDB People 表(與記賬共用同一庫,取代原 CT260 本地 JSON):People 加三欄
+    portal_user_hash/portal_pw_hash/portal_enabled(hl-guest setup 經 meta API 加,冪等);
+    hl-guest add 人名不存在自動建 People 列(=「記賬也新增該員」),rm 只清三欄保留列(仍是借貸對象);
+    圖形化管理=NocoDB 內建 UI(免自製面板)。hl-write-guest 改讀 People portal 欄→guest.json。
+    ★取捨(推翻原「密碼雜湊僅存 ~/.config/homelab」戒律):scrypt 雜湊進 NocoDB/postgres/vzdump;
+    理由=單向雜湊+CT270 離網節點本就存更敏感資料+換得單庫+免費 GUI+自動建人,可接受。
+    BFF(CT205)仍只讀推送快照,永不直連 NocoDB=DMZ 隔離不變。
+  live 驗證:hl-guest setup 加三欄成功、測試帳號 add(自動建人)→list→hl-write-guest 讀→guest.json
+    無明文→雜湊被 verify_password 驗過→rm+刪 junk 列全清;mock 三態+審計+Playwright 6/6 全綠。
+  待使用者:hl-guest add <身分證字號> <人名> --ask-pass 建真帳號 + 外網登入實測。
+  ★剩:圖形化帳號管理原列待辦(待辦50)已被 NocoDB UI 取代,可註銷該子項。

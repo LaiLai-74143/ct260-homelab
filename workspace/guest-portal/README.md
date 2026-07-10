@@ -70,18 +70,22 @@ bash ~/workspace/guest-portal/scripts/finish-guest-portal-03-caddy.sh
 
 ## 帳號管理(CT260)
 
-★ 登入名(身分證字號)與密碼(管制標籤號)**都以 scrypt 雜湊儲存**,檔案/快照外洩讀不到明文。
-  故管理用「記賬人名(明文)」定位,登入才用身分證字號。
+★ 帳號併入 **NocoDB People 表**(2026-07-10 起,與記賬共用同一庫);圖形化管理 = NocoDB 內建 UI
+  (PC40 開 `192.168.20.70:8080` → Life-Ops → People,看 portal_user_hash/portal_pw_hash/portal_enabled)。
+  登入名(身分證字號)與密碼(管制標籤號)**都以 scrypt 雜湊寫入**,連 NocoDB UI 也讀不回明文。
+  故 CLI 管理用「記賬人名」定位,登入才用身分證字號。
 
 ```
-hl-guest add <身分證字號> <記賬人名> [--ask-pass]  # 新增;--ask-pass=互動輸入自訂密碼(不回顯)
-hl-guest passwd <記賬人名> [--ask-pass]             # 重設密碼
-hl-guest disable / enable <記賬人名>                # 停用 / 啟用
-hl-guest rm <記賬人名>                              # 刪除
-hl-guest list                                       # 列出(只顯示記賬人/狀態,不顯示身分證字號)
+hl-guest setup                                     # 一次性:People 加 portal 三欄(冪等)
+hl-guest add <身分證字號> <記賬人名> [--ask-pass]  # 新增;人名不在 People 會自動建該員
+hl-guest passwd <記賬人名> [--ask-pass]            # 重設密碼(--ask-pass=互動輸入,不回顯)
+hl-guest disable / enable <記賬人名>               # 停用 / 啟用
+hl-guest rm <記賬人名>                             # 移除登入(清三欄;People 列保留=仍是記賬對象)
+hl-guest list                                      # 列出(不顯示身分證字號)
 ```
 登入三態:帳號不符→「查無此帳號,聯絡管理員新增」;帳號符密碼錯→「密碼錯誤」;都符→通過。
-任何變更自動推送 CT205。忘記自訂密碼只能 `passwd` 重設(雜湊不可逆);忘記登入名只能 `rm` 後重 `add`。
+任何變更自動推送 CT205。忘記密碼只能 `passwd` 重設(雜湊不可逆);忘記登入名只能 `rm` 後重 `add`。
+BFF(CT205)仍只讀推送的 guest.json 快照,永不直連 NocoDB=DMZ 隔離不變。
 
 ## 登入審計與異常告警
 
