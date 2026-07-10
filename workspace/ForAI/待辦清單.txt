@@ -876,6 +876,10 @@
       debian-13 模板在、CT203 net 推導 vmbr0/tag60/SSD-2)。SoT=~/workspace/guest-portal/(README 有 runbook)。
     ▶ 待使用者執行:①pve24 建 CT ②部署 app ③裝管線+建帳號 ④Caddy 分流 ⑤CF 加 hostname(CF 帳號不經 Agent)。
     ▶ 可選後續:CT205 可用性 Kuma 探活、vzdump 排程納入。
+    ▶ 圖形化帳號管理(使用者 2026-07-10 點名加待辦):portal.hl 生活頁小面板(內網 only,
+      經 Authelia;不對外)——list/add/重設密碼(一次性顯示)/enable/disable;
+      BFF→CT260 走既有白名單操作模式。密碼恆存 scrypt 雜湊,GUI 也讀不回明文
+      (「像 Excel 直接看改密碼」做不到=刻意設計);enabled/人名欄可表格式編輯。
 
 ===============================================================================
 ## 已決策不做（勿再重複建議）
