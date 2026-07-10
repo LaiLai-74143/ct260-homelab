@@ -1,5 +1,5 @@
 diff --git a/gradle.properties b/gradle.properties
-index acc8d49..9eab651 100644
+index acc8d49..6ef9b31 100644
 --- a/gradle.properties
 +++ b/gradle.properties
 @@ -4,6 +4,6 @@ org.gradle.parallel=true
@@ -7,7 +7,7 @@ index acc8d49..9eab651 100644
  
  # Versions
 -mod_version=1.0.0
-+mod_version=1.0.0-beta.1+worldfile.3
++mod_version=1.0.0-beta.1+worldfile.4
  velocity_api_version=3.4.0-SNAPSHOT
  limboapi_version=1.1.27
 diff --git a/src/main/java/fr/jeanney/limboautoserver/Configuration.java b/src/main/java/fr/jeanney/limboautoserver/Configuration.java
@@ -69,6 +69,35 @@ index 270304d..89aa031 100644
      // ----- helpers -----
  
      private String serverKey(RegisteredServer server, String key) {
+diff --git a/src/main/java/fr/jeanney/limboautoserver/LimboAutoServer.java b/src/main/java/fr/jeanney/limboautoserver/LimboAutoServer.java
+index 2e8b8c0..d9c8c5f 100644
+--- a/src/main/java/fr/jeanney/limboautoserver/LimboAutoServer.java
++++ b/src/main/java/fr/jeanney/limboautoserver/LimboAutoServer.java
+@@ -41,6 +41,7 @@ public class LimboAutoServer {
+     private final ProxyServer proxy;
+     private final PluginLogger logger;
+     private final Configuration config;
++    private final StartupHistory startupHistory;
+ 
+     private ServerManager serverManager;
+     private LimboManager limboManager;
+@@ -51,6 +52,7 @@ public class LimboAutoServer {
+         this.proxy = proxy;
+         this.config = new Configuration(dataDirectory);
+         this.logger = new PluginLogger(this, logger);
++        this.startupHistory = new StartupHistory(dataDirectory, this.logger);
+     }
+ 
+     @Subscribe
+@@ -216,4 +218,8 @@ public class LimboAutoServer {
+     public ServerManager getServerManager() {
+         return serverManager;
+     }
++
++    public StartupHistory getStartupHistory() {
++        return startupHistory;
++    }
+ }
 diff --git a/src/main/java/fr/jeanney/limboautoserver/LimboManager.java b/src/main/java/fr/jeanney/limboautoserver/LimboManager.java
 index 997a66b..f702d51 100644
 --- a/src/main/java/fr/jeanney/limboautoserver/LimboManager.java
@@ -164,8 +193,28 @@ index 997a66b..f702d51 100644
      /**
       * Spawns the player into the limbo world and kicks off the backend startup.
       */
+diff --git a/src/main/java/fr/jeanney/limboautoserver/ServerManager.java b/src/main/java/fr/jeanney/limboautoserver/ServerManager.java
+index 289bcbb..76e30f4 100644
+--- a/src/main/java/fr/jeanney/limboautoserver/ServerManager.java
++++ b/src/main/java/fr/jeanney/limboautoserver/ServerManager.java
+@@ -55,12 +55,15 @@ public class ServerManager {
+                 if (isOnline) {
+                     return CompletableFuture.completedFuture(null);
+                 }
++                long bootStart = System.currentTimeMillis();
+                 return runStart(server)
+                         .thenCompose(result -> waitForServerToBecomeResponsive(server))
+                         .thenAccept(isResponsive -> {
+                             if (!isResponsive) {
+                                 throw new CompletionException(new RuntimeException("Server started but is not responsive."));
+                             }
++                            // 量測「發動啟動 -> 首次 ping 通」餵給滾動歷史(boss bar 估值)
++                            plugin.getStartupHistory().record(name, System.currentTimeMillis() - bootStart);
+                         });
+             });
+ 
 diff --git a/src/main/java/fr/jeanney/limboautoserver/StartupSessionHandler.java b/src/main/java/fr/jeanney/limboautoserver/StartupSessionHandler.java
-index d65b4e1..473f880 100644
+index d65b4e1..b79bce2 100644
 --- a/src/main/java/fr/jeanney/limboautoserver/StartupSessionHandler.java
 +++ b/src/main/java/fr/jeanney/limboautoserver/StartupSessionHandler.java
 @@ -29,6 +29,7 @@ public class StartupSessionHandler implements LimboSessionHandler {
@@ -220,6 +269,17 @@ index d65b4e1..473f880 100644
      private void transferToServer() {
          if (transferring || !player.isActive()) {
              return;
+@@ -93,7 +122,9 @@ public class StartupSessionHandler implements LimboSessionHandler {
+         bossBar = BossBar.bossBar(progressTitle(0), 0f, BossBar.Color.BLUE, BossBar.Overlay.PROGRESS);
+         player.showBossBar(bossBar);
+ 
+-        long estMillis = Math.max(1000L, plugin.getConfig().getEstimatedStartupSeconds() * 1000L);
++        // 估值優先用實測滾動平均(近 5 次開機),無歷史才退回設定檔
++        long estMillis = Math.max(1000L, plugin.getStartupHistory().averageMillis(targetName)
++                .orElse(plugin.getConfig().getEstimatedStartupSeconds() * 1000L));
+         progressTask = plugin.getProxy().getScheduler()
+                 .buildTask(plugin, () -> {
+                     if (finished || bossBar == null || !player.isActive()) {
 diff --git a/src/main/resources/config.toml b/src/main/resources/config.toml
 index a3c17f1..bca6573 100644
 --- a/src/main/resources/config.toml

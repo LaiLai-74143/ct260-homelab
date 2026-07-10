@@ -12,9 +12,10 @@ level = "INFO"
 dimension = "OVERWORLD"
 gameMode = "ADVENTURE"
 worldTime = 1000
-# 出生點=Modern House 天台中央(貼圖原點 0,64,0;屋頂主平面 schem y=31 → 站面 96)
+# 出生點=Modern House 室內地板(貼圖原點 0,64,0;NBT 算出中心柱室內地板 schem y=14 → 站面 79;
+# 使用者 2026-07-10:屋頂出生改室內)
 posX = 38.5
-posY = 96.2
+posY = 79.2
 posZ = 59.5
 yaw = 0.0
 pitch = 0.0
@@ -31,7 +32,8 @@ allowMovement = true
 respawnBelowY = 40.0
 readTimeout = 20000
 progressBar = true
-# 只驅動 boss bar 進度觀感,實際送入仍等真 ping(2026-07-10 實測冷啟 ~20s,校準之)
+# boss bar 估值:worldfile.4 起優先用實測滾動平均(近 5 次開機,存 plugins/limboautoserver/
+# startup-history.txt),本值只在無歷史時墊底;實際送入仍等真 ping
 estimatedStartupSeconds = 22
 progressTitle = "<gold>伺服器喚醒中…</gold> <gray>(%time%s)</gray>"
 progressReadyTitle = "<green>就緒,進入中!</green>"

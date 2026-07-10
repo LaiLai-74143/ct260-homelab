@@ -2695,3 +2695,8 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   實測 Fabric 冷啟僅 ~20s。修正:補丁加 limbo.allowMovement(true→enableFalling 放開走動)+
   limbo.respawnBelowY(onMove 監測,掉出建築 y<40 即 teleport 拉回天台出生點,1s 防抖)
   =worldfile.3;estimatedStartupSeconds 校準 22。部署全綠(Pasted→ready→enabled)。
+【等待室迭代 worldfile.4 2026-07-10】使用者兩項回饋:①出生點屋頂→室內:NBT 算中心柱室內地板
+  (schem y=14,挑高 13 格)→ posY 96.2→79.2(字面「降 10 格」是挑高半空,直接放地板)。
+  ②讀條改自適應:新增 StartupHistory(ServerManager 量測「發動啟動→首次 ping 通」,滾動保留
+  近 5 次,存 plugins/limboautoserver/startup-history.txt,fail-open 壞檔=無歷史);boss bar
+  估值=歷史平均,無歷史退回 estimatedStartupSeconds(墊底 22s)。部署全綠。
