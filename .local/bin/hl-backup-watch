@@ -22,7 +22,9 @@ STATE = HOME / ".local/state/homelab-notify/backup-watch.state.json"
 AGE_MAX_H = 36
 NODE = "24bay-pve"
 # 覆蓋缺口檢查排除:刻意不進 vzdump 的 guest(理由註記於 V7/備份索引)
-EXCLUDE = set()
+# 100=使用者裁決(2026-07-10):MC 僅世界檔重要,mc-safe-backup 自理,不進 PVE 備份
+#     (世界檔新鮮度仍由下方 MC 檢查盯)
+EXCLUDE = {"100"}
 DRY = "--dry-run" in sys.argv
 
 

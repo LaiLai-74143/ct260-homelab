@@ -34,7 +34,7 @@
   → break-glass 節點會被 CT203 input 鏈當外人擋,待修(§4.8)。
 - CT203/CT204「無 SSH」不成立:CT203 sshd active 於 *:22、CT204 ssh.socket active 於 *:22
   (皆無 authorized_keys、root 密碼鎖,實際無登入途徑,但 listener 存在;§10.7/§10.8)。
-- DMZ DHCPv4 未真正停用:dnsmasq 仍生成 pool 10.60.60.100–249,現僅靠 dmz input REJECT 擋住(§2.7)。
+- ✔DMZ DHCPv4 已正式停用(2026-07-10 打掃窗:uci dhcp.dmz.ignore='1',消除單層防護)。
 - DNS:mc-server 與裸別名 dxp4800 / dxp4800-fast / caddy 經主 DNS(AGH)NXDOMAIN,僅備援或直查
   dnsmasq:5353 可解(§3)。
 - VM300 RAM=4G(V6 §8 誤植 1G);pve24 介面名 vmbr0.20(V6 誤植 gvmbr0.20);
@@ -614,7 +614,11 @@ Allow-CT201-To-OpenWrt-Portscan-Metrics  10.80.80.11 -> 10.80.80.1:9105/tcp
 Allow/SNAT-Monitor-To-CT270-NodeExporter 10.80.80.11 -> 192.168.20.70 tcp/9100(SNAT 192.168.20.1)
 Allow-Monitor-To-CTDMZ-Proxy             10.80.80.11 -> 10.60.60.10 tcp/80,9100,9959(service→dmz)
   ★ 對應 SNAT-Monitor-To-CTDMZ-Proxy 用 src='dmz'(egress zone)snat_ip 10.60.60.1(會 fire)。
-    其餘 Monitor-To-X 的 SNAT 皆 src=<源 zone> → 落錯 srcnat 鏈、實際 no-op(無害,回程經共用閘道;待清理)。
+    其餘 Monitor-To-X 的 SNAT——★2026-07-10 實測勘誤(推翻本行舊註「皆 no-op」):多數有活
+    計數器且在 fire(PVE24/RouterPVE-8006 各 400+pkt、PC40-18080、DXP 9100/8080/8096、AP/
+    RouterPVE ping、Switch3F-161),僅少數 0 計數(CT260/CT270-9100、蜜罐 ping、MC ping 類,
+    疑落錯鏈或路徑未走)。∴ 不可盲刪;清理改列待辦33 期滿同窗逐條追蹤(0 計數者先查對應
+    探測是否本來就不經 SNAT 路徑)。
 (其餘各 9100 放行 + SNAT 見《監控告警.txt》目標清單)
 
 # Uptime Kuma 監控放行(使用者逐項同意)
@@ -673,7 +677,13 @@ Allow-DMZProxy-TSGate-To-{infra,servers,storage,trusted,iot,service,game,mgmt}
   dmz/10.60.60.10 -> 各 zone,proto all(8 條;「DMZ 不廣泛進內網」的刻意單主機例外——
   安全把關移至 CT203 動態閘門,見 §4.8)
 Allow-DMZProxy-TSGate-To-Router-Web  dmz/10.60.60.10 -> router input tcp/80,443,8080
-★ 殘留:firewall.@rule[77] 為空匿名 section,待清理。
+★ 2026-07-10 打掃窗(回滾=/root/_backups/{firewall,dhcp}.before-sweep-*):rule[77] 空匿名段
+  (cfg7d92bd)已刪;Trusted-Hairpin-* 兩條重複 redirect 已刪(留具名 VLAN40-Hairpin-* 兩條,
+  參數相同);temp_allow_pc40_to_openwrt_ssh 轉正=Allow-PC40-To-Router-SSH-52438(section
+  allow_pc40_router_ssh);新增 Block-Honeypot-To-WAN(REJECT,蜜罐出網不再依賴 zone 預設);
+  dhcp.dmz.ignore='1'。回歸=Kuma 全綠+portal 200+VLAN40-Hairpin 存活(PC 端 MC 公網名連線
+  請使用者順手驗一次)。CT203/204/205 sshd 停用被分類器攔→finish-sweep-leftovers.sh 待使用者
+  (含 pve24 孤兒 tailscaled 清理)。
 ```
 
 ### 4.5 portscan-autoban

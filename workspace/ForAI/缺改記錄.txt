@@ -2747,3 +2747,23 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   待辦51 mc-autosleep 終驗成功全結、VM300=使用者手動關機省 RAM(onboot=1 不一致
   待裁決)、root.crt 清掃=六 CT ca-certificates 皆無殘留(舊自簽 CA 只裝過使用者裝置,
   PC/手機移除方法已告知)。
+【打掃窗+備份補洞+WG 診斷 2026-07-10(同日第二輪)】
+① OpenWrt 打掃(backup=/root/_backups/{firewall,dhcp}.before-sweep-*):rule[77] 空段刪、
+  Trusted-Hairpin×2 重複刪(留 VLAN40-Hairpin 具名組)、temp_allow_pc40_to_openwrt_ssh
+  轉正=Allow-PC40-To-Router-SSH-52438、新增 Block-Honeypot-To-WAN(REJECT)、
+  dhcp.dmz.ignore=1(DMZ DHCPv4 正式停用)。回歸:Kuma 全 up、portal 200。
+  MC hairpin(PC 連公網名)請使用者驗一次。
+② ★SNAT-Monitor 清理中止=V7 舊註「皆 no-op」被計數器推翻(多數在 fire:8006 各 400+pkt
+  /18080/9100/8096/ping;僅 CT260/270-9100 等少數 0)→ 盲刪危險,改列待辦33 期滿同窗
+  逐條追蹤。V7 §4.4 註記已勘誤。教訓:待清理項動手前先量測,文件斷言不可直接當真。
+③ CT203/204/205 sshd 停用被分類器攔(V7 原記待裁決)→ finish-sweep-leftovers.sh
+  (含 pve24 孤兒 tailscaled 指令)待使用者。
+④ 備份補洞(使用者裁決):vzdump job backup-745ff80b-c27f vmid 增 204,205(現=102,201,
+  202,203,204,205,250,260,270,300);CT100 不進 PVE 備份(僅世界檔重要,mc-safe-backup
+  自理)→ hl-backup-watch EXCLUDE={100},世界檔新鮮度檢查保留。204/205 首份 vzdump
+  已手動觸發。
+⑤ CT205 journald:使用者跑 finish 腳本=active;guest-portal 以 python3 驗=200(CT 無 curl,
+  腳本尾驗證段的 curl 報錯無害,已知)。
+⑥ WG break-glass 首測不通根因=wg0 零握手(封包未到達;WAN 規則/監聽埠皆確認正確)——
+  最可能=在家 WiFi 測(endpoint 為 WAN IP,udp/44873 無 hairpin,內打外必死)。
+  正確測法:關 WiFi 用行動網路+關 Tailscale(兩 VPN 都聲明 192.168.x 路由會衝突)。
