@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""hl-log-liveness — 日誌斷流哨兵(新想法A3,2026-07-10)。
+
+主機活著(監控照綠)但日誌停止抵達 Loki=偵測面(絆線/cowrie/Wazuh 上鏈)靜默失明,
+實證=CT202 journald 自 07-01 空轉九天無人察覺。本哨兵 cron */10:
+Loki instant query 近 30m 各 host 日誌量,期望清單缺席連續 2 輪(≈20min+)→ TG;
+恢復發解除。vm300 平時停機(使用者省 RAM)不入清單,開機請手動加回。
+--dry-run 只印不發。
+"""
+import json
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+TG_ENV = HOME / ".config/homelab/notify-telegram.env"
+STATE = HOME / ".local/state/homelab-notify/log-liveness.state.json"
+LOKI = "http://10.80.80.11:3100"
+EXPECT = ["ct100", "ct201", "ct202", "ct260", "ct270", "openwrt"]
+MISS_ROUNDS = 2
+DRY = "--dry-run" in sys.argv
+
+
+def load_env(p):
+    c = {}
+    try:
+        for line in Path(p).read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                c[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return c
+
+
+def tg(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = load_env(TG_ENV)
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True)
+
+
+def main():
+    q = 'sum by (host) (count_over_time({host=~".+"}[30m]))'
+    url = LOKI + "/loki/api/v1/query?" + urllib.parse.urlencode({"query": q})
+    try:
+        d = json.loads(urllib.request.urlopen(url, timeout=20).read().decode())
+        present = {r["metric"].get("host") for r in d["data"]["result"]
+                   if float(r["value"][1]) > 0}
+    except Exception as e:
+        # Loki 本身查不到=另一種斷流,但 Loki down 已有 Kuma/Prometheus 看,這裡不重複吼
+        if DRY:
+            print("loki query failed:", type(e).__name__)
+        return
+
+    st = {}
+    try:
+        st = json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        pass
+    miss = st.get("miss", {})
+    alerted = set(st.get("alerted", []))
+
+    newly_dead, recovered = [], []
+    for h in EXPECT:
+        if h in present:
+            if h in alerted:
+                recovered.append(h)
+                alerted.discard(h)
+            miss[h] = 0
+        else:
+            miss[h] = miss.get(h, 0) + 1
+            if miss[h] >= MISS_ROUNDS and h not in alerted:
+                newly_dead.append(h)
+                alerted.add(h)
+
+    if newly_dead:
+        tg("📉 日誌斷流哨兵:以下主機 30 分鐘無日誌進 Loki(主機可能活著但送日誌的鏈路死了):\n- "
+           + "\n- ".join(newly_dead)
+           + "\n查:該機 systemctl status promtail systemd-journald;參缺改 2026-07-10(CT202 前例=nesting)。")
+    if recovered:
+        tg("✅ 日誌斷流解除:" + ", ".join(recovered) + " 恢復進 Loki。")
+
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps({"miss": miss, "alerted": sorted(alerted)}))
+    if DRY:
+        print("present:", sorted(present), "| miss:", miss, "| alerted:", sorted(alerted))
+
+
+if __name__ == "__main__":
+    main()

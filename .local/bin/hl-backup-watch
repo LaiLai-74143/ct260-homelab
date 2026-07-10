@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""hl-backup-watch — 備份新鮮度/覆蓋面哨兵(新想法A1,2026-07-10)。
+
+檢三件事(全走 pve24 sudo 白名單 pvesh/pct/qm,CT260 零新放行):
+  1. 每個啟用中 vzdump 任務涵蓋的 vmid:最新備份 age > AGE_MAX_H → 告警
+  2. pve24 上運行中 guest 不在任何啟用任務內 → 覆蓋缺口警告(排除清單見 EXCLUDE)
+  3. CT100 /root/mc-backups 最新世界備份 age > AGE_MAX_H → 告警
+TG token 經 curl -K stdin(比照 hl-mc-watch);狀態檔去抖:問題集合簽名變化才發,
+恢復時發解除。cron 每日 08:30(夜間 04:20 vzdump + 03:10 MC 備份之後)。
+--dry-run 只印不發。
+"""
+import hashlib
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+TG_ENV = HOME / ".config/homelab/notify-telegram.env"
+STATE = HOME / ".local/state/homelab-notify/backup-watch.state.json"
+AGE_MAX_H = 36
+NODE = "24bay-pve"
+# 覆蓋缺口檢查排除:刻意不進 vzdump 的 guest(理由註記於 V7/備份索引)
+EXCLUDE = set()
+DRY = "--dry-run" in sys.argv
+
+
+def load_env(p):
+    c = {}
+    try:
+        for line in Path(p).read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                c[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return c
+
+
+def tg(text):
+    if DRY:
+        print("[dry-run TG]\n" + text)
+        return
+    c = load_env(TG_ENV)
+    token, chat = c.get("TELEGRAM_BOT_TOKEN"), c.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print("hl-backup-watch: 無 TG 憑證,略過發送", file=sys.stderr)
+        return
+    conf = f'url = "https://api.telegram.org/bot{token}/sendMessage"\n'
+    subprocess.run(
+        ["curl", "-sf", "-m", "20", "-K", "-",
+         "--data-urlencode", f"chat_id={chat}",
+         "--data-urlencode", f"text={text}"],
+        input=conf, text=True, capture_output=True)
+
+
+def pve(cmd, timeout=60):
+    """ssh pve24 sudo <cmd>;回 stdout 或 None(失敗 fail-open 交上層註記)。"""
+    r = subprocess.run(["ssh", "-o", "ConnectTimeout=10", "pve24", "sudo " + cmd],
+                       capture_output=True, text=True, timeout=timeout)
+    return r.stdout if r.returncode == 0 else None
+
+
+def main():
+    problems, notes = [], []
+    now = time.time()
+
+    jobs_raw = pve("/usr/bin/pvesh get /cluster/backup --output-format json")
+    if jobs_raw is None:
+        problems.append("pvesh 讀不到備份任務(ssh/sudo 失敗?)")
+        jobs = []
+    else:
+        jobs = [j for j in json.loads(jobs_raw) if j.get("enabled") in (1, "1", True)]
+
+    covered = set()
+    storages = set()
+    for j in jobs:
+        covered |= {v.strip() for v in str(j.get("vmid", "")).split(",") if v.strip()}
+        if j.get("storage"):
+            storages.add(j["storage"])
+
+    latest = {}
+    for s in storages:
+        raw = pve(f"/usr/bin/pvesh get /nodes/{NODE}/storage/{s}/content"
+                  " --content backup --output-format json", timeout=120)
+        if raw is None:
+            problems.append(f"storage {s} 內容讀取失敗")
+            continue
+        for v in json.loads(raw):
+            vid, ct = str(v.get("vmid", "")), v.get("ctime", 0)
+            if vid and ct > latest.get(vid, 0):
+                latest[vid] = ct
+
+    for vid in sorted(covered, key=lambda x: int(x) if x.isdigit() else 0):
+        age_h = (now - latest.get(vid, 0)) / 3600
+        if vid not in latest:
+            problems.append(f"vmid {vid}:任務內但無任何備份檔")
+        elif age_h > AGE_MAX_H:
+            problems.append(f"vmid {vid}:最新備份 {age_h:.0f}h 前(>{AGE_MAX_H}h)")
+
+    running = set()
+    for cmd in ("/usr/sbin/pct list", "/usr/sbin/qm list"):
+        out = pve(cmd)
+        if out is None:
+            notes.append(f"{cmd.split('/')[-1]} 讀取失敗,覆蓋面檢查不完整")
+            continue
+        for line in out.splitlines()[1:]:
+            f = line.split()
+            if len(f) >= 2 and f[0].isdigit() and "running" in line:
+                running.add(f[0])
+    for vid in sorted(running - covered - EXCLUDE, key=int):
+        problems.append(f"vmid {vid}:運行中但不在任何 vzdump 任務(覆蓋缺口)")
+
+    mc = pve("/usr/sbin/pct exec 100 -- sh -c "
+             "'ls -t /root/mc-backups 2>/dev/null | head -1 | xargs -r -I{} stat -c %Y /root/mc-backups/{}'")
+    if mc is None or not mc.strip():
+        notes.append("MC 世界備份:CT100 停機或目錄空,本輪略過")
+    else:
+        age_h = (now - int(mc.strip())) / 3600
+        if age_h > AGE_MAX_H:
+            problems.append(f"MC 世界備份:最新 {age_h:.0f}h 前(>{AGE_MAX_H}h)")
+
+    sig = hashlib.sha1("\n".join(sorted(problems)).encode()).hexdigest() if problems else ""
+    st = {}
+    try:
+        st = json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        pass
+
+    if problems and st.get("sig") != sig:
+        tg("🗄️ 備份哨兵(hl-backup-watch):\n- " + "\n- ".join(problems)
+           + ("\n(註:" + ";".join(notes) + ")" if notes else ""))
+    elif not problems and st.get("sig"):
+        tg("✅ 備份哨兵:先前問題已全數解除。")
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps({"sig": sig, "ts": now}))
+    if DRY:
+        print("problems:", json.dumps(problems, ensure_ascii=False, indent=1))
+        print("notes:", notes)
+
+
+if __name__ == "__main__":
+    main()

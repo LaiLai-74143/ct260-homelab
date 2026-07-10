@@ -279,7 +279,7 @@
     確認含 nc_data/pg_data 卷、大小合理 → 缺改記錄。
 
 -------------------------------------------------------------------------------
-◐14. Wazuh HIDS —— a✔b✔c✔d✔ 完成（agent 9/9 Active），僅剩 e 調噪期（2026-07-05 起算一週）
+✔14. Wazuh HIDS —— 全結（2026-07-10 調噪期收斂,見 e）
     【說明】主機入侵偵測：檔案完整性（authorized_keys 變動告警）、可疑進程、rootkit，
     等於把手動 SSH key 稽核自動化。
     流程：
@@ -299,7 +299,11 @@
     d✔ Allow-{Servers,Infra,Game,DMZ}-To-Wazuh-Agent 1514-1515 逐項點名 +
        Allow-PC40-To-Wazuh-Dashboard 443（使用者同意；dashboard=https://10.80.80.12，自簽憑證）
        （拓樸 §4.4；備份 firewall.before-20260705-todo14 與 -todo14b2）。
-    e. 跑一週調噪音（排除 docker 高頻路徑）後轉常態——2026-07-05 起算，順帶觀察 CT204 記憶體。
+    e✔ 調噪期收斂（2026-07-10 分析一週 alerts）：推播面零噪音（Gotify 門檻 L10,一週僅 FIM
+       真變動);量體=informational 為主(PAM 開關 session 2.1 萬/sudo 5.7k/ssh 成功 4.6k,
+       全是自動化例行,~30MB/day 儲存無壓力 19G/79G);FIM 安靜(60 事件/週,無 docker 高頻
+       路徑需排除);rootcheck 異常 344 筆全出自 manager 容器自掃=已知容器誤報(可選根治=
+       manager ossec.conf disable rootcheck,未做);CT204 記憶體穩定 1.8G/6G。轉常態。
        另議：AGH rewrite wazuh.home.arpa。
 
 -------------------------------------------------------------------------------
@@ -388,7 +392,8 @@
     c. 注意：PD 前綴隨 PPPoE 重撥漂移，任何規則不得寫死 GUA，用介面/zone 匹配。
 
 -------------------------------------------------------------------------------
-◐18. 音樂串流 Navidrome — 服務全上線（2026-07-06：a✔ b✔ c✔ d◐ e◐），唯音樂庫尚空待使用者放歌
+✔18. 音樂串流 Navidrome — 全結（2026-07-10 尾巴收齊:掃描 cron 上線 CT270
+    /etc/cron.d/navidrome-scan */6h+實測 143ms;Kuma /ping 探活已加=id 23）
     〔完成 2026-07-06〕使用者三裁決：NAS SMB(10G 唯讀 bind) → CT270 → A2(Navidrome 自身登入 + CT203 gate
       對 20.70:4533 豁免)。落地驗證：navidrome 容器 Up、/ping=200；/mnt/music-nas 掛載 OK(帳號 Survice)；
       CT203 gate 4533 豁免 live；openwrt DNS(三解析器 OK)+PC40 防火牆 fw4 live。詳見拓樸 §10.5 / 缺改記錄 2026-07-06。
@@ -491,7 +496,8 @@
        增量有限 → 移除，維持自製方案，缺改記錄結論。
 
 -------------------------------------------------------------------------------
-◐21. Docker image 版本 pin + diun —— 主體完成(2026-07-08),餘 nocodb 尾段待使用者
+✔21. Docker image 版本 pin + diun —— 全結(2026-07-10 nocodb 尾段收:agent 執行
+    finish-21-nocodb.sh 成功,nocodb pin 2026.06.2、squid 暫時窗開→復關驗證)
     【說明】:latest 某次 pull 可能拉進 breaking change,最壞讓監控鏈路靜默失效。
     a✔ 盤點+pin(以現役版為準,pin tag=現役 digest,零行為變化):CT201 prometheus v3.12.0/
        grafana-oss 13.0.2/gotify 2.9.1/alertmanager v0.33.0/gotify-bridge 2.3.2/
@@ -597,7 +603,9 @@
     （統計 TOP 來源/憑證/命令、行為變化、值得注意的新手法）→ TG 發送 + 存 ForAI/reports/。
 
 -------------------------------------------------------------------------------
-◐30. RSS + AI 晨報 —— 管線全備(2026-07-08),上線待使用者跑 finish 腳本
+✔30. RSS + AI 晨報 —— 全結(FreshRSS 已上線+訂閱源已進;2026-07-10 修「AI 濃縮失敗
+    列原題」:v4-flash 思考鏈偶爆 max_tokens 1200→3000+空回重試一次,當日大廳已重推
+    濃縮版 8 條)
     a✔ 基建先行:CT270 /opt/freshrss compose staged(freshrss/freshrss:1.29.1,:8082,
        sqlite);rss.home.arpa→20.70(dnsmasq hosts+24pve 備援);Allow-PC40-To-CT270-
        FreshRSS-8082;憑證 CT260 ~/.config/homelab/freshrss.env(600,UI+API 雙密碼)。
@@ -635,6 +643,14 @@
        ★計數不跨重開機(init.d 重建空集,觀察期內路由器重開需順延)。
        ★首讀即錄到 CT260→52438 與 DNS;另見 src=192.168.20.1(路由器自身
        VLAN20 IP)打 53 的迴環樣本,期滿分析時解讀。
+       ★中期讀數(2026-07-10):servers tcp={22×28pkt(20.5×17,20.60×11 ⚠見下),
+       52438×31(20.60)};servers udp={53×5572,138×244(pve24 NetBIOS 噪音),
+       1900×260(CT270 SSDP 噪音)};infra udp={53×87(routerpve)};icmp 0——
+       123/udp NTP 至今零樣本,期滿確認各機時間源再定。
+       ⚠異常待查(期滿分析必辦):pve24(20.5)與 CT260(20.60)有 tcp/22 打 router
+       gateway 的樣本=ssh22-tripwire 死埠;tripwire hits_v4 另見 10.70.70.20(CT100)、
+       10.80.80.11(CT201)各 3pkt。來源進程未查明;若 SSH22Tripwire 告警未同步觸發
+       也要查為什麼(告警管線 vs 絆線計數不一致)。
     b. 期滿依觀察寫顯式放行:53/tcp+udp、123/udp、icmp、各段實際需要者,
        另點名:CT201→AGH:8080、CT260 現行管理路徑:52438。
     c. zone input ACCEPT → REJECT,逐 zone 切(先 servers 後 infra),每切一個驗證
@@ -856,14 +872,20 @@
     【進度 2026-07-09(0.8.1→0.8.2)】0.8.1 修 Grafana 嵌入(改 BFF 同源反代
     /grafana/*→:3002,詳 V7 §5)+終端連結去重,部署全綠。0.8.2 使用者裁決再拔
     portal.hl 終端提示行;同輪勘誤 Grafana admin 非弱密(admin/admin 實測 401,
-    0.8.1 誤記遺留已於監控告警 §7 勘正)。finish-portal-082.sh 備妥待使用者跑。
+    0.8.1 誤記遺留已於監控告警 §7 勘正)。finish-portal-082.sh 已執行(123059b)。
+    【進度 2026-07-09/10(0.9.0→0.9.1)】0.9.0=生活頁「行程共享·帳號管理」圖形介面
+    (72894d2,隨待辦50);0.9.1=生活頁「近期行程」段(明日起 14 天依日分組,3b3a408)。
+    現役=CT201 portal:0.9.1(2026-07-10 核實)。
+    ★ 2026-07-10 版本鏈勘誤:本段曾落後現實(文件停在 0.8.2 待跑、實機已 0.9.1);
+    重跑 082 腳本無害 no-op(錨點斷言擋下),殘留 build 映像已清。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。
     過渡期 Homepage 凍結現狀不再投入。
 
-50. guest-portal 對外唯讀分享站(行程+借貸)  ★材料備妥待建(2026-07-10)
+✔50. guest-portal 對外唯讀分享站(行程+借貸) — 全結(2026-07-10 使用者外網登入
+    實測成功;CT205 running;剩 Kuma 探活/vzdump 納入=已由備份哨兵抓到缺口待裁決)
     給受邀外人看的迷你入口:登入後顯示屋主未來 14 天行程(唯讀)+ 與該人相關借貸往來。
     對外模式比照 Vaultwarden(CF Tunnel→CT203 Caddy),不經 Authelia/單一入口。
     使用者裁決(2026-07-10):①放 DMZ 新 CT205 schedule(非 CT270)②公網名 schedule.lailai74143.com
@@ -881,7 +903,8 @@
       免自製面板。hl-guest 改 NocoDB-backed(add 自動建人、rm 只清登入欄保留列)。
       記賬/登入共用同一庫;取捨=scrypt 雜湊進 NocoDB(見缺改記錄)。
 
-51. ✔ MC 伺服器自動休眠/喚醒(mc-autosleep,2026-07-10 上線)
+51. ✔ MC 伺服器自動休眠/喚醒(mc-autosleep,2026-07-10 上線;同日使用者終驗成功
+    =等待室/白名單/出生點全過,全結)
     使用者裁決:①無人 10 分鐘關服 ②等待室吊玩家(exaroton 式,不踢出)③開機只由
     玩家活動決定(備份完不重啟)④備份期間嚴格不開機 ⑤喚醒/關服發 TG ⑥Bedrock 相容性不考慮。
     架構:CT102 Velocity 插件 LimboAPI+LimboAutoServer(join→等待室 boss bar→自動送入;
@@ -891,7 +914,7 @@
     備份完才開機);mc-safe-backup.sh 改 WAS_RUNNING(睡著不叫醒)+flock -w 120;
     CT260 hl-mc-watch(cron */2,Loki 游標)發 TG(喚醒+首位進入玩家名/休眠/撞備份窗/錯 token)。
     詳見 V7 §7 與缺改記錄。
-    ▶ 待使用者終驗:實際 join 走等待室(白名單內)+ 非白名單帳號被拒;MOTD 休眠字樣。
+    ✔ 終驗完成(2026-07-10 使用者回報成功)。
 
 ===============================================================================
 ## 已決策不做（勿再重複建議）

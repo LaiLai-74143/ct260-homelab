@@ -2720,3 +2720,30 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   ctdmz-nft.service}.before-*＋CT260 ~/_backups/ctdmz.nft.before-v31-20260710。
   源檔 SoT：CT260 ~/.config/homelab/authelia/{ctdmz.nft, ctdmz-nft.service,
   tailscaled-dropin-10-ctdmz-failclosed.conf}。
+【待辦大掃除+三哨兵上線 2026-07-10】使用者裁決一批(33/14e 做、二區全清、A1-A3 做):
+① 待辦14e Wazuh 調噪轉常態:一週量體=informational 自動化例行(PAM 2.1萬/sudo 5.7k/
+  ssh 成功 4.6k),推播零噪音,FIM 60 事件無 docker 高頻,rootcheck 344 全為 manager
+  容器自掃誤報(可選根治未做),CT204 記憶體 1.8G/6G 穩。全結。
+② 待辦33 中期讀數已記入待辦清單(07-15 期滿切 REJECT);⚠新發現=pve24/CT260/CT100/
+  CT201 有零星 tcp/22 打 gateway 的樣本(絆線死埠),來源進程未明,期滿分析必查。
+③ CT202 journald 243/CREDENTIALS 根治:根因=nesting=0 unprivileged LXC 撞 systemd 257
+  憑證機制(07-01 安全更新後發病);nesting=1+reboot 即癒(squid/promtail 復活)。
+  橫掃發現 CT205 同病→finish-ct205-journald.sh(~/workspace/ops/)待使用者跑。
+  通則入 V7:Debian 13 LXC 一律開 nesting。教訓:journald 壞=促發 A3 日誌斷流哨兵。
+④ 晨報「今日訊息」修復:v4-flash 思考鏈偶爆 max_tokens(1200 仍不夠)→3000+空回重試;
+  DeepSeek key 本身健康(401 假警報=測試腳本沒剝引號)。當日大廳已重推濃縮版。
+⑤ Kuma 探活批次(免 UI:stop→sqlite 直插→start,DB 備份 before-batch-*):新增 Loki/
+  ntfy/webhook/Navidrome/ct-dmz-proxy 五監測+修 Paperless(接受碼 []→200-399+OpenWrt
+  Allow-Monitor-To-CT270-Paperless-8000/-Navidrome-4533,無 SNAT),六監測首輪全綠。
+⑥ Navidrome 掃描 cron 上線(CT270 /etc/cron.d/navidrome-scan */6h,實測 143ms)。
+⑦ 三支「靜默失效」哨兵上線(詳監控告警 §9 尾註):hl-backup-watch(CT260 08:30,
+  vzdump 新鮮度+覆蓋缺口+MC 世界備份 age)、hl-log-liveness(CT260 */10,Loki 六 host
+  斷流偵測)、ct260-deadman(CT201 每分鐘,雙端點×5 輪→本機 ntfy urgent,不經 CT260
+  =監控大腦自身的獨立後路;上線自檢 ntfy 200 實收)。
+  ★備份哨兵首輪即抓真缺口:CT100/204/205 不在任何 vzdump 任務,且 MC 世界備份純
+  CT100 本機無跨機副本(詳備份索引 CT100 段,補法待使用者裁決)。
+⑧ 其他收檔:nocodb pin 2026.06.2(待辦21 全結)、portal 版本鏈勘誤(現役 0.9.1,082
+  已於 123059b 執行,殘留映像清除)、待辦50 guest-portal 使用者外網實測成功全結、
+  待辦51 mc-autosleep 終驗成功全結、VM300=使用者手動關機省 RAM(onboot=1 不一致
+  待裁決)、root.crt 清掃=六 CT ca-certificates 皆無殘留(舊自簽 CA 只裝過使用者裝置,
+  PC/手機移除方法已告知)。

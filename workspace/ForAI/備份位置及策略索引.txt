@@ -31,6 +31,13 @@ CT201 Monitor    /opt/monitoring/_backups            prometheus.yml/docker-compo
                                                      rules/*.yml/grafana-dashboards/*.json .before-*
   └ Kuma DB      容器內 uptime-kuma:/app/data/_backups   kuma.db.bak_*                            3+
 CT100 mc-backend /root/_backups                       nftables.conf/minecraft 設定/interfaces      11+
+  ★★ MC 世界備份實況(2026-07-10 hl-backup-watch 首輪查核):mc-safe-backup.sh 每日 03:10
+     tar 到 CT100 本機 /root/mc-backups——「純本機、無跨機副本」;且 CT100 不在 pve24 夜間
+     vzdump 任務(04:20 job=201,300,102,250,260,202,203,270,無 100/204/205)。最後一份
+     CT100 vzdump=2026-07-05 手動檔。→ MC 世界資料現況=單碟單機。補法待使用者裁決:
+     (a) CT100 加入 04:20 vzdump 任務(整 CT 含世界+插件,最省事) 或 (b) mc-safe-backup
+     加 rsync 到 NAS。CT204(wazuh)/CT205(schedule) 同屬覆蓋缺口,一併裁決。
+     哨兵=CT260 hl-backup-watch(cron 08:30)會持續告警直到補齊或列入排除清單。
 CT102 mc-proxy   /root/_backups                       velocity.toml/interfaces 散檔                3
   └ 既有目錄(原樣保留)：/root/velocity-backup-*/、velocity-upgrade-backup-*/、
      geyser-floodgate-upgrade-backup-*/、viaversion-install-backup-*/

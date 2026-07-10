@@ -843,9 +843,13 @@ def rss_section(cfg):
     if not items:
         return {"h": "今日訊息", "body": "無未讀新訊(訂閱源在 FreshRSS UI 維護)。"}
     ai_in = json.dumps([{"feed": f, "title": t} for f, t in items], ensure_ascii=False)
-    # max_tokens 需含 reasoning 預算:v4-flash 思考吃掉太小的上限會回空 content(踩坑 2026-07-09)
+    # max_tokens 需含 reasoning 預算:v4-flash 思考吃掉太小的上限會回空 content(踩坑 2026-07-09;
+    # 1200 實測仍偶爆=2026-07-10 大廳退回原題,拉到 3000 並補一次重試)
     digest = deepseek_call(cfg, model_fast(cfg), RSS_SYSTEM_PROMPT, ai_in,
-                           max_tokens=1200, timeout=60)
+                           max_tokens=3000, timeout=60)
+    if not digest:
+        digest = deepseek_call(cfg, model_fast(cfg), RSS_SYSTEM_PROMPT, ai_in,
+                               max_tokens=3000, timeout=60)
     if not digest:
         digest = ";".join(t for _, t in items[:5]) + "。(AI 濃縮失敗,列前 5 條原題)"
     return {"h": "今日訊息", "body": digest}

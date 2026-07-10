@@ -548,15 +548,30 @@ portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 if
 2. 告警關鍵 image 由 :latest 改 pin 版本（新增的 loki/promtail/pve-exporter 已 pin；存量 :latest 待辦㉑）。
 3. 視需要把 Uptime Kuma 的部分監控逐步收斂到 Prometheus（核心告警集中，Kuma 留外層探活）。
 4. ✔已解（2026-07-05 待辦12）：Loki/Promtail 管線上線，七台 host 全入庫＋冒煙測試通過（§5e）；
-   殘餘小尾巴＝Kuma 對 Loki http://10.80.80.11:3100/ready 探活待 UI 加。
+   殘餘小尾巴＝Kuma 對 Loki /ready 探活 ✔（2026-07-10 sqlite 批次直插,見 §9 尾註）。
 5. promtail 已 EOL → 長期遷移 Grafana Alloy（收集端替換，Loki 端不動）。
-5b. Kuma 對 Paperless-ngx http://192.168.20.70:8000 探活（302 即活）待 UI 加（2026-07-05 待辦15）。
+5b. ✔已解（2026-07-10）：Kuma Paperless 監測原已存在（id 18）但 accepted_statuscodes=[]＋
+    OpenWrt 無 monitor→CT270:8000 放行=永紅；已補規則+接受碼 200-399,現綠（見 §9 尾註）。
     附註（2026-07-05 待辦15f）：ocr sidecar（paperless-ocr-1）刻意不設獨立探活——有 compose
     healthcheck 自癒＋fail-open 設計（掛了只降級回 tesseract，不斷入件），無告警價值。
 6. pve-exporter（待辦11）啟用後：Grafana「PVE 虛擬化總覽」(uid pve-overview) 檢視微調；
    PveStorageAlmostFull 對兩座 cifs(~88%) 將常駐 firing → 待辦38 清理或 silence。
-7. Kuma 探活待 UI 加（2026-07-07 待辦19）：ntfy http://10.80.80.11:8091/v1/health、
-   CT260 webhook http://192.168.20.60:5001/health（皆期望 200）。
-8. Kuma 探活待 UI 加（2026-07-08 待辦49）：portal http://10.80.80.11:8088/api/health
-   （200 即活,interval 60s;portal 掛掉時大廳不可用,由 Kuma+站外看門狗兜底）。
+7. ✔已解（2026-07-10）：ntfy /v1/health、CT260 webhook /health 探活已加（§9 尾註）。
+8. ✔已解（portal monitor 已在=id 19,0.4.0 收尾時使用者建）。
+★ 2026-07-10 Kuma 探活批次補齊（免 UI:docker stop→sqlite 直插→start,DB 備份
+  /opt/uptime-kuma/data/kuma.db.before-batch-*）：新增 id 20-24=Loki /ready、ntfy
+  /v1/health、CT260 webhook /health、Navidrome /ping、ct-dmz-proxy /health,全部綁
+  TG 通知(notification 1),首輪心跳全綠;同窗修 id 18 Paperless(接受碼+OpenWrt
+  Allow-Monitor-To-CT270-Paperless-8000/-Navidrome-4533 兩條,無 SNAT——回程走共用
+  閘道,比照既有 Monitor-To-X no-op SNAT 實況不再新增)。
+★ 2026-07-10 新增三支「靜默失效」哨兵（皆獨立於 Alertmanager）：
+  - hl-backup-watch(CT260 cron 08:30):pvesh 讀 vzdump 任務+storage content 逐 vmid
+    算備份 age(>36h 告警)+運行中 guest 不在任何任務=覆蓋缺口+CT100 /root/mc-backups
+    世界備份 age;TG 去抖(問題簽名變化才發+恢復解除)。首輪即抓到 100/204/205 缺口。
+  - hl-log-liveness(CT260 cron */10):Loki 查近 30m 各 host 日誌量,期望清單
+    {ct100,ct201,ct202,ct260,ct270,openwrt} 缺席連續 2 輪→TG(主機活著但日誌斷流
+    =偵測面失明;實證=CT202 journald 空轉 9 天無人察覺)。vm300 停機不入清單。
+  - ct260-deadman(CT201 cron 每分鐘,/usr/local/bin):雙端點(5001/health+9100)連續
+    5 輪全掛→CT201 本機 ntfy 直發 urgent(刻意不經 CT260 TG 鏈=獨立路徑;CT260 一倒
+    全站通知靜默的盲點就靠這條);恢復發解除。憑證 /usr/local/etc/ct260-deadman.env(600)。
 ```

@@ -146,7 +146,7 @@ CT201  monitor                   running
 CT202  fwdproxy                  running   # VLAN80 正向代理 squid
 CT203  ct-dmz-proxy              running   # VLAN60 DMZ 反向代理 Caddy(§10.7)
 CT204  wazuh                     running   # VLAN80 Wazuh HIDS(§10.8)
-CT205  schedule                  (規劃)  # VLAN60 DMZ guest-portal 對外分享站(§10.9;材料備妥待建)
+CT205  schedule                  running  # VLAN60 DMZ guest-portal 對外分享站(§10.9;2026-07-10 上線)
 CT250  vaultwarden-restore-test  stopped   # Onboot 0,常態關機(§9)
 CT260  codex-ops                 running
 CT270  life-ops                  running
@@ -321,7 +321,8 @@ IPv6:RA server(SLAAC),見 §4.7。
 10.60.60.10    CT203 ct-dmz-proxy — 反向代理 Caddy + Authelia SSO(§10.7)
                v6 GUA(SLAAC)2001:b011:5c10:9fbc:be24:11ff:fe4c:db63 — phone↔CT203 tailscale v6
                直連傳輸端點(主機 v6 守衛擋冷 inbound,§4.7)
-10.60.60.11    CT205 schedule — guest-portal 對外唯讀分享站(行程+借貸;§10.9,材料備妥待建)。
+10.60.60.11    CT205 schedule — guest-portal 對外唯讀分享站(行程+借貸;§10.9,2026-07-10 上線,
+               使用者外網登入實測通過)。
                與 CT203 同 pve24/vmbr0/tag=60=同 L2,Caddy→app:8300 走 bridge 直通(零新防火牆規則)
 
 現況:DMZ->WAN enabled;DMZ<->內網僅逐項 allowlist(monitor→dmz:80,9100,9959、
@@ -1553,7 +1554,9 @@ CT204  hostname wazuh  VLAN80 10.80.80.12/24  GW 10.80.80.1  DNS 10.80.80.1
     AGH rewrite wazuh.home.arpa 另議。
 ```
 
-## 10.9 CT205 schedule(VLAN60 DMZ,guest-portal 對外唯讀分享站)★材料備妥待建(2026-07-10)
+## 10.9 CT205 schedule(VLAN60 DMZ,guest-portal 對外唯讀分享站)✔已上線(2026-07-10,
+   使用者外網登入實測成功;★nesting=0 致 systemd-journald 243/CREDENTIALS 同 CT202 病,
+   修法=finish-ct205-journald.sh 待使用者跑,見缺改 2026-07-10)
 
 用途:給受邀外人看的迷你入口——登入後顯示屋主未來 14 天行程(唯讀)+ 與該人相關的借貸往來。
 對外模式比照 Vaultwarden(CF Tunnel → CT203 Caddy),**不經 Authelia/單一入口**;
@@ -1627,18 +1630,24 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
 
 ```text
 既有:
-- CT202 systemd-journald 故障(243/CREDENTIALS 自 2026-07-01)journal 空轉待修。
+- ✔CT202 systemd-journald——已修(2026-07-10):根因=nesting=0 的 unprivileged LXC 撞
+  systemd 257 憑證機制(07-01 安全更新後發病);pct set 202 -features nesting=1+reboot 即癒
+  (squid/promtail 隨之復活)。同病:CT205(finish-ct205-journald.sh 待使用者跑)。
+  通則:Debian 13 LXC 一律開 nesting,否則 journald 必炸。
 - CT102 promtail 未鋪(要收再比照 CT100 模式)。
 - Nas(24Bay cifs storage)命名偏舊,待整理。
 - ✔DXP4800 NAS 備份盤點——已結(2026-07-09 待辦37,入備份索引 §1/§5)。
 2026-07-07 稽核新增:
-- VM300 stopped(onboot=1)——查明原因並決定是否重啟。
+- ✔VM300 stopped 原因已明(2026-07-10 使用者):手動關機省 RAM(4G),刻意為之。
+  殘餘不一致:onboot=1 意味宿主重開後蜜罐又自啟吃 RAM——是否改 onboot=0 待使用者裁決。
+  蜜罐停機期間 WAN 22/23 DNAT 無人接、targets 21/23 缺 2 屬預期。
 - ✔DXP node_exporter down——已根治(2026-07-09 待辦37:base unit 綁 legacy IP+textfile 灌爆,finish-37-exporter.sh 全綠)。
 - ✔ctdmz owned_v4 殭屍——已修(2026-07-10:1.21→1.0,ctdmz.nft v3.1,見 §4.8)。
 - CT203 sshd / CT204 ssh.socket 監聽 *:22——裁決關閉或文件定案接受。
 - pve24 孤兒 tailscaled 程序清理。
 - DMZ DHCPv4 正式停用(uci dhcp.dmz),消除單層防護。
-- Navidrome 自動掃描 cron 補建(源檔 navidrome-scan.cron 缺失)。
+- ✔Navidrome 自動掃描——已建(2026-07-10):CT270 /etc/cron.d/navidrome-scan(*/6h flock
+  docker exec navidrome scan;實測 143ms 完掃);源檔副本 CT260 ~/workspace/navidrome/。
 - OpenWrt 殘留清理:MC hairpin 重複兩組、temp_allow_pc40_to_openwrt_ssh、firewall.@rule[77] 空 section、
   Monitor-To-X no-op SNAT 數條。
 - DNS:裸別名(dxp4800/dxp4800-fast/caddy/mc-server)經 AGH 不可解——補 FQDN 條目或接受並以本文為準。
