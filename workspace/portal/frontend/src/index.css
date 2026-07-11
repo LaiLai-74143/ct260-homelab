@@ -14,9 +14,10 @@
   --warn: #D9A03F;
   --crit: #E5534B;
   --unk: #57606C;
-  /* 吉祥物專用官方橘(Claude 品牌 terracotta)——非六色 token,僅 Mascot 使用
-     (偏離:使用者點名官方形象色,2026-07-11;同 kiosk #000 前例) */
-  --clawd: #D97757;
+  /* 吉祥物專用橘——非六色 token,僅 Mascot 使用(偏離:使用者點名官方形象色,
+     2026-07-11;同 kiosk #000 前例)。0.15.0 由品牌 terracotta #D97757 改為
+     clawd-on-desk 桌面版實測體色 #DE886D(使用者要求視覺對齊) */
+  --clawd: #DE886D;
 }
 
 html {
@@ -126,74 +127,179 @@ body {
 .card-hover:hover { transform: translateY(-2px); }
 .card-hover:active { transform: translateY(0) scale(0.99); }
 
-/* ---- 吉祥物 Clawd(0.13.0):fixed 漂浮全頁面的官方像素形象;全部進下方殺名單。
-   蹲起/顛球(svg)、跳躍(外層 span)、眨眼(眼群組)各掛不同元素,transform 動畫
-   互不搶(0.11.0 簡寫互蓋教訓);idle/kick 同掛 svg 但由 React 二選一切 class ---- */
-/* 待機:蹲下起立循環(origin 釘地,蹲進地面;蹲時橫向微脹=squash & stretch) */
-@keyframes clawd-squat {
-  0%, 58%, 100% { transform: scaleY(1) scaleX(1); }
-  66%, 76% { transform: scaleY(0.84) scaleX(1.07); }
-  86% { transform: scaleY(1.04) scaleX(0.98); }
+/* ---- 吉祥物 Clawd(0.15.0):對齊 clawd-on-desk 桌面版的動畫參數(呼吸/眨眼/
+   大跳/拋接/趴地節奏皆取自其 SVG 實測值——動畫參數是事實不受著作權保護,
+   圖形全自繪)。各動畫掛不同元素,transform 互不搶(0.11.0 簡寫互蓋教訓);
+   全部進下方 reduced-motion 殺名單 ---- */
+/* 待機呼吸:微擠壓+下沉半格(原版 breathe 3.2s) */
+@keyframes clawd-breathe-idle {
+  0%, 100% { transform: scale(1, 1) translateY(0); }
+  50% { transform: scale(1.02, 0.98) translateY(0.5px); }
 }
-.clawd-idle { animation: clawd-squat 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
-/* 顛球:小跳+前傾,與球同 1.06s 週期 */
-@keyframes clawd-kick {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  35% { transform: translateY(-5px) rotate(-8deg); }
+.clawd-breathe-idle { animation: clawd-breathe-idle 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+/* 眨眼:4s 週期開頭壓扁一瞬(原版 eye-blink) */
+@keyframes clawd-blink {
+  0%, 10%, 100% { transform: scaleY(1); }
+  5% { transform: scaleY(0.1); }
 }
-.clawd-kick { animation: clawd-kick 1.06s ease-in-out infinite; transform-origin: 50% 100%; }
-/* 足球:腳邊彈起到頭頂高度再落下,轉半圈 */
-@keyframes clawd-ball {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-30px) rotate(180deg); }
+.clawd-blink { transform-box: fill-box; transform-origin: center; animation: clawd-blink 4s ease-in-out infinite; }
+/* 眼神跟隨:平滑滑動而非跳格(原版 transition 0.2s ease-out) */
+.clawd-eyefollow { transition: transform 0.2s ease-out; }
+/* 開心:連續大跳,起跳前蹲+空中拉伸+落地擠壓(原版 bounce 1s;位移換算到
+   CSS px 縮半,免撞台詞泡泡) */
+@keyframes clawd-bounce {
+  0%, 15%, 100% { transform: translateY(0) scaleY(1); }
+  20% { transform: translateY(0) scaleY(0.85); }
+  40% { transform: translateY(-18px) scaleY(1.05); }
+  50% { transform: translateY(-21px) scaleY(1); }
+  60% { transform: translateY(-18px) scaleY(1.05); }
+  80% { transform: translateY(0) scaleY(0.85); }
+  85% { transform: translateY(0) scaleY(1); }
 }
-.clawd-ball { animation: clawd-ball 1.06s ease-in-out infinite; }
-/* 報錯:發抖(critical firing 時) */
-@keyframes clawd-shake {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  25% { transform: translateX(-0.8px) rotate(-1.2deg); }
-  75% { transform: translateX(0.8px) rotate(1.2deg); }
+.clawd-bounce { animation: clawd-bounce 1s ease-in-out infinite; transform-origin: 50% 100%; }
+/* 開心揮臂:肩關節往復(原版 mini-happy 節奏) */
+@keyframes clawd-wave-l {
+  0% { transform: rotate(20deg); }
+  100% { transform: rotate(80deg); }
 }
-.clawd-shake { animation: clawd-shake 0.45s linear infinite; transform-origin: 50% 100%; }
-/* 睡覺:慢呼吸 */
-@keyframes clawd-breathe {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.955); }
+@keyframes clawd-wave-r {
+  0% { transform: rotate(-20deg); }
+  100% { transform: rotate(-80deg); }
 }
-.clawd-breathe { animation: clawd-breathe 4s ease-in-out infinite; transform-origin: 50% 100%; }
-/* 頭頂徽章(!)彈跳 */
+.clawd-wave-l { transform-box: fill-box; transform-origin: 100% 50%; animation: clawd-wave-l 0.4s infinite alternate ease-in-out; }
+.clawd-wave-r { transform-box: fill-box; transform-origin: 0% 50%; animation: clawd-wave-r 0.4s infinite alternate ease-in-out; }
+/* 像素星光:中心點先亮→外圈補齊→中心滅→全滅(原版 8-bit sparkle 時間軸) */
+@keyframes clawd-spark-c {
+  0% { opacity: 0; } 10% { opacity: 1; } 30% { opacity: 0; } 100% { opacity: 0; }
+}
+@keyframes clawd-spark-o {
+  0% { opacity: 0; } 20% { opacity: 1; } 40% { opacity: 0; } 100% { opacity: 0; }
+}
+.clawd-spark-c { opacity: 0; animation: clawd-spark-c 1.5s infinite step-end; }
+.clawd-spark-o { opacity: 0; animation: clawd-spark-o 1.5s infinite step-end; }
+/* 雜耍:身體左右搖+微沉(原版 rock 1.2s) */
+@keyframes clawd-rock {
+  0%, 50%, 100% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-3deg) translateY(0.3px); }
+  75% { transform: rotate(3deg) translateY(0.3px); }
+}
+.clawd-rock { transform-box: fill-box; transform-origin: 50% 100%; animation: clawd-rock 1.2s ease-in-out infinite; }
+/* 雜耍雙臂:左右交替接拋,與搖擺同週期 */
+@keyframes clawd-arm-jl {
+  0%, 50%, 100% { transform: rotate(20deg); }
+  25% { transform: rotate(35deg); }
+  75% { transform: rotate(5deg); }
+}
+@keyframes clawd-arm-jr {
+  0%, 50%, 100% { transform: rotate(-20deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(-35deg); }
+}
+.clawd-arm-jl { transform-box: fill-box; transform-origin: 50% 50%; animation: clawd-arm-jl 1.2s ease-in-out infinite; }
+.clawd-arm-jr { transform-box: fill-box; transform-origin: 50% 50%; animation: clawd-arm-jr 1.2s ease-in-out infinite; }
+/* 雜耍球:雙手間拋物線,頂點懸滯(原版 juggle 軌跡原值;座標=viewBox 用戶單位) */
+@keyframes clawd-packet {
+  0%   { transform: translate(2px, 10px); }
+  8%   { transform: translate(4px, 4px); }
+  18%  { transform: translate(6px, 0px); }
+  30%  { transform: translate(8px, -1px); }
+  42%  { transform: translate(10px, 0px); }
+  50%  { transform: translate(14px, 10px); }
+  58%  { transform: translate(12px, 4px); }
+  68%  { transform: translate(10px, 0px); }
+  80%  { transform: translate(8px, -1px); }
+  92%  { transform: translate(4px, 4px); }
+  100% { transform: translate(2px, 10px); }
+}
+.clawd-packet { animation: clawd-packet 1.2s infinite; }
+/* 雜耍眼:追球弧線(原版 eye-track 2.4s;雜耍時取代滑鼠跟隨) */
+@keyframes clawd-eyetrack {
+  0%, 100% { transform: translate(-1px, -1px); }
+  15% { transform: translate(0, -1.5px); }
+  30% { transform: translate(1px, -1px); }
+  45% { transform: translate(1px, 0.5px); }
+  50% { transform: translate(1px, -1px); }
+  65% { transform: translate(0, -1.5px); }
+  80% { transform: translate(-1px, -1px); }
+  90% { transform: translate(-1px, 0.5px); }
+}
+.clawd-eyetrack { animation: clawd-eyetrack 2.4s ease-in-out infinite; }
+/* 報錯趴地:沉重喘息(原版 heavy-breathe 2.5s) */
+@keyframes clawd-heavy {
+  0%, 100% { transform: scale(1, 1) translateY(0); }
+  50% { transform: scale(1.05, 0.9) translateY(1.5px); }
+}
+.clawd-heavy { transform-box: fill-box; transform-origin: 50% 100%; animation: clawd-heavy 2.5s ease-in-out infinite; }
+/* 報錯搧風臂 */
+@keyframes clawd-fan {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-60deg); }
+}
+.clawd-fan { transform-box: fill-box; transform-origin: 50% 0%; animation: clawd-fan 0.4s infinite alternate ease-in-out; }
+/* 報錯冒煙:從頭頂浮升放大淡出(基態 opacity 0——reduced 殺動畫後自然隱形) */
+@keyframes clawd-smoke {
+  0% { transform: translate(7.5px, 6px) scale(0.5); opacity: 0; }
+  20% { opacity: 0.6; }
+  100% { transform: translate(7.5px, -6px) scale(1.8); opacity: 0; }
+}
+.clawd-smoke { opacity: 0; animation: clawd-smoke 3s infinite ease-out; }
+/* ERROR 紅字閃爍(reduced 殺動畫後恆亮=語義保留) */
+@keyframes clawd-errflash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.clawd-errflash { animation: clawd-errflash 0.8s ease-in-out infinite; }
+/* 睡覺趴地:慢速深呼吸,胸腔鼓起(原版 breathe-squash 4.5s) */
+@keyframes clawd-sleep-breathe {
+  0%, 80%, 100% { transform: scale(1, 1); }
+  30%, 40% { transform: scale(1.02, 1.25); }
+}
+.clawd-sleep-breathe { transform-box: fill-box; transform-origin: 50% 100%; animation: clawd-sleep-breathe 4.5s ease-in-out infinite; }
+/* 睡覺像素 Z:三顆各自搖曳浮升淡出(原版 float-1/2/3;基態 opacity 0 同煙) */
+@keyframes clawd-z1 {
+  0% { transform: translate(5px, 8px) scale(0.4); opacity: 0; }
+  10% { opacity: 1; }
+  30% { transform: translate(9px, 4px) scale(0.6); }
+  50% { transform: translate(4px, 0px) scale(0.8); }
+  70% { transform: translate(8px, -4px) scale(1); }
+  90% { opacity: 0.8; }
+  100% { transform: translate(6px, -8px) scale(1.1); opacity: 0; }
+}
+@keyframes clawd-z2 {
+  0% { transform: translate(8px, 9px) scale(0.3); opacity: 0; }
+  10% { opacity: 1; }
+  30% { transform: translate(5px, 5px) scale(0.5); }
+  50% { transform: translate(9px, 1px) scale(0.7); }
+  70% { transform: translate(6px, -3px) scale(0.9); }
+  90% { opacity: 0.8; }
+  100% { transform: translate(8px, -7px) scale(1); opacity: 0; }
+}
+@keyframes clawd-z3 {
+  0% { transform: translate(6px, 7px) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  30% { transform: translate(9px, 3px) scale(0.7); }
+  50% { transform: translate(4px, -1px) scale(0.9); }
+  70% { transform: translate(8px, -5px) scale(1.1); }
+  90% { opacity: 0.8; }
+  100% { transform: translate(5px, -9px) scale(1.2); opacity: 0; }
+}
+.clawd-z1 { opacity: 0; animation: clawd-z1 6s infinite ease-in-out; }
+.clawd-z2 { opacity: 0; animation: clawd-z2 6s infinite ease-in-out; animation-delay: 2s; }
+.clawd-z3 { opacity: 0; animation: clawd-z3 6s infinite ease-in-out; animation-delay: 4s; }
+/* 頭頂徽章(!)彈跳(notify 疊加用,沿用) */
 @keyframes clawd-badge-bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-1px); }
 }
 .clawd-badge { transform-box: fill-box; animation: clawd-badge-bounce 1s ease-in-out infinite; }
-/* 睡覺 zzz:浮升淡出循環 */
-@keyframes clawd-zzz-float {
-  0% { opacity: 0; transform: translateY(2px); }
-  40% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-6px); }
-}
-.clawd-zzz { animation: clawd-zzz-float 1.8s ease-out infinite; }
-/* 眨眼:長週期壓扁一瞬;transform-box 讓 origin 落在眼睛自身中心 */
-@keyframes clawd-blink {
-  0%, 91%, 97%, 100% { transform: scaleY(1); }
-  94% { transform: scaleY(0.12); }
-}
-.clawd-eye { transform-box: fill-box; transform-origin: center; animation: clawd-blink 5.6s infinite; }
-/* 點擊跳一下(class 開關+onAnimationEnd 收尾;不換 key——remount 會連坐重置
-   子孫常駐動畫,0.12.0 審查 CONFIRMED) */
-@keyframes clawd-jump {
-  0%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-7px); }
-  55% { transform: translateY(0); }
-  72% { transform: translateY(-3px); }
-}
-.clawd-jump { animation: clawd-jump 480ms ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   .dot-crit-breathe, .skeleton, .data-flash, .toast-in, .toast-out, .dialog-in,
-  .route-fade, .clawd-idle, .clawd-kick, .clawd-ball, .clawd-eye, .clawd-jump,
-  .clawd-shake, .clawd-breathe, .clawd-badge, .clawd-zzz { animation: none !important; }
+  .route-fade, .clawd-breathe-idle, .clawd-blink, .clawd-bounce, .clawd-wave-l,
+  .clawd-wave-r, .clawd-spark-c, .clawd-spark-o, .clawd-rock, .clawd-arm-jl,
+  .clawd-arm-jr, .clawd-packet, .clawd-eyetrack, .clawd-heavy, .clawd-fan,
+  .clawd-smoke, .clawd-errflash, .clawd-sleep-breathe, .clawd-z1, .clawd-z2,
+  .clawd-z3, .clawd-badge { animation: none !important; }
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
   /* reveal 的隱藏態由 Reveal.tsx 在 reduced 時整組不掛;這裡雙保險直接顯示 */

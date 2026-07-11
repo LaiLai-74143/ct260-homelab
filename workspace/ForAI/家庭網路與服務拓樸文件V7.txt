@@ -918,10 +918,10 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.12.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.12.0 於 2026-07-11 使用者部署上線(大廳截圖驗證);0.13.0(fixed
-              漂浮+官方形象)與 0.14.0(六動作狀態機)已備妥——直接跑
-              finish-portal-0140.sh(錨點自適應 0.10~0.13 都收,0130 作廢);
+portal        8088   portal:0.14.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.14.0 於 2026-07-11 使用者部署上線(截圖驗證:漂浮吉祥物+notify
+              徽章);0.15.0(吉祥物視覺對齊 clawd-on-desk 桌面版)已備妥——
+              直接跑 finish-portal-0150.sh(錨點自適應 0.10~0.14 都收);
               見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
@@ -1126,6 +1126,27 @@ portal        8088   portal:0.12.0 本地 build(python:3.13.5-slim+pin;待辦49 
               新 keyframes shake/breathe/badge-bounce/zzz-float 全進殺名單,
               reduced 下表情差分保留(紅!/××眼靜態可見,狀態語義不丟)。
               走查 19/19。部署 finish-portal-0140.sh(錨點自適應 0.10~0.13)
+              0.15.0(2026-07-11 施工,使用者比對截圖點名「與原專案盡可能一致」):
+              視覺對齊 clawd-on-desk 桌面版——照其 SVG 實測參數重繪(動畫參數
+              是事實不受著作權保護,圖形全自繪,素材 ARR 紅線不變;使用者問
+              「自用不推 GitHub 行嗎」→ 答:its LICENSE personal-use 例外僅涵蓋
+              跑原 app 本身,抽素材進自己專案即使私用也不在內,維持自繪)。
+              格點 15×16(viewBox -1 -8 17 24 留徽章/Z 頭頂空間)、體色 --clawd
+              #D97757→#DE886D(原版實測)、1×2 直縫眼(--bg)、四腿 1×2 垂地、
+              2×2 側臂、地面陰影 9×1 #000/.5;六動作全套換新:idle=breathe
+              3.2s(scale 1.02/.98)+blink 4s+眼神跟隨改 0.2s transition 平滑滑動
+              (半格量化 clamp ±1.5/±1);happy=clawd-bounce 1s 循環大跳(擠壓
+              拉伸)+雙臂 0.4s 揮舞+^^眼+像素星光兩拍閃;juggle=三彩球
+              (--crit/--amber/--ok 圓球+高光陰影)雙手間拋物線 1.2s 錯相位
+              +body-rock ±3°+接拋臂+追球眼(取代滑鼠跟隨);error=整隻趴地
+              sploot(軀幹 13×5 壓扁+腿朝上翹+左臂攤地+右臂搧風 0.4s)+××眼
+              (0.6×2.2 交叉槓)+冒煙三puff+ERROR 紅字 0.8s 閃爍(取代 0.14 紅!
+              +發抖);sleep=趴地+雙臂攤地+閉眼細縫(2×0.4)+sleep-breathe
+              4.5s 胸腔鼓起+像素 Z 三顆搖曳浮升(取代文字 zzz)。雜耍球/煙/Z
+              基態 opacity 0=reduced 殺動畫後自然隱形,error 趴地+××眼+恆亮
+              ERROR 靜態保語義;殺名單全量更新(22 個 clawd-* class)。
+              走查 24/24(含戳完呼吸相位不歸零防回歸)。部署
+              finish-portal-0150.sh(錨點自適應 0.10~0.14;0140 作廢)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

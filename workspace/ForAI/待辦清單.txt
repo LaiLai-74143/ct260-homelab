@@ -920,8 +920,15 @@
     參考專案素材 All Rights Reserved 不可取用 → 自繪六動作接 portal 真實狀態:
     idle/happy(被戳)/juggle 三球/notify(warning→琥珀!)/error(crit→××眼
     +紅!+發抖)/sleep(23–07 無 crit)。?clawd=<mood> 可強制預覽。走查 19/19。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0140.sh
-      (錨點自適應 0.10~0.13 都收,0130 作廢;驗收三點見腳本尾註)→ 反饋。
+    ▶ ✔ 0.14.0 已上線(2026-07-11 使用者跑 0140,截圖驗證)。
+    【進度 2026-07-11(0.15.0 視覺對齊,使用者比對截圖點名「盡可能一致」)】
+    照 clawd-on-desk SVG 實測參數重繪(參數是事實可用、圖檔 ARR 不可用;自用
+    豁免問題已答:其 LICENSE personal-use 例外僅涵蓋跑原 app,不涵蓋抽素材):
+    格點 15×16、體色 #DE886D、直縫眼+平滑跟隨、四腿、揮臂大跳+星光、三彩球
+    拋物線+搖擺、error/sleep 整隻趴地(××眼+冒煙+ERROR 閃字/閉眼縫+像素 Z)。
+    走查 24/24。細節見 V7 §5 portal 版本史+缺改記錄。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0150.sh
+      (錨點自適應 0.10~0.14 都收,0140 作廢;驗收三點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
