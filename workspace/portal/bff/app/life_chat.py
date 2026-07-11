@@ -186,6 +186,39 @@ def _mock_guest_op(op: str, body: dict) -> dict:
     return {"ok": False, "error": f"『{person}』沒有登入帳號"}
 
 
+# ---- 吉祥物問答(portal 0.16.0,右鍵 Clawd;CT260 life-chat /clawd,Plan 型唯讀) ----
+
+def clawd_info(remote_user: str | None) -> dict:
+    """GET /api/clawd/chat:前端能力探測(零上游呼叫)。"""
+    return {"enabled": enabled(), "allowed": allowed(remote_user),
+            "stateless": True, "generated_at": _now()}
+
+
+async def clawd(body: dict, remote_user: str | None) -> tuple[int, dict]:
+    """單一 question、無歷史(每問全新);單飛與 life 對話共池(CT260 端同一把鎖)。"""
+    _gate(remote_user)
+    q = body.get("question")
+    if not (isinstance(q, str) and 0 < len(q.strip()) <= 2000):
+        raise ChatError(400, "question 須為 1–2000 字元字串", "右鍵對話框一次送一個問題")
+    if _inflight_chat.locked():
+        raise ChatError(409, "上一輪對話仍在處理中", "等它回完再送")
+    async with _inflight_chat:
+        if MODE == "mock":
+            await asyncio.sleep(0.5)
+            return 200, {"ok": True,
+                         "reply": f"(mock)你問「{q.strip()[:40]}」——我翻了 ForAI 文件,"
+                                  "答案是 42。嗶。每次對話都是全新的,我不會記得這題。",
+                         "meta": {"turns": 2, "secs": 0.5}}
+        try:
+            r = await _post("/clawd", {"question": q.strip()}, _CHAT_TIMEOUT)
+        except httpx.TimeoutException:
+            raise ChatError(504, "Clawd 無回應(timeout)", "模型可能仍在翻文件,稍候重問;或檢查 CT260 :5002")
+        except httpx.HTTPError as e:
+            raise ChatError(504, "life-chat 連線失敗",
+                            f"{type(e).__name__};檢查 CT260 :5002 或 OpenWrt Allow-Monitor-To-CT260-LifeChat-5002")
+        return _map(r, "Clawd 回應異常")
+
+
 async def _mock_chat(msgs: list) -> dict:
     """mock:UI 走查用——問句含「記」「新增」「加」出提案卡,其餘純文字回覆。"""
     await asyncio.sleep(0.8)

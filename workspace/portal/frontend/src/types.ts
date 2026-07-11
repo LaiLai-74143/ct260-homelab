@@ -283,6 +283,21 @@ export interface LifeChatInfo {
   generated_at: string
 }
 
+// ---- 吉祥物問答(portal 0.16.0 右鍵 Clawd;BFF /api/clawd/chat → CT260 life-chat /clawd) ----
+
+export interface ClawdInfo {
+  enabled: boolean
+  allowed: boolean
+  stateless: boolean
+  generated_at: string
+}
+
+export interface ClawdReply {
+  ok: boolean
+  reply: string
+  meta?: { turns?: number; secs?: number }
+}
+
 // ---- guest-portal 帳號管理(待辦50;生活頁面板) ----
 export interface GuestAccount {
   person: string

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAlerts } from '../api'
+import ClawdChat from './ClawdChat'
 
 /** 同 Num/Reveal:啟動時取一次即可,OS 層偏好極少中途翻轉 */
 const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -71,6 +72,7 @@ export default function Mascot() {
   const [happy, setHappy] = useState(false)
   const [woke, setWoke] = useState(false)
   const [juggling, setJuggling] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [hour, setHour] = useState(() => new Date().getHours())
   const [eye, setEye] = useState<[number, number]>([0, 0])
   const svgRef = useRef<SVGSVGElement>(null)
@@ -157,19 +159,23 @@ export default function Mascot() {
     <div data-mood={mood}
          className="pointer-events-none fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-3 z-40 md:bottom-[18vh] md:right-5">
       <div className="relative">
-        {/* 台詞泡泡:活區容器固定掛載(display 切換,不汰換節點) */}
+        {/* 台詞泡泡:活區容器固定掛載(display 切換,不汰換節點);問答框開著時讓位 */}
         <div
           role="status"
-          className={`absolute bottom-full right-0 mb-2 w-max max-w-[190px] rounded-card border border-line bg-panel px-2.5 py-1.5 text-[11.5px] leading-snug shadow-lg ${bubble ? 'toast-in' : 'hidden'}`}
+          className={`absolute bottom-full right-0 mb-2 w-max max-w-[190px] rounded-card border border-line bg-panel px-2.5 py-1.5 text-[11.5px] leading-snug shadow-lg ${bubble && !chatOpen ? 'toast-in' : 'hidden'}`}
         >
-          {bubble ? quip : ''}
+          {bubble && !chatOpen ? quip : ''}
         </div>
+
+        {/* 右鍵問答框(0.16.0):條件掛載=關閉即銷毀,配合「每問全新」語義 */}
+        {chatOpen && <ClawdChat onClose={() => setChatOpen(false)} />}
 
         <button
           type="button"
           onClick={doPoke}
+          onContextMenu={(e) => { e.preventDefault(); setChatOpen(true) }}
           aria-label="戳一下 Clawd"
-          title="Clawd"
+          title="Clawd(左鍵戳一下,右鍵問問題)"
           className="pointer-events-auto block cursor-pointer rounded-btn"
         >
           {/* happy 大跳掛外層 span,與 svg 內動畫分元素不互搶 */}

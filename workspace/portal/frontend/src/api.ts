@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, ClawdInfo, ClawdReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -204,6 +204,26 @@ export function useLifeConfirmMutation() {
     retry: 0,
     mutationFn: (p) => postJson('/api/life/confirm', p),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['life'] }) },
+  })
+}
+
+// ---- 吉祥物問答(portal 0.16.0;右鍵 Clawd → BFF /api/clawd/chat → CT260 life-chat /clawd) ----
+
+/** 能力探測:enabled(已配置)/ allowed(本請求可對話);開對話框時才 fetch */
+export function useClawdInfo(open: boolean) {
+  return useQuery<ClawdInfo>({
+    queryKey: ['clawdInfo'],
+    queryFn: () => getJson('/api/clawd/chat'),
+    staleTime: 5 * 60_000,
+    enabled: open,
+  })
+}
+
+/** 問答:retry 0(限速 6/分與生活助理共池);單一 question,無歷史=每問全新 */
+export function useClawdMutation() {
+  return useMutation<{ status: number; data: ClawdReply }, ActionHttpError, { question: string }>({
+    retry: 0,
+    mutationFn: (body) => postJson('/api/clawd/chat', body),
   })
 }
 

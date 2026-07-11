@@ -3038,3 +3038,33 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   斷言寫 8 rect,實為每眼 2 交叉槓共 4(與原版同),修斷言非修圖。
 - 部署:finish-portal-0150.sh(錨點自適應 0.10~0.14→0.15.0;0140 作廢)交
   使用者 CT260 跑。
+
+## 2026-07-11 portal 0.16.0 右鍵 Clawd 問答(唯讀 Sonnet 5,每問全新)
+- 使用者點名四要件:右鍵叫出對話框/可問問題(唯讀)/以 Plan 的 Sonnet 5
+  回答/不留歷史每次全新。
+- 設計:全沿用 life-chat 管線,零新基建(5002 放行、LIFE_CHAT_URL/TOKEN 皆
+  現成)。CT260 life-chat.py 加 /clawd 端點:{"question":str} 單題進出——
+  「不留歷史」做在 API 契約層(不收 messages 陣列),不是前端自律;前端
+  問答框條件掛載,關閉即 unmount=畫面串也銷毀。
+- claude -p 形態(Plan 型唯讀):--allowedTools "Read(~/workspace/ForAI/**),
+  Glob,Grep"、--strict-mcp-config 不帶 config=零 MCP、禁 Bash/Edit/Write/Web*;
+  system prompt=Clawd 人設+動態列 ForAI 檔名+「先讀 00_索引再取答」+俏皮但
+  準確+婉拒寫入(「我只出一張嘴」)。Read 出 ForAI 即權限拒絕 fail-closed;
+  Grep/Glob 無路徑規則可綁=殘餘面,受 Bearer+Remote-User 雙閘覆蓋(本人
+  專用功能,風險=本人讀自己文件)。
+- 限速/單飛與生活助理共池(同一把鎖+6/分窗):兩個入口打同一個訂閱,
+  分開限反而失守。
+- BFF:life_chat.py 加 clawd_info/clawd + main.py GET/POST /api/clawd/chat
+  (catchall 之前);Remote-User 閘門、409 單飛、429 透傳、504 timeout 文案
+  比照 /chat;mock=罐頭回覆 0.5s。
+- 前端:ClawdChat.tsx(錨吉祥物上方 320px 卡,Esc/✕ 關,focus 進輸入框,
+  等待態「翻文件中…」);Mascot 按鈕 onContextMenu preventDefault 開框
+  (手機長按同事件);開框時台詞泡泡讓位(bubble && !chatOpen)。
+- 走查 16/16:含兩個關鍵斷言——POST payload 鍵集合恰為 ["question"](第二
+  問不夾帶第一問)、關框重開空狀態(mock 回覆不殘留);閘門 curl 403/
+  allowed:false 用第二個 uvicorn(預設 remote-user)驗,走查主體用
+  PORTAL_ACTION_AUTH=open。
+- 部署:finish-portal-0160.sh 兩段——A 段 CT260 本機換 life-chat.py(diff 才
+  動、備份 ~/_backups、殺登記 PID 非按名連坐、flock wrapper 重拉、401/400
+  驗證鏈+真問一句 E2E);B 段 portal 照 0150 模式(錨點 0.10~0.15,0150
+  作廢,0.15 吉祥物重繪一起帶上)。

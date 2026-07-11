@@ -21,6 +21,9 @@ portal BFF 轉發使用者訊息進來,本服務起 claude -p(Sonnet 5,吃 CT260
   GET  /health                     免驗證(Kuma/BFF 探活)
   POST /chat    Bearer  {"messages":[{"role":"user|assistant","content":str},...]}
   POST /confirm Bearer  {"action":str,"args":{},"summary":str,"ts":int,"sig":str}
+  POST /clawd   Bearer  {"question":str}  ——吉祥物問答(portal 0.16.0,右鍵 Clawd):
+    Plan 型唯讀(Read 限 ~/workspace/ForAI + Glob/Grep,零 MCP、禁 Bash/寫入),
+    API 就不收歷史=每問全新無記憶;與 /chat 共用單飛鎖+6/分限速(訂閱保護)。
 """
 import hashlib
 import hmac
@@ -211,6 +214,64 @@ def _system_prompt() -> str:
 7. 人名核對(重要):記帳前一律先 find_person 查對象。若查無此名,先用姓氏或部分字再查一次;查到「名稱不同但發音相同/形近」的既有人物(例:于/宇、翔/祥、明/銘),不要逕自當成新人物——先在正文問使用者是否打錯字、指的是不是既有那位,等下一輪回覆確認後才提案。確定是全新對象才走 add_transaction(它會自動建人物)。"""
 
 
+FORAI_DIR = HOME / "workspace/ForAI"
+
+
+def _clawd_system_prompt() -> str:
+    now = datetime.now(TZ)
+    wd = "一二三四五六日"[now.weekday()]
+    try:
+        docs = "\n".join(f"  - {FORAI_DIR}/{n}" for n in sorted(os.listdir(FORAI_DIR))
+                         if n.endswith(".txt"))
+    except OSError:
+        docs = "  (文件目錄暫不可讀)"
+    return f"""你是 Clawd,家庭入口網站 portal 的像素吉祥物(橘色小傢伙,平時在頁面右下角值班)。使用者在網站上對你按了右鍵問問題。今天是 {now.strftime('%Y-%m-%d')}(週{wd}),時區 Asia/Taipei。
+
+規則:
+1. 一律用繁體中文(zh-TW)回覆,簡潔有點吉祥物的俏皮,但內容要準確。
+2. 你是唯讀的:沒有任何寫入/執行能力,只能讀文件回答。使用者要求改設定、跑指令、部署等,一律婉拒:「我只出一張嘴,動手要找 Claude Code 本尊。」
+3. 關於這個 homelab 的問題(網路拓樸、服務、監控、備份、待辦……),先讀 {FORAI_DIR}/00_索引.txt 定位,再讀對應文件取答;可用 Grep 快速找關鍵字。只讀 ~/workspace/ForAI 下的文件,不要試圖讀其他路徑。現有文件:
+{docs}
+4. 通識問題(不需查文件的)直接回答即可,不用硬翻文件。
+5. 每次對話都是全新的:你沒有上一輪的記憶,也不會記住這一輪——需要延續脈絡的事請使用者一次講全。
+6. 回覆保持精簡(通常 3–8 句內),不用 markdown 標題,不要輸出大段文件原文。"""
+
+
+def run_clawd(question: str):
+    """吉祥物問答:一次性 claude -p,Plan 型唯讀。回 (reply_text, meta) 或丟 RuntimeError。"""
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        CLAUDE_BIN, "-p",
+        "--model", MODEL,
+        "--output-format", "json",
+        "--strict-mcp-config",  # 不帶 --mcp-config=零 MCP,連 life-ro 也不掛
+        "--allowedTools", f"Read({FORAI_DIR}/**),Glob,Grep",
+        "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch,"
+                             "Task,NotebookEdit,TodoWrite,KillShell,BashOutput",
+        "--append-system-prompt", _clawd_system_prompt(),
+    ]
+    env = dict(os.environ)
+    env.setdefault("HOME", str(HOME))
+    env["PATH"] = f"{HOME}/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+    t0 = time.time()
+    try:
+        r = subprocess.run(cmd, input=question, text=True,
+                           capture_output=True, timeout=CHAT_TIMEOUT,
+                           cwd=str(WORK_DIR), env=env)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude timeout {CHAT_TIMEOUT}s")
+    dt = time.time() - t0
+    if r.returncode != 0:
+        raise RuntimeError(f"claude rc={r.returncode}: {(r.stderr or r.stdout)[:300]}")
+    try:
+        j = json.loads(r.stdout)
+    except ValueError:
+        raise RuntimeError(f"claude 輸出非 JSON: {r.stdout[:200]!r}")
+    if j.get("is_error"):
+        raise RuntimeError(f"claude is_error: {str(j.get('result'))[:300]}")
+    return str(j.get("result") or ""), {"turns": j.get("num_turns"), "secs": round(dt, 1)}
+
+
 def _transcript(messages) -> str:
     lines = ["以下是與使用者的對話,請接著回覆最後一則:", ""]
     for m in messages:
@@ -334,8 +395,36 @@ class Handler(BaseHTTPRequestHandler):
             self._confirm()
         elif self.path == "/guest":
             self._guest()
+        elif self.path == "/clawd":
+            self._clawd()
         else:
             self._reply(404, {"ok": False, "error": "not found"})
+
+    def _clawd(self):
+        # 吉祥物問答:單一 question、無歷史(每問全新);限速/單飛與 /chat 共池
+        body = self._auth_body()
+        if body is None:
+            return
+        q = body.get("question")
+        if not (isinstance(q, str) and 0 < len(q.strip()) <= 2000):
+            self._reply(400, {"ok": False, "error": "question 須為 1–2000 字元字串"})
+            return
+        if not rate_ok():
+            self._reply(429, {"ok": False, "error": "rate limited(6 次/分)"})
+            return
+        if not _chat_lock.acquire(blocking=False):
+            self._reply(409, {"ok": False, "error": "上一輪對話仍在處理中"})
+            return
+        try:
+            log(f"CLAWD q={q.strip()[:80]!r}")
+            reply, meta = run_clawd(q.strip())
+            log(f"CLAWD DONE turns={meta['turns']} {meta['secs']}s")
+            self._reply(200, {"ok": True, "reply": reply, "meta": meta})
+        except RuntimeError as e:
+            log(f"CLAWD FAIL: {e}")
+            self._reply(502, {"ok": False, "error": str(e)[:300]})
+        finally:
+            _chat_lock.release()
 
     def _guest(self):
         # guest-portal 帳號管理(待辦50;portal 生活頁面板 → 這裡 → hl-guest svc → NocoDB)。

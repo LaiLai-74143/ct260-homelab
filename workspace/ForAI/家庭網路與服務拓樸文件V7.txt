@@ -920,9 +920,9 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               後必須 docker restart prometheus,HUP reload 不夠)
 portal        8088   portal:0.14.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
               0.14.0 於 2026-07-11 使用者部署上線(截圖驗證:漂浮吉祥物+notify
-              徽章);0.15.0(吉祥物視覺對齊 clawd-on-desk 桌面版)已備妥——
-              直接跑 finish-portal-0150.sh(錨點自適應 0.10~0.14 都收);
-              見版本史尾;
+              徽章);0.15.0(吉祥物視覺對齊 clawd-on-desk)+0.16.0(右鍵 Clawd
+              問答)已備妥——直接跑 finish-portal-0160.sh(錨點自適應 0.10~0.15
+              都收,0150 作廢;含 CT260 life-chat /clawd 部署段);見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1147,6 +1147,20 @@ portal        8088   portal:0.14.0 本地 build(python:3.13.5-slim+pin;待辦49 
               ERROR 靜態保語義;殺名單全量更新(22 個 clawd-* class)。
               走查 24/24(含戳完呼吸相位不歸零防回歸)。部署
               finish-portal-0150.sh(錨點自適應 0.10~0.14;0140 作廢)
+              0.16.0(2026-07-11 施工,使用者點名「右鍵 Clawd 叫出對話框、
+              問問題(唯讀)、Plan 的 Sonnet 5 回答、不留歷史每次全新」):
+              右鍵(手機長按)吉祥物→問答框(ClawdChat.tsx,錨吉祥物上方,
+              Esc/✕ 關、關閉即銷毀=條件掛載 state 歸零;開框時台詞泡泡讓位)
+              → BFF GET/POST /api/clawd/chat(life_chat.py clawd_info/clawd,
+              Remote-User 閘門比照生活助理,mock 有罐頭回覆)→ CT260 life-chat
+              :5002 /clawd(見 §10 life-chat 段:Plan 型唯讀 claude -p,Read 限
+              ForAI+Glob/Grep,零 MCP;API 只收單一 question=每問全新)。
+              零新基建:5002 放行與 LIFE_CHAT_URL/TOKEN 全沿用;限速與生活
+              助理共池 6/分。走查 16/16(右鍵開框/mock 問答/payload 僅
+              question 不夾歷史/重開全新/Esc+✕/泡泡讓位/閘門 403/kiosk 無/
+              回歸)。部署 finish-portal-0160.sh(A 段=CT260 life-chat 換版
+              +驗證鏈 401/400+真問一句 E2E;B 段=portal 錨點自適應
+              0.10~0.15;0150 作廢)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測
@@ -1389,6 +1403,13 @@ SoT=那邊)→HMAC-SHA256
 mcp-life-ro.json;log ~/.local/state/life-chat/life-chat.log;cron @reboot+*/5 flock 自癒;
 源=~/workspace/life-chat/(含 finish-life-chat-infra.sh);
 來源=OpenWrt Allow-Monitor-To-CT260-LifeChat-5002(§4.4)。
+  /clawd 端點(portal 0.16.0 右鍵吉祥物問答,2026-07-11):同服務同 token,
+  {"question":str}——API 不收歷史=每問全新無記憶(使用者點名);claude -p
+  Plan 型唯讀:--allowedTools "Read(~/workspace/ForAI/**),Glob,Grep"、零 MCP、
+  禁 Bash/寫入,知識庫=ForAI 文件(system prompt 動態列檔名+先讀 00_索引);
+  與 /chat 共用單飛鎖+6/分限速;log 記 CLAWD 行。Read 路徑外=權限拒絕
+  fail-closed;Grep/Glob 無路徑規則可綁=殘餘面,受 Bearer+Remote-User 雙閘
+  (使用者本人專用)覆蓋。
 
 ★hl-tg-bridge(C1 生活助理 TG 雙向橋,2026-07-10):~/.local/bin/hl-tg-bridge——
 Telegram getUpdates 長輪詢(全系統唯一消費者;日後別再起第二個,會互搶 409),

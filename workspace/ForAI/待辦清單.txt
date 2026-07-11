@@ -927,8 +927,15 @@
     格點 15×16、體色 #DE886D、直縫眼+平滑跟隨、四腿、揮臂大跳+星光、三彩球
     拋物線+搖擺、error/sleep 整隻趴地(××眼+冒煙+ERROR 閃字/閉眼縫+像素 Z)。
     走查 24/24。細節見 V7 §5 portal 版本史+缺改記錄。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0150.sh
-      (錨點自適應 0.10~0.14 都收,0140 作廢;驗收三點見腳本尾註)→ 反饋。
+    【進度 2026-07-11(0.16.0 右鍵 Clawd 問答,使用者點名四要件)】
+    右鍵(手機長按)吉祥物→問答框;唯讀(Plan 型 claude -p Sonnet 5,Read 限
+    ForAI+Glob/Grep,零 MCP 禁 Bash/寫入);API 只收單一 question=不留歷史
+    每問全新,關框連畫面都銷毀。管線=BFF /api/clawd/chat(Remote-User 閘門)
+    → CT260 life-chat :5002 新 /clawd 端點;零新基建(5002+token 全沿用),
+    限速與生活助理共池 6/分。走查 16/16。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0160.sh
+      (A 段更新 life-chat 服務+E2E 真問一句;B 段 portal 錨點自適應 0.10~0.15
+      都收,0150 作廢連 0.15 吉祥物一起帶上;驗收五點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

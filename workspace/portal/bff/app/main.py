@@ -21,7 +21,7 @@ BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.15.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.16.0", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -213,6 +213,28 @@ async def life_confirm(request: Request):
         return _err(400, "body 須為 JSON 物件", "提案五欄位原樣帶回:action/args/summary/ts/sig")
     try:
         status, payload = await life_chat.confirm(body, request.headers.get("Remote-User"))
+        return JSONResponse(payload, status_code=status)
+    except life_chat.ChatError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+# ---- 吉祥物問答(portal 0.16.0;右鍵 Clawd,Plan 型唯讀、每問全新無記憶) ----
+
+@app.get("/api/clawd/chat")
+async def clawd_info(request: Request):
+    return life_chat.clawd_info(request.headers.get("Remote-User"))
+
+
+@app.post("/api/clawd/chat")
+async def clawd_post(request: Request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"question": "..."}')
+    try:
+        status, payload = await life_chat.clawd(body, request.headers.get("Remote-User"))
         return JSONResponse(payload, status_code=status)
     except life_chat.ChatError as e:
         return _err(e.status, e.error, e.hint)
