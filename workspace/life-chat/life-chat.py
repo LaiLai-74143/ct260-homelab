@@ -115,6 +115,9 @@ def load_config():
 CFG = load_config()
 MODEL = CFG.get("LIFE_CHAT_MODEL", "claude-sonnet-5")
 CLAUDE_BIN = CFG.get("CLAUDE_BIN", str(HOME / ".npm-global/bin/claude"))
+# 服務版本標記(/health 回報):finish 腳本靠它判定「跑著的程序」要不要重啟——
+# 檔案 diff 判不了半途狀態、端點探測判不了行為修正,每次改本檔就 bump
+SERVICE_REV = "0160b"
 
 
 def tg_send(text):
@@ -245,7 +248,9 @@ def run_clawd(question: str):
         "--model", MODEL,
         "--output-format", "json",
         "--strict-mcp-config",  # 不帶 --mcp-config=零 MCP,連 life-ro 也不掛
-        "--allowedTools", f"Read({FORAI_DIR}/**),Glob,Grep",
+        # 權限規則:單斜線開頭=相對專案根,絕對路徑必須雙斜線 //(0160b 修正:
+        # 原 Read(/home/…) 被解讀為 <cwd>/home/… 永不匹配 → 唯讀全拒)
+        "--allowedTools", f"Read(/{FORAI_DIR}/**),Glob,Grep",
         "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch,"
                              "Task,NotebookEdit,TodoWrite,KillShell,BashOutput",
         "--append-system-prompt", _clawd_system_prompt(),
@@ -363,7 +368,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self._reply(200, {"ok": True, "model": MODEL})
+            self._reply(200, {"ok": True, "model": MODEL, "rev": SERVICE_REV})
         else:
             self._reply(404, {"ok": False, "error": "not found"})
 

@@ -3068,3 +3068,19 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   動、備份 ~/_backups、殺登記 PID 非按名連坐、flock wrapper 重拉、401/400
   驗證鏈+真問一句 E2E);B 段 portal 照 0150 模式(錨點 0.10~0.15,0150
   作廢,0.15 吉祥物重繪一起帶上)。
+
+## 2026-07-11 0160b:Clawd 問答 Read 權限修正(上線後使用者實測抓到)
+- 症狀:0.16.0 上線,問「目前系統還好嗎?」→ Clawd 回「我讀取權限被擋了」
+  (優雅降級正確,但唯讀本體失效)。
+- 根因:Claude Code 權限規則語法——`Read(/home/…)` 單斜線開頭=「相對專案根
+  目錄」,絕對路徑必須雙斜線 `Read(//home/…)`;cwd 是空工作目錄,規則永不
+  匹配 → Read 出範圍全拒(fail-closed 方向正確,範圍寫錯)。
+- 修:allowedTools 改 f"Read(/{FORAI_DIR}/**)"(FORAI_DIR 自帶前導 / → 實值
+  //home/…);本機以同形態 claude -p 實測讀到 00_索引.txt 第一行才交付。
+- 連帶:finish 腳本重啟判定再修一層——端點探測(401)判不了「行為修正、
+  端點沒變」的更新 → life-chat.py 加 SERVICE_REV 進 /health,腳本比對源檔
+  rev 與 running rev 決定重啟(此後改服務就 bump rev);E2E 問題改成必須
+  翻文件才答得出的(portal 在哪個 CT/埠),順帶驗 Read 真的通。
+- 前情(同腳本第一輪):pgrep -f 命中 flock wrapper+python 兩顆 PID,引號包
+  成單參數餵 kill 直接報錯且 && 鏈下 set -e 不攔 → 改逐 PID 殺+等鎖+health
+  重試(已入 e22b22a)。

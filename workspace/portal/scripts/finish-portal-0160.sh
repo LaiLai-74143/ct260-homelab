@@ -26,11 +26,12 @@ if ! diff -q ~/workspace/life-chat/life-chat.py ~/.local/bin/life-chat.py >/dev/
 else
   echo "life-chat.py 檔案已同步"
 fi
-# 重啟判定看「跑著的程序」而非檔案:探測 /clawd,401=新版已在跑,404/其他=舊程序要換
-PROBE=$(curl -s -o /dev/null -w '%{http_code}' -m 4 -X POST -H 'Authorization: Bearer probe' \
-        -H 'Content-Type: application/json' -d '{"question":"x"}' http://127.0.0.1:5002/clawd || true)
-if [ "$PROBE" != "401" ]; then
-  echo "running 服務無 /clawd(probe=$PROBE)→ 重啟(逐 PID 殺:flock wrapper+python 各一顆)"
+# 重啟判定看「跑著的程序」而非檔案:/health 的 rev 與源檔一致才算新版在跑
+# (端點探測判不了行為修正——0160b 修 Read 權限規則,端點沒變)
+REV=$(sed -n 's/^SERVICE_REV = "\(.*\)"$/\1/p' ~/workspace/life-chat/life-chat.py)
+[ -n "$REV" ] || { echo "源檔缺 SERVICE_REV?"; exit 1; }
+if ! curl -s -m 4 http://127.0.0.1:5002/health | grep -q "\"rev\": *\"$REV\""; then
+  echo "running 服務非 rev=$REV → 重啟(逐 PID 殺:flock wrapper+python 各一顆)"
   for p in $(pgrep -f "$HOME/.local/bin/life-chat.py" || true); do
     kill "$p" 2>/dev/null || true
   done
@@ -62,9 +63,10 @@ curl -s -m 4 http://127.0.0.1:5002/health | grep -q '"ok": *true' || { echo "/he
   || { echo "空 question 未回 400(路由沒上?)"; exit 1; }
 echo "life-chat /clawd 驗證鏈 OK(401/400)"
 
-echo "== A2. 真問一句(E2E,起一次 claude -p,約 10–40s)=="
+echo "== A2. 真問一句(E2E,必須翻文件才答得出=順帶驗 Read 權限;約 20–60s)=="
 R=$(curl -s -m 120 -X POST -H "Authorization: Bearer $LIFE_CHAT_TOKEN" \
-     -H 'Content-Type: application/json' -d '{"question":"用一句話介紹你自己"}' \
+     -H 'Content-Type: application/json' \
+     -d '{"question":"portal 入口站跑在哪個 CT、聽哪個埠?翻文件答,答不出要明說"}' \
      http://127.0.0.1:5002/clawd)
 echo "$R" | grep -q '"ok": *true' || { echo "E2E 失敗:$R"; exit 1; }
 echo "E2E 回覆:$(echo "$R" | python3 -c 'import json,sys; print(json.load(sys.stdin)["reply"][:120])')"
