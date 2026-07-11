@@ -3112,3 +3112,57 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   PromQL 無顯式匹配不會 many-to-one 報錯等,詳審查紀錄)。
 - 走查 31/31(e2e-0170-mock.mjs);部署 finish-portal-0170.sh 交使用者跑
   (auto-mode 攔;錨點自適應 0.10~0.16,0160 作廢;B5 驗 /api/spark+閘門回歸)。
+
+## 2026-07-11 pve24 重開機後監控棧未恢復事故(19:33 重啟,watchdog 19:36 抓到)
+- 症狀:①watchdog-ct201/告警管線連續失敗告警;②portal 前端「連不上 BFF」;
+  ③CT260 tmux claude session 消失,PC 端 Remote Control 連不上 codex-ops。
+- 排查(Sonnet 5 子代理唯讀,CT260→pve24-auto→pct exec 201):CT201 本體
+  running,14 個 docker 容器僅 prometheus+alertmanager 兩個 Exited(0),其餘
+  全 up;BFF 本體健康,/api/overview|alerts|spark 因上游 9090/9093 死而 502
+  =前端誤報「連不上 BFF」。②①同一根因。
+- 根因:兩容器 config.v2.json HasBeenManuallyStopped=true——moby 對任何
+  docker kill -s <signal>(含 -s HUP 熱重載)都持久標記「手動停過」,
+  unless-stopped 重開機不拉起。旗標時間點 07-10 22:07(兩容器 reload 差
+  2ms=一次 docker kill -s HUP prometheus alertmanager,推定、原始指令無
+  日誌留存);hl-reload(curl /-/reload)不設旗標,已排除。
+- 修:docker start prometheus alertmanager(start 會把旗標歸零,兼防再發;
+  不用 compose up -d 避免 recreate 其他服務)→ 交使用者跑
+  /home/codex/finish-ct201-recover.sh(auto-mode 攔 CT201 寫入;含旗標/健康/
+  BFF 200 驗證)。回滾:docker stop 兩容器。
+- 戒律入檔:監控告警.txt §3(★2026-07-11)+§4 回指——熱重載只准
+  curl /-/reload,嚴禁 docker kill -s HUP。
+- tmux/Remote Control:claude session 本來就是手動起的、無自啟機制。新增
+  ~/.local/bin/hl-claude-tmux-run.sh(冪等;先開 shell session 再 send-keys
+  進 claude,claude 退出殼還在)+crontab @reboot sleep 35;刻意只掛 @reboot
+  不掛 */N 自癒——手動 kill-session 應保持死亡。已當場拉起並確認 TUI 進提示列。
+  補×2(使用者實測抓到,兩輪):①純 claude 只有本機 TUI,遠端看不到;
+  ②--remote-control 旗標也不夠——只曝光單一 session,選單那個
+  「workspace · codex-ops · N of 32」是 server mode=`claude remote-control`
+  子指令(常駐,遠端可開新對話、由 server 本機 spawn,容量預設 32,經
+  claude.ai 中繼不依賴內網)。腳本最終形:cwd ~/workspace +
+  `claude remote-control`;已重起並確認「Connected · workspace · Capacity 1/32」
+  (啟動時對重開機前殘留 session 報 404/Session failed 屬清理,非故障)。
+  斷線查證:server log 在 ~/.claude/remote/run/<hash>/remote-server.log;
+  12:26 使用者首連時平台曾自動引導 daemon 並 spawn session(還回了一句),
+  但 daemon 12:28 自我升級重啟,接手的後端 exit -1,遠端只見轉圈——
+  server mode 常駐後此引導路徑不再是唯一依靠。
+- claude-rc 監控(使用者核准):新哨兵 hl-claude-rc-watch(cron */5+flock,
+  SoT=ops/)——pgrep 錨定 (^|/)claude remote-control,連續 2 輪失敗才 TG、
+  恢復補發,★只告警不自動重啟(手動 kill 合法;重拉=hl-claude-tmux-run.sh)。
+  coldstart-check 加 proc 型檢查項(同 pattern,開機面)。實測:三分支
+  (正常/去抖告警/恢復)dry 全過+coldstart 15/15;測試踩到 pgrep -f 自匹配
+  (測試殼 cmdline 含 pattern),故 pattern 加 (^|/) 錨定、測試用 [x] 括號法。
+  同步:監控告警.txt 哨兵清單、V7 §12 覆蓋面。
+- 附帶確認:ssh pve24(ops 金鑰)重開機後 publickey 被拒=hl-ssh-agent 6h
+  快取設計如此,需人工 ssh-add;自動化鏈(homelab-notify/watchdog)全走
+  pve24-auto 不受影響。watchdog-ct201 本次表現正確(重啟後 3 分鐘內抓到)。
+- 防再發候補:①compose 兩服務 restart 改 always——未做(代價:刻意停用會復活);
+  ②hl-coldstart-check 加 CT201 Exited 容器掃描——使用者核准已做(同日,見下)。
+- 修復收案:使用者跑 finish-ct201-recover.sh,旗標雙 false、9090/9093 健康;
+  腳本第 4 步 /api/overview 502 為時序(BFF 錯誤快取未過期),數分鐘後四端點
+  全 200;20:23-24 告警管線+站外看門狗雙恢復通知。
+- coldstart-check 增項(使用者核准):ct201_exited()——ssh pve24-auto→pct exec 201
+  docker ps -a --filter status=exited/created;有→✗ 列名+排查指引,ssh 不通→
+  只報「未確認」不算 ✗(維持原「無假陰性」設計,模組註記已補例外說明);
+  --dry-run 實測 14/14 全綠+ssh stub 模擬上鎖=13/13+未確認,兩分支過。
+  同步:監控告警.txt §哨兵清單、V7 §12 覆蓋面。

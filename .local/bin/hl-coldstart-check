@@ -6,6 +6,8 @@ CT260 @reboot +10 分鐘跑一次:照清單探全站關鍵端點,發**一則** T
 冷啟依賴 DAG 見 V7 §「冷啟依賴與復電自檢」;本清單=該 DAG 的驗收面。
 註:CT260 單獨重啟(pct reboot 260)也會觸發,屬可接受的罕見小噪音。
 探測全走 TCP/HTTP(刻意不用 ssh——hl-lock 金鑰上鎖時 ssh 會假陰性)。
+例外(2026-07-11 事故後加):CT201 docker Exited 掃描必須走 ssh(9090/9093
+未對 CT260 放行);ssh 失敗只報「未確認」不報 ✗,維持無假陰性原則。
 --dry-run 只印不發。與待辦1h UPS 拔線實測同窗驗收。
 """
 import json
@@ -40,6 +42,7 @@ CHECKS = [
     ("FreshRSS",           "tcp",  "192.168.20.70:8082",              "CT270 compose"),
     ("webhook(本機)",      "http", "http://127.0.0.1:5001/health",    "CT260 ntfy-webhook.py"),
     ("life-chat(本機)",    "http", "http://127.0.0.1:5002/health",    "CT260 life-chat.py"),
+    ("claude-rc(本機)",    "proc", "(^|/)claude remote-control",      "@reboot+35s 的 hl-claude-tmux-run.sh 應已跑過仍不在=起失敗,tmux attach -t claude 看現場"),
 ]
 
 
@@ -55,9 +58,31 @@ def probe(kind, target):
         if kind == "http":
             with urllib.request.urlopen(target, timeout=TIMEOUT) as r:
                 return 200 <= r.status < 400
+        if kind == "proc":
+            return subprocess.run(["pgrep", "-f", target],
+                                  capture_output=True).returncode == 0
     except Exception:
         return False
     return False
+
+
+def ct201_exited():
+    """CT201 docker 非運行容器掃描(2026-07-11 事故:docker kill -s HUP 持久標記
+    HasBeenManuallyStopped=true,unless-stopped 重開機不拉起 prometheus+alertmanager;
+    監控面自身死角——TargetDown 要靠的 alertmanager 正是死者,只能從 CT260 掃)。
+    走 watchdog-ct201 同路徑 ssh pve24-auto → pct exec 201。
+    回傳 (state, names):ok=無 Exited/Created、bad=有(附名單)、unknown=ssh 不通。"""
+    cmd = ["ssh", "-o", "BatchMode=yes", "pve24-auto",
+           "sudo /usr/sbin/pct exec 201 -- docker ps -a"
+           " --filter status=exited --filter status=created --format '{{.Names}}'"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+    except subprocess.TimeoutExpired:
+        return "unknown", []
+    if r.returncode != 0:
+        return "unknown", []
+    names = [n for n in r.stdout.split() if n]
+    return ("bad", names) if names else ("ok", [])
 
 
 def tg(text):
@@ -84,14 +109,23 @@ def main():
     ok, bad = [], []
     for name, kind, target, hint in CHECKS:
         (ok if probe(kind, target) else bad).append((name, hint))
-    n, total = len(ok), len(CHECKS)
+    state, names = ct201_exited()
+    note = ""
+    if state == "ok":
+        ok.append(("CT201 容器無 Exited", ""))
+    elif state == "bad":
+        bad.append((f"CT201 有非運行容器:{','.join(names)}",
+                    "docker start <名>;若重開機後未自起=kill -s HUP 旗標,見 缺改記錄 2026-07-11"))
+    else:
+        note = "\n(CT201 容器掃描未確認:ssh pve24-auto 不通——hl-lock 上鎖?人工補 docker ps -a)"
+    n, total = len(ok), len(ok) + len(bad)
     if not bad:
-        tg(f"🔋 復電自檢(hl-coldstart-check):{n}/{total} 全綠,全站就緒。")
+        tg(f"🔋 復電自檢(hl-coldstart-check):{n}/{total} 全綠,全站就緒。{note}")
     else:
         lines = "\n".join(f"- {name} ✗ → 查:{hint}" for name, hint in bad)
         tg(f"🔋 復電自檢:{n}/{total} 綠,缺 {len(bad)} 項:\n{lines}\n"
-           "(VM300 蜜罐/CT250 屬手動開機,不在清單;DAG 見 V7 冷啟節)")
-    print(json.dumps({"ok": n, "total": total,
+           "(VM300 蜜罐/CT250 屬手動開機,不在清單;DAG 見 V7 冷啟節)" + note)
+    print(json.dumps({"ok": n, "total": total, "scan201": state,
                       "bad": [b[0] for b in bad]}, ensure_ascii=False))
 
 

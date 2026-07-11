@@ -96,7 +96,7 @@ services:
     # 無 host port:僅 prometheus 經 compose 內網 scrape(snmp-exporter:9116),比照 pve-exporter
 
   portal:
-    image: portal:0.9.2
+    image: portal:0.17.0
     container_name: portal
     restart: unless-stopped
     ports:

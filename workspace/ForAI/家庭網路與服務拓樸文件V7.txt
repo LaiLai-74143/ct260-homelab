@@ -1892,6 +1892,10 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
 CT250 restore-lab(常態關機)、PC(NUT watchdog 登入後才武裝,見待辦1 PC 段)。
 
 hl-coldstart-check 覆蓋面=CT260 合法可達域:DNS(綠=routerpve+VM101 活)、WAN、
-pve24:8006、Loki/ntfy(CT201)、DMZ:443(CT203)、CT270 五服務、本機 webhook/life-chat。
+pve24:8006、Loki/ntfy(CT201)、DMZ:443(CT203)、CT270 五服務、本機 webhook/life-chat、
+本機 claude-rc 程序(Remote Control server,2026-07-11 加;平時由 hl-claude-rc-watch
+cron */5 盯,此處為開機面)、
+CT201 docker Exited 掃描(2026-07-11 加;唯一走 ssh 的項,補「監控面自身死角」——
+alertmanager 死時 TargetDown 發不出來;ssh 不通只報「未確認」維持無假陰性)。
 未放行故不探(由 CT201 監控面覆蓋):routerpve:8006、NAS:445、portal:8088、VLAN70。
 ```

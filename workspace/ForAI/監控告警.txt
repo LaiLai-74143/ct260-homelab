@@ -208,6 +208,10 @@ spike 閾值為起始猜值，誤報多再調。
 DXP4800(nas) 某掛載點剩餘 ~11.6%（使用者表示不理會），逼近 10% 跌破才會通知。
 改規則內容：promtool check rules 後 curl -X POST .../-/reload（同檔內容變更不需重建容器）；
   新增「規則檔目錄掛載」才需重建 prometheus 容器。
+★戒律(2026-07-11 事故)：prometheus/alertmanager 熱重載只准走 curl -X POST /-/reload（hl-reload），
+  嚴禁 docker kill -s HUP——moby 對任何 docker kill -s <signal> 都會持久標記
+  HasBeenManuallyStopped=true（容器不停、旗標落盤），unless-stopped 重開機判「手動停過」不拉起；
+  兩容器曾因此在 07-11 pve24 重開機後雙雙未起（告警管線+portal BFF 上游 502）。
 ```
 
 ---
@@ -223,7 +227,7 @@ bridge        alertmanager-gotify-bridge：把 AM webhook JSON 轉成 Gotify mes
 
 bridge 取值：title=annotation.summary，內文=annotation.description，priority=annotation.priority（預設 5）。
 **寫新規則務必帶 summary / description**（方案 A：hardware+services staleness 規則 description 已加 {{ $value }}）。
-改 alertmanager.yml：amtool check-config 後 curl -X POST .../-/reload。
+改 alertmanager.yml：amtool check-config 後 curl -X POST .../-/reload（嚴禁 docker kill -s HUP，見 §3 戒律）。
 
 inhibit_rules(共 2 條,B1 2026-07-10 起):
 ```text
@@ -606,8 +610,15 @@ portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 if
     假 action(403=活/401=死,不耗限速);連線失敗只記 note(fail-open,可達性歸 Kuma);
     去抖同 backup-watch。坑:CF 帳戶級 token(cfat_)不能用 /user/tokens/verify,
     改打 /zones(2026-07-10 首輪即誤報 401 後修正)。
-  - hl-coldstart-check(@reboot+600s 一次性):復電自檢 13 端點→單則 TG(全綠也發=
-    安心訊號);DAG 與覆蓋面見拓樸 V7 §12;與待辦1h 拔線實測同窗驗收。
+  - hl-coldstart-check(@reboot+600s 一次性):復電自檢 13 端點+claude-rc 程序
+    +CT201 Exited 容器掃描(後兩項 2026-07-11 加;掃描走 ssh pve24-auto→pct,
+    ssh 不通只報「未確認」不算 ✗)→單則 TG(全綠也發=安心訊號);DAG 與
+    覆蓋面見拓樸 V7 §12;與待辦1h 拔線實測同窗驗收。
+  - hl-claude-rc-watch(cron */5,2026-07-11):claude remote-control(Remote
+    Control server mode,住 tmux claude session)程序哨兵——死了=手機/PC 連不上
+    codex-ops workspace。pgrep 錨定 (^|/)claude remote-control;連續 2 輪(約
+    10 分)失敗才發 TG、恢復補發;★只告警不自動重啟(手動 kill-session 屬合法
+    操作,重拉=hl-claude-tmux-run.sh,與 @reboot+35s 自啟同支)。
   - hl-trivy-watch(cron 週二 09:30 台北):暴露面 6 映像 CVE 週掃(authelia/paperless/
     navidrome/ntfy/home-assistant/freshrss;IMAGES 與 diun-images.yml 同步),
     --ignore-unfixed CRITICAL,HIGH;僅「新 CRITICAL」推 TG,HIGH 入 trivy-last.json;

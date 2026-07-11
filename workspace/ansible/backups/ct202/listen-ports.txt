@@ -2,6 +2,6 @@ tcp [::1]:25 master
 tcp 127.0.0.1:25 master
 tcp *:22 sshd
 tcp *:3128 squid
-tcp *:41619 promtail
+tcp *:43389 promtail
 tcp *:9080 promtail
 tcp *:9100 prometheus-node

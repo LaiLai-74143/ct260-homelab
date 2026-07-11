@@ -1,7 +1,8 @@
 tcp 0.0.0.0:5001 python3
 tcp 0.0.0.0:5002 python3
 tcp 127.0.0.1:25 -
+tcp 127.0.0.1:45241 code-fc3def6774
 tcp *:22 -
-tcp *:42115 -
+tcp *:44111 -
 tcp *:9080 -
 tcp *:9100 -

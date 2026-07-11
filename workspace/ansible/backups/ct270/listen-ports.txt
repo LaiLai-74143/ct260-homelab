@@ -7,7 +7,7 @@ tcp 127.0.0.1:18554 go2rtc
 tcp 127.0.0.1:25 master
 tcp *:18555 go2rtc
 tcp *:22 sshd
-tcp *:39243 promtail
+tcp *:32897 promtail
 tcp [::]:8123 python3
 tcp *:9080 promtail
 tcp *:9100 node_exporter
