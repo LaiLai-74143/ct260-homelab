@@ -3084,3 +3084,31 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
 - 前情(同腳本第一輪):pgrep -f 命中 flock wrapper+python 兩顆 PID,引號包
   成單參數餵 kill 直接報錯且 && 鏈下 set -e 不攔 → 改逐 PID 殺+等鎖+health
   重試(已入 e22b22a)。
+
+【2026-07-11|portal 0.17.0 P0/P1 增強包(使用者自改範本 v0.17 點名移植)】
+- P0:⌘K 命令面板(CommandPalette.tsx,全域鍵盤捷徑收攏於此——「/」從跳服務
+  目錄改開面板、g d 改指設備/大廳=g h;靜音動作走既有 ConfirmDialog+
+  /api/action;服務項用 Services.linkOf 同套可達性判定)+卡片 sparkline
+  (新端點 GET /api/spark,TTL 60s;SparkLine.tsx 純 SVG,顏色跟狀態燈=
+  範本定案,偏離 0.8.0 uPlot「線色一律 muted」;無時序源模塊誠實缺席)。
+- P1:卡片光暈(.card-hover::after+全站一條 pointermove;card-hover 加
+  position:relative+overflow:hidden)、氛圍層 Ambient.tsx(44px 網格+14 光點
+  ~30fps;hidden 停 rAF、REDUCED 靜態網格)、crit 戰情(EnvProvider 掛
+  html.crit:紅呼吸條+INCIDENT+光點轉紅;?crit= 強制)、夜間模式
+  (html.night 23:00–07:00;?night= 強制;Tailwind bg/panel/line/text/amber
+  五色改 rgb(var(--x-rgb)/<alpha>) 管道——index.css hex 與 -rgb 三元組兩形式
+  必須同步改,此為新維護義務)。
+- 晨報「今日訊息」條列排版(newsItems 半形「;」拆條+尾端(來源)抽右欄,
+  >14 字不當來源=AI 失敗尾註防誤抓)。
+- 對抗審查(4 finder+8 verifier)確認 3 項已修:
+  ①weekdayOf +08:00 午夜用 getUTCDay 恆少一天(既有 bug,每期刊頭星期都錯;
+    改 T00:00:00Z 解析)——即先前掛著的「今日快報星期標籤 off-by-one」,結案;
+  ②/api/spark power 序列未比照 live.power() 新鮮度 gate——UPS 管線死後
+    textfile 殘值仍被 scrape,卡面 pending 底下卻畫趨勢線(補 nut_upsc_ok+
+    mtime≤300s gate);
+  ③Ambient 隱藏分頁掛載排下的 rAF 只是延後不是取消,切回前景再排一條=
+    雙迴圈雙倍重繪(掛載守 !document.hidden+onVis 先 cancel 再重排)。
+  駁 5(kiosk 不走 Layout 故面板輪詢不及於它、產生器分隔符 prompt 釘死半形、
+  PromQL 無顯式匹配不會 many-to-one 報錯等,詳審查紀錄)。
+- 走查 31/31(e2e-0170-mock.mjs);部署 finish-portal-0170.sh 交使用者跑
+  (auto-mode 攔;錨點自適應 0.10~0.16,0160 作廢;B5 驗 /api/spark+閘門回歸)。

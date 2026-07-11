@@ -629,3 +629,32 @@ async def host_detail(slug: str) -> dict:
         "grafana_url": f"{GRAFANA_LAN}{DASH_OVERVIEW}",
         "generated_at": _now(),
     }
+
+
+# ---------------- L0 卡片迷你趨勢(0.17.0) ----------------
+
+async def spark() -> dict:
+    """大廳卡片 sparkline:各模塊 24h 序列、一小時一點(~25 點)。
+    只出有真實時序源的模塊——devices(targets up)/security(autoban 累計)/
+    power(實際功耗 W);alerts 卡由前端重用 /api/alerts 的 timeline_24h,
+    無時序源的模塊(services/game/life)誠實缺席,前端不畫線。"""
+    async with httpx.AsyncClient(timeout=6.0) as client:
+        devices, security, power_w, ups_ok, ups_stale = await asyncio.gather(
+            _promq_range(client, "sum(up)", 24 * 3600, 3600),
+            _promq_range(client, "sum(portscan_autoban_banned_ips)", 24 * 3600, 3600),
+            _promq_range(client, "sum(nut_ups_load_percent * nut_ups_realpower_nominal_watts / 100)",
+                         24 * 3600, 3600),
+            _promq(client, "nut_upsc_ok"),
+            _promq(client, 'time() - node_textfile_mtime_seconds{file=~".*ups[.]prom"}'),
+        )
+    # power 新鮮度比照 live.power() 的 pending gate(0.17.0 審查 CONFIRMED):
+    # 管線死後 textfile 殘值仍被 scrape,卡面已誠實「數據源未接」時底下不能還畫趨勢線
+    st = _scalar(ups_stale)
+    power_fresh = _scalar(ups_ok) == 1 and st is not None and st <= 300
+    series: dict[str, list[list[float]]] = {}
+    for key, res, keep in (("devices", devices, True), ("security", security, True),
+                           ("power", power_w, power_fresh)):
+        s = _series(res)
+        if keep and len(s) >= 2:  # 單點畫不出線段,缺席比擺直線誠實
+            series[key] = s
+    return {"series": series, "generated_at": _now()}

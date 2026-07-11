@@ -73,6 +73,14 @@ export interface ApiError {
   hint?: string
 }
 
+/** L0 卡片迷你趨勢(0.17.0;BFF /api/spark):模塊 key → [[unix_ts, val]…]。
+    只含有真實時序源的模塊(devices/security/power);alerts 卡重用
+    Alerts.timeline_24h;其餘模塊誠實缺席=卡面不畫線 */
+export interface Spark {
+  series: Record<string, [number, number][]>
+  generated_at: string
+}
+
 // ---- M2 契約(docs/M2-架構.md §3) ----
 
 export interface ServiceItem {

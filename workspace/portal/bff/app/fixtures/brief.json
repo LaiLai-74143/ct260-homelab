@@ -18,6 +18,10 @@
     {
       "h": "建議",
       "body": "VM300 停機已 18 小時,若非刻意保留,建議今晚裁決重啟並查 onboot 未生效原因。"
+    },
+    {
+      "h": "今日訊息",
+      "body": "GPT-5.6 Sol Ultra 證明循環雙覆蓋猜想(Hacker News);紐約市率先禁止欺騙性訂閱並推一鍵取消規則(Hacker News);勒索軟體談判代表實為攻擊者內應(Ars Technica);歐盟通過 Chat Control 1.0 監控法案(Hacker News);SpaceX 擬發射 10 萬顆 Starlink 衛星提升百倍帶寬(Hacker News);Valve 新 Steam Machine 驗證避談 Steam Deck 瓶頸(Ars Technica)"
     }
   ],
   "generated_at": "generated 06:00 by CT260 notifier · fixture"

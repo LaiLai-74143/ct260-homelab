@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { MODULES, TABBAR } from '../modules'
 import { useStream } from '../api'
+import { EnvProvider } from '../env'
+import Ambient from './Ambient'
+import CommandPalette from './CommandPalette'
 import Mascot from './Mascot'
 
 function isActive(route: string, pathname: string): boolean {
@@ -9,37 +12,31 @@ function isActive(route: string, pathname: string): boolean {
 }
 
 export default function Layout() {
-  const nav = useNavigate()
   const { pathname } = useLocation()
-  const pendingG = useRef(false)
   useStream()
+  // 鍵盤捷徑(0.17.0 起收攏進 CommandPalette):⌘K//喚起面板、g+字母跳頁
 
-  // 鍵盤捷徑(§7):g d 回大廳、g a 告警、/ 服務目錄搜尋
+  // 卡片光暈(0.17.0 P1):全站一條 pointermove 委派,把游標位置寫進
+  // 最近 .card-hover 的 --mx/--my,::after 的 radial 跟著走
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      // 確認框開啟時(焦點在 dialog 內)不吃全域捷徑,避免 g/a 誤導航(M3)
-      if (e.target instanceof HTMLElement && e.target.closest('[role="dialog"]')) return
-      if (e.key === '/' && !pathname.startsWith('/m/services')) {
-        // 進服務目錄;頁內的 / 聚焦由 Services 自己接手
-        e.preventDefault()
-        pendingG.current = false
-        nav('/m/services', { viewTransition: true })
-        return
-      }
-      if (e.key === 'g') { pendingG.current = true; return }
-      if (pendingG.current) {
-        if (e.key === 'd') nav('/', { viewTransition: true })
-        if (e.key === 'a') nav('/m/alerts', { viewTransition: true })
-      }
-      pendingG.current = false
+    const onMove = (e: PointerEvent) => {
+      const c = (e.target as Element | null)?.closest?.('.card-hover') as HTMLElement | null
+      if (!c) return
+      const r = c.getBoundingClientRect()
+      c.style.setProperty('--mx', `${e.clientX - r.left}px`)
+      c.style.setProperty('--my', `${e.clientY - r.top}px`)
     }
-    addEventListener('keydown', onKey)
-    return () => removeEventListener('keydown', onKey)
-  }, [nav, pathname])
+    addEventListener('pointermove', onMove, { passive: true })
+    return () => removeEventListener('pointermove', onMove)
+  }, [])
 
   return (
+    <EnvProvider>
     <div className="flex min-h-screen">
+      {/* 背景氛圍層:z-0;側欄(sticky)與 fixed 元件靠 DOM 序/z 疊其上,
+          main 顯式 z-[1](非定位元素會被畫到 canvas 下面) */}
+      <Ambient />
+
       {/* 側欄:≥1280 全寬 220px;768–1279 圖示欄;<768 隱藏(§6 RWD) */}
       <aside className="sticky top-0 hidden h-screen shrink-0 border-r border-line py-5 md:block md:w-14 xl:w-[220px]">
         <div className="border-b border-line px-0 pb-[18px] text-center xl:px-5 xl:text-left">
@@ -47,7 +44,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.16</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.17</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {
@@ -72,7 +69,7 @@ export default function Layout() {
         </nav>
       </aside>
 
-      <main className="min-w-0 max-w-[1180px] flex-1 px-3.5 pb-[90px] pt-4 md:px-[26px] md:pt-[22px]">
+      <main className="relative z-[1] min-w-0 max-w-[1180px] flex-1 px-3.5 pb-[90px] pt-4 md:px-[26px] md:pt-[22px]">
         {/* 0.10.0:拔 key={pathname} remount(單向淡入會閃)——路由切換交給
             View Transitions crossfade;route-fade 只在首載播一次 */}
         <div className="route-fade">
@@ -105,6 +102,10 @@ export default function Layout() {
       {/* 吉祥物(0.13.0):fixed 漂浮全頁面;掛在 Layout 根層=無 transform 祖先、
           kiosk(頂層路由不走 Layout)自然豁免 */}
       <Mascot />
+
+      {/* ⌘K 命令面板(0.17.0):全域鍵盤捷徑也由它託管 */}
+      <CommandPalette />
     </div>
+    </EnvProvider>
   )
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, ClawdInfo, ClawdReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services } from './types'
+import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, ClawdInfo, ClawdReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services, Spark } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -50,14 +50,27 @@ export function useBrief() {
   })
 }
 
+/** L0 卡片迷你趨勢(0.17.0):24h/1h 桶,5 分鐘刷一次就夠 */
+export function useSpark() {
+  return useQuery<Spark>({
+    queryKey: ['spark'],
+    queryFn: () => getJson('/api/spark'),
+    refetchInterval: 5 * 60_000,
+    staleTime: 60_000,
+  })
+}
+
 // ---- M2 hooks(刷新週期照 docs/M2-架構.md §2) ----
 
-export function useServices() {
+/** enabled=false 供命令面板首開前不拉(0.17.0):同 key 共享快取,
+    Services 頁掛著時輪詢由該頁的實例驅動 */
+export function useServices(enabled = true) {
   return useQuery<Services>({
     queryKey: ['services'],
     queryFn: () => getJson('/api/services'),
     refetchInterval: 30_000,
     staleTime: 15_000,
+    enabled,
   })
 }
 
@@ -159,12 +172,14 @@ async function postJson<T>(path: string, body: unknown, headers: Record<string, 
   return { status: r.status, data: data as T }
 }
 
-/** 能力探測:enabled(已配置)/ allowed(本請求可操作)/ 動作字典 */
-export function useActions() {
+/** 能力探測:enabled(已配置)/ allowed(本請求可操作)/ 動作字典。
+    fetch=false 供命令面板首開前不拉(0.17.0) */
+export function useActions(fetch = true) {
   return useQuery<ActionsInfo>({
     queryKey: ['actions'],
     queryFn: () => getJson('/api/actions'),
     staleTime: 5 * 60_000,
+    enabled: fetch,
   })
 }
 

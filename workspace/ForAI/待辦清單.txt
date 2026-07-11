@@ -936,6 +936,17 @@
     ▶ ✔ 0.16.0 已上線(2026-07-11 使用者跑 0160 兩輪+0160b Read 權限修正,
       實測「功能正常」;二次教訓見缺改記錄:kill 多 PID 引號坑、權限規則
       絕對路徑雙斜線、重啟判定改 /health rev)。
+    【進度 2026-07-11(0.17.0 P0/P1 增強包,使用者以自改範本 v0.17 點名移植)】
+    P0=⌘K 命令面板(模糊搜尋模塊/服務/網站/動作;⌘K //「/」喚起、g+字母跳頁;
+    靜音走既有確認框+/api/action;手機入口=banner 鈕;★「/」與 g d 語義變更見 V7)
+    +卡片 sparkline(新端點 /api/spark:devices/security/power 24h 真時序,
+    alerts 重用 timeline_24h,無源模塊誠實缺席);P1=卡片光暈+氛圍層 canvas
+    (hidden 停 rAF/REDUCED 靜態)+crit 戰情(紅呼吸條+INCIDENT+光點轉紅)
+    +夜間模式(23:00–07:00 與 Clawd 同表;Tailwind 五色改 CSS 變數管道);
+    另:晨報「今日訊息」條列排版+修刊頭星期 off-by-one(既有 bug,審查揪出)。
+    走查 31/31;對抗審查 8 發現確認 3 已修(power spark 新鮮度 gate、Ambient
+    雙 rAF、星期)駁 5。
+    ▶ 部署:finish-portal-0170.sh 待使用者跑(auto-mode 攔,錨點自適應 0.10~0.16)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

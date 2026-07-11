@@ -1,4 +1,4 @@
-import { useAlerts, useBrief, useDataLag, useOverview } from '../api'
+import { useAlerts, useBrief, useDataLag, useOverview, useSpark } from '../api'
 import StatusBanner from '../components/StatusBanner'
 import BriefCard from '../components/BriefCard'
 import ModuleCard, { type ModuleCardData } from '../components/ModuleCard'
@@ -27,6 +27,7 @@ export default function Home() {
   const ov = useOverview()
   const al = useAlerts()
   const br = useBrief()
+  const sp = useSpark()
   const lag = useDataLag(ov.data?.generated_at, ov.isError)
 
   if (ov.isError && !ov.data) {
@@ -34,8 +35,13 @@ export default function Home() {
   }
 
   const stubOf = (key: string): ModuleStub | undefined => ov.data?.modules?.find((m) => m.key === key)
+  // 24h 迷你趨勢(0.17.0):alerts 卡重用告警時間軸;其餘取 /api/spark,
+  // 無時序源的模塊 undefined=不畫線(誠實缺席,不擺假序列)
+  const sparkOf = (key: string): [number, number][] | undefined =>
+    key === 'alerts' ? al.data?.timeline_24h : sp.data?.series[key]
 
   const cards: ModuleCardData[] = MODULES.filter((m) => m.key !== 'home').map((m) => {
+    const spark = sparkOf(m.key)
     if (m.key === 'devices') {
       const t = ov.data?.targets
       const bad = t ? t.total - t.up : 0
@@ -43,6 +49,7 @@ export default function Home() {
         route: m.route, name: m.label, state: bad > 0 ? 'warn' : 'ok',
         big: t ? `${t.up}` : '—', bigUnit: t ? `/${t.total}` : '',
         sub: t ? (bad > 0 ? `${bad} 個 target 離線` : '全數在線') : '讀取中…',
+        spark,
       }
     }
     if (m.key === 'alerts') {
@@ -52,10 +59,11 @@ export default function Home() {
         route: m.route, name: m.label, state: crit > 0 ? 'crit' : f.length > 0 ? 'warn' : 'ok',
         big: `${f.length}`,
         sub: `${crit} critical · ${f.length - crit} warning · ${al.data?.silences.length ?? 0} silences`,
+        spark,
       }
     }
     const s = stubOf(m.key)
-    if (s) return { route: m.route, name: m.label, state: s.state, big: s.big, bigUnit: s.bigUnit, sub: s.sub }
+    if (s) return { route: m.route, name: m.label, state: s.state, big: s.big, bigUnit: s.bigUnit, sub: s.sub, spark }
     // 誠實原則:無數據來源就標待接,不顯示假數字
     return { route: m.route, name: m.label, state: 'unk', big: '—', sub: 'M2 待接' }
   })

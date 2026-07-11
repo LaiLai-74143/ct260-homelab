@@ -2,14 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens — 《入口大廳設計報告-3》§6,實體樣衣 portal-demo.html */
+/* Design tokens — 《入口大廳設計報告-3》§6,實體樣衣 portal-demo.html。
+   0.17.0 起五個 token 有日/夜雙態:hex 供本檔 var() 直用、-rgb 三元組供
+   tailwind.config.js rgb(var(--x-rgb)/<alpha>) 管道——兩形式必須同步改 */
 :root {
-  --bg: #0E1116;
-  --panel: #161C24;
-  --line: #232B36;
-  --text: #DDE3EA;
+  --bg: #0E1116;      --bg-rgb: 14 17 22;
+  --panel: #161C24;   --panel-rgb: 22 28 36;
+  --line: #232B36;    --line-rgb: 35 43 54;
+  --text: #DDE3EA;    --text-rgb: 221 227 234;
+  --amber: #E8A33D;   --amber-rgb: 232 163 61;
   --muted: #8A94A3;
-  --amber: #E8A33D;
   --ok: #4CC38A;
   --warn: #D9A03F;
   --crit: #E5534B;
@@ -18,6 +20,17 @@
      2026-07-11;同 kiosk #000 前例)。0.15.0 由品牌 terracotta #D97757 改為
      clawd-on-desk 桌面版實測體色 #DE886D(使用者要求視覺對齊) */
   --clawd: #DE886D;
+}
+
+/* 夜間模式(0.17.0 P1):23:00–07:00 自動(EnvProvider 掛 class,與 Clawd
+   睡覺同表)、?night=1/0 強制;token 降半階+琥珀降飽和,靜態換色非動效,
+   不進 reduced-motion 殺名單 */
+html.night {
+  --bg: #0A0D12;      --bg-rgb: 10 13 18;
+  --panel: #11161D;   --panel-rgb: 17 22 29;
+  --line: #1C232D;    --line-rgb: 28 35 45;
+  --text: #D2D8E0;    --text-rgb: 210 216 224;
+  --amber: #C9913F;   --amber-rgb: 201 145 63;
 }
 
 html {
@@ -120,12 +133,56 @@ body {
 .reveal-stagger.reveal-in > *:nth-child(11) { animation-delay: 450ms; }
 .reveal-stagger.reveal-in > *:nth-child(n+12) { animation-delay: 495ms; }
 
-/* 卡片互動(0.11.0):hover 浮起 2px、按下回彈——撒在可點卡片/連結上 */
+/* 卡片互動(0.11.0):hover 浮起 2px、按下回彈——撒在可點卡片/連結上。
+   0.17.0 加指標追蹤光暈:--mx/--my 由 Layout 全站一條 pointermove 委派寫入,
+   ::after 一層琥珀 radial 跟著滑鼠游走(position/overflow 為光暈裁切而設) */
 .card-hover {
+  position: relative;
+  overflow: hidden;
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .card-hover:hover { transform: translateY(-2px); }
 .card-hover:active { transform: translateY(0) scale(0.99); }
+.card-hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(150px circle at var(--mx, 50%) var(--my, 50%),
+    rgb(var(--amber-rgb) / 0.13), transparent 65%);
+}
+.card-hover:hover::after { opacity: 1; }
+
+/* 卡片迷你趨勢線(0.17.0):SparkLine.tsx;顏色跟狀態燈 */
+.spark { display: block; width: 100%; height: 26px; margin-top: 10px; opacity: 0.9; }
+.spark .ln { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.spark .ar { opacity: 0.1; }
+.spark.ok .ln { stroke: var(--ok); }     .spark.ok .ar { fill: var(--ok); }
+.spark.warn .ln { stroke: var(--warn); } .spark.warn .ar { fill: var(--warn); }
+.spark.crit .ln { stroke: var(--crit); } .spark.crit .ar { fill: var(--crit); }
+.spark.unk .ln { stroke: var(--unk); }   .spark.unk .ar { fill: var(--unk); }
+
+/* crit 戰情模式(0.17.0 P1):EnvProvider 掛 html.crit → 頂部細紅呼吸條;
+   .critbar-pulse 給刊頭 INCIDENT 徽章共用同節奏 */
+@keyframes critbar {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+html.crit body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  height: 2px;
+  z-index: 70;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--crit) 30% 70%, transparent);
+  animation: critbar 2s ease-in-out infinite;
+}
+.critbar-pulse { animation: critbar 2s ease-in-out infinite; }
 
 /* ---- 吉祥物 Clawd(0.15.0):對齊 clawd-on-desk 桌面版的動畫參數(呼吸/眨眼/
    大跳/拋接/趴地節奏皆取自其 SVG 實測值——動畫參數是事實不受著作權保護,
@@ -300,6 +357,9 @@ body {
   .clawd-arm-jr, .clawd-packet, .clawd-eyetrack, .clawd-heavy, .clawd-fan,
   .clawd-smoke, .clawd-errflash, .clawd-sleep-breathe, .clawd-z1, .clawd-z2,
   .clawd-z3, .clawd-badge { animation: none !important; }
+  /* 0.17.0:紅條/徽章殺動畫後恆亮=戰情語義保留;氛圍層由 Ambient.tsx JS 側
+     REDUCED 停 rAF 只畫靜態網格 */
+  html.crit body::before, .critbar-pulse { animation: none !important; }
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
   /* reveal 的隱藏態由 Reveal.tsx 在 reduced 時整組不掛;這裡雙保險直接顯示 */

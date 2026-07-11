@@ -5,12 +5,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0E1116',
-        panel: '#161C24',
-        line: '#232B36',
-        text: '#DDE3EA',
+        // 0.17.0 夜間模式:五個受 html.night 影響的 token 改走 CSS 變數
+        // (RGB 三元組形式保住 bg-bg/95、border-amber/60 這類 alpha 修飾);
+        // 實值(日/夜兩套)只在 index.css :root 與 html.night 維護
+        bg: 'rgb(var(--bg-rgb) / <alpha-value>)',
+        panel: 'rgb(var(--panel-rgb) / <alpha-value>)',
+        line: 'rgb(var(--line-rgb) / <alpha-value>)',
+        text: 'rgb(var(--text-rgb) / <alpha-value>)',
+        amber: 'rgb(var(--amber-rgb) / <alpha-value>)',
         muted: '#8A94A3',
-        amber: '#E8A33D',
         ok: '#4CC38A',
         warn: '#D9A03F',
         crit: '#E5534B',

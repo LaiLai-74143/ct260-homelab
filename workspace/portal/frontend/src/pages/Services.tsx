@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { IS_HL, useServices } from '../api'
 import Dot from '../components/Dot'
 import PageHead from '../components/PageHead'
@@ -7,8 +7,9 @@ import PageSkeleton from '../components/Skeleton'
 import type { ServiceItem } from '../types'
 
 /** 依存取場景(§5 可達性矩陣)決定可點連結;不可達=灰化+提示,不做死鏈。
- *  非 http(s) 位址(如 MC 連線位址)屬資訊展示,不做超連結。 */
-function linkOf(i: ServiceItem): string | null {
+ *  非 http(s) 位址(如 MC 連線位址)屬資訊展示,不做超連結。
+ *  export 供命令面板共用同一套可達性判定(0.17.0)。 */
+export function linkOf(i: ServiceItem): string | null {
   const u = IS_HL ? (i.url_hl ?? (i.phone ? i.url : null)) : (i.pc40 ? i.url : null)
   return u && /^https?:\/\//.test(u) ? u : null
 }
@@ -44,17 +45,7 @@ export default function Services() {
   const [q, setQ] = useState('')
   const input = useRef<HTMLInputElement>(null)
 
-  // `/` 聚焦搜尋(§7 鍵盤)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === '/' && !(e.target instanceof HTMLInputElement)) {
-        e.preventDefault()
-        input.current?.focus()
-      }
-    }
-    addEventListener('keydown', onKey)
-    return () => removeEventListener('keydown', onKey)
-  }, [])
+  // 0.17.0:頁內 `/` 聚焦讓位給全站命令面板(`/` 由 CommandPalette 收走)
 
   const groups = useMemo(() => {
     const gs = sv.data?.groups ?? []

@@ -919,8 +919,11 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
 portal        8088   portal:0.16.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.17.0 已施工完成(⌘K 面板+sparkline+氛圍層+戰情/夜間模式+
+              晨報條列;新端點 /api/spark)待使用者跑 finish-portal-0170.sh,
+              見版本史尾;
               0.16.0 於 2026-07-11 使用者部署上線並實測問答正常(含 0.15 吉祥物
-              重繪與 0160b Read 權限修正;CT260 life-chat rev=0160b);見版本史尾;
+              重繪與 0160b Read 權限修正;CT260 life-chat rev=0160b);
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1159,6 +1162,48 @@ portal        8088   portal:0.16.0 本地 build(python:3.13.5-slim+pin;待辦49 
               回歸)。部署 finish-portal-0160.sh(A 段=CT260 life-chat 換版
               +驗證鏈 401/400+真問一句 E2E;B 段=portal 錨點自適應
               0.10~0.15;0150 作廢)
+              0.17.0(2026-07-11 施工,P0/P1 增強包——使用者以自改範本
+              portaltemplatev0.17.html 為參考點名移植):
+              P0-1 ⌘K 命令面板(CommandPalette.tsx:模糊搜尋=子序列計分,
+              涵蓋 8 模塊+服務目錄(linkOf 同套可達性判定,不出死鏈)+14 常用
+              網站+動作(firing 告警靜音 1h 走既有 ConfirmDialog+POST
+              /api/action、戳 Clawd=clawd-poke 自訂事件、夜間切換);⌘K/
+              Ctrl+K/「/」喚起、g+字母跳頁 h/d/a/s/c/p/m/l——★行為變更:
+              「/」從跳服務目錄改開面板(Services 頁內 / 聚焦一併讓位)、
+              g d 從大廳改指設備、大廳=g h;banner〔⌘K 搜尋〕鈕=手機入口;
+              services/actions 查詢首開面板才 enabled 不加閒置輪詢);
+              P0-2 卡片 sparkline(新端點 GET /api/spark,TTL 60s:devices=
+              sum(up)、security=autoban 累計、power=實際功耗 W,各 24h/1h 桶
+              ~25 點;alerts 卡重用 timeline_24h;services/game/life 無時序源
+              誠實缺席不畫線;power 序列比照 live.power() 新鮮度 gate
+              (nut_upsc_ok+mtime≤300s),管線死時卡面 pending 底下不畫殘值線
+              ——審查 CONFIRMED 修正;SparkLine.tsx 純 SVG 折線+面積,顏色跟
+              狀態燈=偏離 0.8.0 uPlot Spark「線色一律 muted」原則,範本使用者
+              定案,兩元件不同役);
+              P1 卡片指標追蹤光暈(.card-hover::after 琥珀 radial,Layout 全站
+              一條 pointermove 委派寫 --mx/--my;card-hover 因此加 position:
+              relative+overflow:hidden)+背景氛圍層(Ambient.tsx canvas:
+              44px 網格+14 顆沿格線流動光點,~30fps 封頂/dpr≤2/分頁 hidden 停
+              rAF/REDUCED 只畫靜態網格;★隱藏分頁掛載不起 rAF+onVis 先
+              cancel 再重排,防雙迴圈——審查 CONFIRMED 修正)+crit 戰情模式
+              (EnvProvider 掛 html.crit:頂部 2px 紅呼吸條 body::before+刊頭
+              INCIDENT 徽章+氛圍光點轉紅;?crit=1/0 強制)+夜間模式
+              (html.night 23:00–07:00 自動與 Clawd 睡覺同表、?night=1/0 強制、
+              面板可切換預覽:五 token 降半階/琥珀降飽和 #C9913F、刊頭出 ☾;
+              ★Tailwind bg/panel/line/text/amber 五色由字面 hex 改
+              rgb(var(--x-rgb)/<alpha>) 管道,實值只在 index.css :root 與
+              html.night 維護,hex 與 -rgb 三元組兩形式必須同步改);
+              晨報「今日訊息」條列排版(newsItems() 按產生器契約半形「;」
+              拆條+尾端(來源)抽右欄,>14 字不當來源防 AI 失敗尾註誤抓;
+              誠實註記單句退回段落);連帶修刊頭星期 off-by-one(weekdayOf
+              +08:00 午夜用 getUTCDay 恆少一天→改 T00:00:00Z——審查
+              CONFIRMED,既有 bug 每期都錯);環境態 kiosk 天然豁免(頂層
+              路由不走 Layout)+EnvProvider unmount 摘 class。
+              走查 31/31(面板開合/模糊搜尋/g 跳頁/靜音 payload/夜間 token
+              管道/crit 紅條+INCIDENT/光暈/今日訊息 6 條/reduced-motion/手機
+              入口/回歸);對抗審查 4 finder+8 verifier:8 發現確認 3(上述
+              ★修正)駁 5。部署 finish-portal-0170.sh(錨點自適應 0.10~0.16;
+              0160 作廢;auto-mode 攔=交使用者跑,B5 驗 /api/spark 序列)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

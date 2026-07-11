@@ -152,6 +152,15 @@ export default function Mascot() {
   }
   const quip = woke && bubble ? '……吵醒我了。' : QUIPS[poke % QUIPS.length]
 
+  // 命令面板「戳一下 Clawd」(0.17.0):自訂事件解耦,面板不必伸手進本元件
+  const pokeRef = useRef(doPoke)
+  pokeRef.current = doPoke
+  useEffect(() => {
+    const h = () => pokeRef.current()
+    window.addEventListener('clawd-poke', h)
+    return () => window.removeEventListener('clawd-poke', h)
+  }, [])
+
   const sploot = mood === 'error' || mood === 'sleep'
   const look = { transform: `translate(${eye[0]}px, ${eye[1]}px)` }
 

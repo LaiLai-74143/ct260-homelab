@@ -17,8 +17,9 @@ FIXTURES = BASE / "fixtures"
 DATA_DIR = Path(os.environ.get("PORTAL_DATA", BASE.parent / "data"))
 
 # 逐端點 TTL(秒):全部落在報告規定的 3–10s
+# spark 例外(60s):24h/1h 桶的趨勢線,分鐘級新鮮度沒有意義,不值得逐 tick 打 range 查詢
 TTL = {"overview": 5, "alerts": 5, "services": 10, "security": 10,
-       "game": 10, "host": 10, "life": 5, "power": 10}
+       "game": 10, "host": 10, "life": 5, "power": 10, "spark": 60}
 NEG_TTL = float(os.environ.get("PORTAL_NEG_TTL", "30"))
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -103,6 +104,11 @@ async def get_overview() -> dict:
 async def get_alerts() -> dict:
     from . import live
     return await _get("alerts", live.alerts)
+
+
+async def get_spark() -> dict:
+    from . import live
+    return await _get("spark", live.spark)
 
 
 async def get_services() -> dict:

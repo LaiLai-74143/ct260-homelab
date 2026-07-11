@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import Dot from './Dot'
 import Num from './Num'
+import SparkLine from './SparkLine'
 import type { HostState } from '../types'
 
 export interface ModuleCardData {
@@ -10,6 +11,8 @@ export interface ModuleCardData {
   bigUnit?: string
   sub: string
   state: HostState
+  /** 24h 迷你趨勢(0.17.0;有真實時序源的模塊才有) */
+  spark?: [number, number][]
 }
 
 export default function ModuleCard({ m }: { m: ModuleCardData }) {
@@ -28,6 +31,7 @@ export default function ModuleCard({ m }: { m: ModuleCardData }) {
         <Num value={m.big} unit={m.bigUnit} />
       </div>
       <div className="text-[12.5px] text-muted">{m.sub}</div>
+      {m.spark && <SparkLine data={m.spark} state={m.state} />}
     </Link>
   )
 }
