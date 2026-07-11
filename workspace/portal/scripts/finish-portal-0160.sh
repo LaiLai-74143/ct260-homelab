@@ -19,15 +19,36 @@ python3 -m py_compile ~/workspace/life-chat/life-chat.py
 grep -q '"/clawd"' ~/workspace/life-chat/life-chat.py || { echo "源檔缺 /clawd 路由?"; exit 1; }
 mkdir -p ~/_backups
 if ! diff -q ~/workspace/life-chat/life-chat.py ~/.local/bin/life-chat.py >/dev/null 2>&1; then
-  cp -a ~/.local/bin/life-chat.py ~/_backups/life-chat.py.before-clawd-$TS
+  ls ~/_backups/life-chat.py.before-clawd-* >/dev/null 2>&1 \
+    || cp -a ~/.local/bin/life-chat.py ~/_backups/life-chat.py.before-clawd-$TS
   cp ~/workspace/life-chat/life-chat.py ~/.local/bin/life-chat.py
-  # 重啟:只殺登記在案的那顆 PID(不按名字連坐),flock wrapper 拉新
-  PID=$(pgrep -f "$HOME/.local/bin/life-chat.py" || true)
-  [ -n "$PID" ] && kill "$PID" && sleep 1
-  ~/.local/bin/life-chat-run.sh &
-  sleep 2
+  echo "life-chat.py 已換新檔"
 else
-  echo "life-chat.py 已同步(冪等跳過部署;仍驗證端點)"
+  echo "life-chat.py 檔案已同步"
+fi
+# 重啟判定看「跑著的程序」而非檔案:探測 /clawd,401=新版已在跑,404/其他=舊程序要換
+PROBE=$(curl -s -o /dev/null -w '%{http_code}' -m 4 -X POST -H 'Authorization: Bearer probe' \
+        -H 'Content-Type: application/json' -d '{"question":"x"}' http://127.0.0.1:5002/clawd || true)
+if [ "$PROBE" != "401" ]; then
+  echo "running 服務無 /clawd(probe=$PROBE)→ 重啟(逐 PID 殺:flock wrapper+python 各一顆)"
+  for p in $(pgrep -f "$HOME/.local/bin/life-chat.py" || true); do
+    kill "$p" 2>/dev/null || true
+  done
+  # 等 flock 釋放再拉新(最多 6s)
+  for _ in 1 2 3 4 5 6; do
+    pgrep -f "$HOME/.local/bin/life-chat.py" >/dev/null || break
+    sleep 1
+  done
+  ~/.local/bin/life-chat-run.sh &
+  # health 起機重試(最多 8s)
+  UP=""
+  for _ in 1 2 3 4 5 6 7 8; do
+    sleep 1
+    curl -s -m 2 http://127.0.0.1:5002/health | grep -q '"ok": *true' && { UP=1; break; }
+  done
+  [ -n "$UP" ] || { echo "/health 起不來(cron */5 自癒會再拉;先中止人工看 log)"; exit 1; }
+else
+  echo "running 服務已是新版(冪等跳過重啟)"
 fi
 curl -s -m 4 http://127.0.0.1:5002/health | grep -q '"ok": *true' || { echo "/health 掛了"; exit 1; }
 # shellcheck disable=SC1090
