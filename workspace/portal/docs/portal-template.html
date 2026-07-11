@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<!--
+  portal 架構範本(單檔,零建置:直接用瀏覽器開啟即可看效果)
+  來源:入口大廳設計報告-3 的「實體樣衣」;正式站(portal 0.x)由此長出。
+  拿去修改的地圖:
+
+  1. 配色/字體 token —— <style> 開頭的 :root。六色語義:--ok 綠(正常)、
+     --warn 黃(警告)、--crit 紅(嚴重)、--unk 灰(未知)、--amber 琥珀
+     (品牌強調,只給互動/焦點/刊頭用)、其餘為底色階。改全站觀感只動這裡。
+  2. 版面骨架 —— .shell(桌面左側欄 .side + 主欄 .main)+ 手機底部 .tabbar;
+     RWD 斷點在 /* RWD */ 段(<768px 收側欄、出 tabbar)。
+  3. 組件庫 —— .banner(狀態橫幅)、.brief(晨報刊頭:serif 大字+琥珀細線
+     =簽名元素)、.grid+.card(模塊格)、.dot(狀態燈)、.toast。
+  4. 內容/資料 —— <script> 的 mock data 段(D 物件),換成你的資料或 fetch。
+  5. 頁面/路由 —— pages 段每個函式回傳一頁的 HTML,router 段用 location.hash
+     切頁;加新頁=加一個函式+nav 加一條。
+  正式站(React+Vite 版)的進階件不在此範本:動效 keyframes 見
+  portal/frontend/src/index.css,吉祥物見 components/Mascot.tsx,可按需搬。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>入口大廳 · demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0E1116; --panel:#161C24; --line:#232B36;
+  --text:#DDE3EA; --muted:#8A94A3; --amber:#E8A33D;
+  --ok:#4CC38A; --warn:#D9A03F; --crit:#E5534B; --unk:#57606C;
+  --sans:'Noto Sans TC',sans-serif; --serif:'Noto Serif TC',serif; --mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{font-family:var(--sans);color:var(--text);background:var(--bg);line-height:1.45;
+  padding-bottom:env(safe-area-inset-bottom)}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono)}
+
+/* ---------- layout ---------- */
+.shell{display:flex;min-height:100vh}
+.side{width:220px;border-right:1px solid var(--line);padding:20px 0;position:sticky;top:0;
+  height:100vh;flex-shrink:0}
+.brand{padding:0 20px 18px;border-bottom:1px solid var(--line)}
+.brand .t{font-family:var(--serif);font-weight:900;font-size:19px;letter-spacing:.06em}
+.brand .s{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+.nav{padding:12px 10px}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;
+  color:var(--muted);font-size:14px;margin-bottom:2px;border-left:2px solid transparent}
+.nav a.on{color:var(--text);background:rgba(232,163,61,.07);border-left-color:var(--amber)}
+.nav a:hover{color:var(--text)}
+.nav .ic{font-family:var(--mono);font-size:12px;width:18px;color:var(--muted)}
+.nav a.on .ic{color:var(--amber)}
+.main{flex:1;min-width:0;max-width:1180px;padding:22px 26px 90px}
+
+/* ---------- banner ---------- */
+.banner{display:flex;align-items:center;gap:10px;padding:11px 16px;border:1px solid var(--line);
+  border-radius:6px;background:var(--panel);margin-bottom:18px;font-size:14px}
+.banner .dot{flex-shrink:0}
+.banner .lag{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
+.banner b{font-weight:700}
+.banner.warn{border-color:rgba(217,160,63,.45)}
+
+/* ---------- 晨報刊頭 (signature) ---------- */
+.brief{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:22px 24px 18px;margin-bottom:22px;position:relative}
+.brief .mast{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.brief h1{font-family:var(--serif);font-weight:900;font-size:26px;letter-spacing:.14em;color:var(--text)}
+.brief .issue{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
+.brief .rule{height:1px;background:linear-gradient(90deg,var(--amber),transparent 70%);
+  margin:12px 0 14px;opacity:.85}
+.brief .body{font-size:14.5px;color:var(--text)}
+.brief .body p{margin-bottom:10px}
+.brief .body p b{color:var(--amber);font-weight:700}
+.brief .more{display:none}
+.brief.open .more{display:block}
+.brief .toggle{background:none;border:none;color:var(--muted);font-family:var(--mono);
+  font-size:12px;cursor:pointer;padding:4px 0 0}
+.brief .toggle:hover{color:var(--amber)}
+.brief .foot{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+
+/* ---------- module grid ---------- */
+.sec-label{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em;
+  margin:0 0 10px 2px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;
+  cursor:pointer;transition:border-color .15s}
+.card:hover{border-color:var(--amber)}
+.card .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.card .name{font-size:15px;font-weight:700}
+.card .big{font-family:var(--mono);font-size:24px;font-weight:600;margin-bottom:2px}
+.card .sub{font-size:12.5px;color:var(--muted)}
+.card .big .u{font-size:13px;color:var(--muted);font-weight:400}
+
+/* ---------- status dot ---------- */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}
+.dot.unk{background:var(--unk)}
+.dot.crit{background:var(--crit);animation:breathe 2s ease-in-out infinite}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(229,83,75,.5)}50%{box-shadow:0 0 0 5px rgba(229,83,75,0)}}
+@media (prefers-reduced-motion:reduce){.dot.crit{animation:none}}
+
+/* ---------- module page ---------- */
+.pg-head{display:flex;align-items:baseline;gap:14px;margin:2px 0 16px}
+.pg-head h2{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:.06em}
+.pg-head .back{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.pg-head .back:hover{color:var(--amber)}
+.wall{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.host{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:13px 14px}
+.host .top{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.host .hn{font-family:var(--mono);font-size:13.5px;font-weight:600}
+.host .vlan{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted);
+  border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+.host .st{font-size:11.5px;color:var(--muted);margin-bottom:9px}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.bar .k{font-family:var(--mono);font-size:10px;color:var(--muted);width:28px}
+.bar .tr{flex:1;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar .fl{height:100%;background:var(--muted);border-radius:2px}
+.bar .fl.hi{background:var(--warn)}
+.bar .v{font-family:var(--mono);font-size:10px;color:var(--muted);width:32px;text-align:right}
+.host .up{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:7px}
+.host.off{opacity:.55}
+
+.alist .al{display:flex;gap:12px;align-items:flex-start;background:var(--panel);
+  border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:10px}
+.al .dot{margin-top:6px}
+.al .an{font-family:var(--mono);font-size:13.5px;font-weight:600}
+.al .ad{font-size:12.5px;color:var(--muted);margin-top:3px}
+.al .at{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.al .act{margin-top:8px;display:flex;gap:8px}
+.btn{font-family:var(--sans);font-size:12px;padding:5px 12px;border-radius:3px;cursor:pointer;
+  border:1px solid var(--line);background:transparent;color:var(--text)}
+.btn:hover{border-color:var(--amber);color:var(--amber)}
+.stub{border:1px dashed var(--line);border-radius:6px;padding:40px 20px;text-align:center;
+  color:var(--muted);font-size:13.5px}
+.stub .mono{display:block;margin-top:6px;font-size:11px}
+
+/* ---------- bottom nav (mobile) ---------- */
+.tabbar{display:none}
+.toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--panel);
+  border:1px solid var(--amber);color:var(--text);font-size:13px;padding:9px 18px;border-radius:6px;
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
+.toast.show{opacity:1}
+
+/* ---------- RWD ---------- */
+@media(max-width:1279px){.grid{grid-template-columns:repeat(2,1fr)}.wall{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:767px){
+  .side{display:none}
+  .main{padding:16px 14px 90px}
+  .grid{grid-template-columns:1fr 1fr;gap:10px}
+  .card{padding:13px 14px}
+  .card .big{font-size:20px}
+  .wall{grid-template-columns:1fr 1fr;gap:10px}
+  .brief h1{font-size:21px}
+  .brief{padding:16px 16px 14px}
+  .tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(14,17,22,.96);
+    border-top:1px solid var(--line);z-index:50;backdrop-filter:blur(8px);
+    padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar a{flex:1;text-align:center;padding:10px 0 8px;font-size:11px;color:var(--muted)}
+  .tabbar a.on{color:var(--amber)}
+  .tabbar .ti{display:block;font-family:var(--mono);font-size:15px;margin-bottom:1px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><div class="t">入口大廳</div><div class="s">home.arpa · portal v0-demo</div></div>
+    <nav class="nav" id="sidenav">
+      <a href="#/" data-r="home"><span class="ic">◈</span>大廳</a>
+      <a href="#/m/devices" data-r="devices"><span class="ic">▣</span>設備總覽</a>
+      <a href="#/m/alerts" data-r="alerts"><span class="ic">▲</span>告警中心</a>
+      <a href="#/m/services" data-r="services"><span class="ic">≡</span>服務目錄</a>
+      <a href="#/m/security" data-r="security"><span class="ic">◉</span>安全面板</a>
+      <a href="#/m/power" data-r="power"><span class="ic">⚡</span>電力</a>
+      <a href="#/m/game" data-r="game"><span class="ic">▶</span>遊戲</a>
+      <a href="#/m/life" data-r="life"><span class="ic">✦</span>生活</a>
+    </nav>
+  </aside>
+
+  <main class="main" id="view"></main>
+</div>
+
+<nav class="tabbar" id="tabbar">
+  <a href="#/" data-r="home"><span class="ti">◈</span>大廳</a>
+  <a href="#/m/devices" data-r="devices"><span class="ti">▣</span>設備</a>
+  <a href="#/m/alerts" data-r="alerts"><span class="ti">▲</span>告警</a>
+  <a href="#/m/services" data-r="services"><span class="ti">≡</span>服務</a>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ------- mock data(對齊拓樸 V7 · 2026-07-07 稽核現況) ------- */
+const hosts=[
+ {n:"openwrt",v:"路由",s:"ok",st:"25.12.4 · PPPoE 正常",c:12,m:34,d:41,up:"41d"},
+ {n:"router-pve",v:"infra",s:"ok",st:"pve 9.1 · VM101 running",c:18,m:52,d:37,up:"12d"},
+ {n:"pve24",v:"infra",s:"ok",st:"9 CT/VM · NUT secondary",c:23,m:61,d:65,up:"3d 04h"},
+ {n:"dxp4800",v:"storage",s:"warn",st:"exporter 離線 · 服務正常",c:null,m:null,d:63,up:"—"},
+ {n:"switch3f",v:"infra",s:"ok",st:"SNMP 待接",c:null,m:null,d:null,up:"—"},
+ {n:"pc40",v:"trusted",s:"unk",st:"關機(正常)",c:null,m:null,d:null,up:"off"},
+ {n:"ct100 · mc",v:"game",s:"ok",st:"Fabric 26.2 · TPS 20.0",c:31,m:72,d:38,up:"3d"},
+ {n:"ct102 · velocity",v:"game",s:"ok",st:"proxy 正常",c:4,m:29,d:22,up:"3d"},
+ {n:"ct201 · monitor",v:"svc",s:"ok",st:"22 targets · 19 up",c:27,m:58,d:52,up:"3d"},
+ {n:"ct202 · fwdproxy",v:"svc",s:"ok",st:"squid · denied 0/h",c:2,m:18,d:12,up:"3d"},
+ {n:"ct203 · dmz",v:"dmz",s:"ok",st:"Caddy+Authelia · 閘門 up",c:6,m:41,d:19,up:"2d"},
+ {n:"ct204 · wazuh",v:"svc",s:"ok",st:"9 agents active",c:34,m:68,d:24,up:"2d"},
+ {n:"ct250 · lab",v:"srv",s:"unk",st:"常態關機(onboot 0)",c:null,m:null,d:null,up:"off"},
+ {n:"ct260 · codex",v:"srv",s:"ok",st:"watchdog 心跳正常",c:9,m:47,d:44,up:"3d"},
+ {n:"ct270 · life",v:"srv",s:"ok",st:"NocoDB/HA/Paperless",c:14,m:66,d:31,up:"3d"},
+ {n:"vm300 · honeypot",v:"666",s:"crit",st:"stopped(onboot=1)· 待人工裁決",c:null,m:null,d:null,up:"down 18h"},
+];
+const alerts=[
+ {s:"crit",n:"VM300HoneypotDown",d:"onboot=1 卻停機 · cowrie/vm300 兩 target no route · 原因未查",t:"18h",act:["重啟 VM300","靜音 24h"]},
+ {s:"warn",n:"DXPNodeExporterDown",d:"192.168.30.3:9100 connection refused · NAS 本體正常(Jellyfin 200)· 疑 linger 未生效",t:"1d 2h",act:["待 SSH 開窗","靜音 3d"]},
+];
+const mods=[
+ {r:"devices", n:"設備總覽", big:"14<span class='u'>/16</span>", sub:"2 台非預期 · 2 台計畫性離線", s:"warn"},
+ {r:"alerts",  n:"告警中心", big:"2", sub:"1 critical · 1 warning · 0 silences", s:"crit"},
+ {r:"services",n:"服務目錄", big:"12<span class='u'>/13</span>", sub:"Vaultwarden 經 CF Tunnel 正常", s:"ok"},
+ {r:"security",n:"安全面板", big:"37", sub:"今日封鎖 · 絆線 0 事件(第 3 天)", s:"ok"},
+ {r:"power",   n:"電力",     big:"市電", sub:"CP1500 · 電池 100% · 負載 —%", s:"ok"},
+ {r:"game",    n:"遊戲",     big:"2<span class='u'> 在線</span>", sub:"mc.lailai74143.com · TPS 20.0", s:"ok"},
+ {r:"life",    n:"生活",     big:"1<span class='u'> 行程</span>", sub:"借貸未結 3 筆 · RSS 待接", s:"ok"},
+];
+
+/* ------- helpers ------- */
+const V=document.getElementById("view");
+const esc=s=>s;
+function bar(k,v){if(v==null)return "";const hi=v>=80?" hi":"";
+ return `<div class="bar"><span class="k">${k}</span><span class="tr"><span class="fl${hi}" style="width:${v}%"></span></span><span class="v">${v}%</span></div>`}
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");
+ clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1800)}
+
+/* ------- pages ------- */
+function pgHome(){
+ V.innerHTML=`
+  <div class="banner warn"><span class="dot warn"></span>
+   <span><b>2 個注意</b>：VM300 已停機（onboot=1，待裁決）、DXP node_exporter 離線——其餘全站正常</span>
+   <span class="lag">數據延遲 4s</span></div>
+
+  <section class="brief" id="brief">
+   <div class="mast"><h1>今日快報</h1><span class="issue">第 127 期 · 2026-07-08 · 週三</span></div>
+   <div class="rule"></div>
+   <div class="body">
+    <p><b>全站概況</b>——夜間無新告警。Prometheus 22 targets 中 19 up：dxp4800 exporter 仍拒連（NAS 服務面正常，待 SSH 開窗查 linger）；cowrie 兩項 down 屬 VM300 停機的預期連帶。</p>
+    <div class="more">
+     <p><b>安全</b>——portscan-autoban 過去 24h 封鎖 37 個來源（前日 41）；SSH22 絆線連續第 3 天零事件；Cowrie 因 VM300 停機無新樣本。</p>
+     <p><b>行程</b>——今日 1 項：19:30 家庭聚餐。借貸未結 3 筆，無逾期。</p>
+     <p><b>建議</b>——VM300 停機已 18 小時，若非刻意保留，建議今晚裁決重啟並查 onboot 未生效原因。</p>
+    </div>
+   </div>
+   <button class="toggle" onclick="document.getElementById('brief').classList.toggle('open');this.textContent=this.textContent.includes('展開')?'▲ 收合全文':'▼ 展開全文'">▼ 展開全文</button>
+   <div class="foot">generated 06:00 by CT260 notifier · deepseek tier-1</div>
+  </section>
+
+  <div class="sec-label">MODULES</div>
+  <div class="grid">
+   ${mods.map(m=>`
+    <a class="card" href="#/m/${m.r}">
+     <div class="head"><span class="name">${m.n}</span><span class="dot ${m.s}"></span></div>
+     <div class="big">${m.big}</div>
+     <div class="sub">${m.sub}</div>
+    </a>`).join("")}
+  </div>`;
+}
+
+function pgDevices(){
+ V.innerHTML=`
+  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>設備總覽</h2>
+   <span class="back mono" style="margin-left:auto">19/22 targets up</span></div>
+  <div class="wall">
+   ${hosts.map(h=>`
+    <div class="host${h.s==='unk'?' off':''}">
+     <div class="top"><span class="dot ${h.s}"></span><span class="hn">${h.n}</span><span class="vlan">${h.v}</span></div>
+     <div class="st">${h.st}</div>
+     ${bar("cpu",h.c)}${bar("mem",h.m)}${bar("disk",h.d)}
+     <div class="up">uptime ${h.up}</div>
+    </div>`).join("")}
+  </div>`;
+}
+
+function pgAlerts(){
+ V.innerHTML=`
+  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>告警中心</h2>
+   <span class="back mono" style="margin-left:auto">firing 2 · silences 0</span></div>
+  <div class="alist">
+   ${alerts.map(a=>`
+    <div class="al"><span class="dot ${a.s}"></span>
+     <div style="flex:1">
+      <div class="an">${a.n}</div>
+      <div class="ad">${a.d}</div>
+      <div class="act">${a.act.map(x=>`<button class="btn" onclick="toast('demo：「${x}」將經 CT260 webhook 執行（M3）')">${x}</button>`).join("")}</div>
+     </div>
+     <span class="at">${a.t}</span>
+    </div>`).join("")}
+  </div>
+  <div class="stub" style="margin-top:14px">近 24h 告警時間軸（M2 實作）<span class="mono">GET /api/alerts?range=24h</span></div>`;
+}
+
+function pgStub(name,api){
+ V.innerHTML=`
+  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>${name}</h2></div>
+  <div class="stub">此模塊屬 M2 實作範圍——demo 僅示意導航與骨架<span class="mono">${api}</span></div>`;
+}
+
+/* ------- router ------- */
+const routes={
+ "home":pgHome,"devices":pgDevices,"alerts":pgAlerts,
+ "services":()=>pgStub("服務目錄","GET /api/services"),
+ "security":()=>pgStub("安全面板","GET /api/security"),
+ "power":()=>pgStub("電力","GET /api/power"),
+ "game":()=>pgStub("遊戲","GET /api/game"),
+ "life":()=>pgStub("生活","GET /api/life"),
+};
+function route(){
+ const h=location.hash||"#/";
+ const r=h.startsWith("#/m/")?h.slice(4):"home";
+ (routes[r]||pgHome)();
+ document.querySelectorAll("[data-r]").forEach(a=>a.classList.toggle("on",a.dataset.r===r));
+ window.scrollTo(0,0);
+}
+addEventListener("hashchange",route);route();
+</script>
+</body>
+</html>
