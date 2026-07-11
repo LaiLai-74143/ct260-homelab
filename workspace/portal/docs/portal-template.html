@@ -1,34 +1,40 @@
 <!DOCTYPE html>
 <!--
-  portal 架構範本(單檔,零建置:直接用瀏覽器開啟即可看效果)
-  來源:入口大廳設計報告-3 的「實體樣衣」;正式站(portal 0.x)由此長出。
-  拿去修改的地圖:
+  portal 架構範本(當前狀態版,對齊正式站 v0.16)
+  單檔零建置:直接用瀏覽器開啟即可;改完存檔重整即生效。
+  正式站是 React+Vite+Tailwind,本檔為等效 vanilla 轉寫(CSS/動畫參數與正式站
+  index.css 逐字一致;結構照 Layout.tsx/Home.tsx/Mascot.tsx 抄)。
 
-  1. 配色/字體 token —— <style> 開頭的 :root。六色語義:--ok 綠(正常)、
-     --warn 黃(警告)、--crit 紅(嚴重)、--unk 灰(未知)、--amber 琥珀
-     (品牌強調,只給互動/焦點/刊頭用)、其餘為底色階。改全站觀感只動這裡。
-  2. 版面骨架 —— .shell(桌面左側欄 .side + 主欄 .main)+ 手機底部 .tabbar;
-     RWD 斷點在 /* RWD */ 段(<768px 收側欄、出 tabbar)。
-  3. 組件庫 —— .banner(狀態橫幅)、.brief(晨報刊頭:serif 大字+琥珀細線
-     =簽名元素)、.grid+.card(模塊格)、.dot(狀態燈)、.toast。
-  4. 內容/資料 —— <script> 的 mock data 段(D 物件),換成你的資料或 fetch。
-  5. 頁面/路由 —— pages 段每個函式回傳一頁的 HTML,router 段用 location.hash
-     切頁;加新頁=加一個函式+nav 加一條。
-  正式站(React+Vite 版)的進階件不在此範本:動效 keyframes 見
-  portal/frontend/src/index.css,吉祥物見 components/Mascot.tsx,可按需搬。
+  拿去修改的地圖:
+  1. 配色/字體 token —— :root。六色語義:--ok 綠(正常)、--warn 黃(警告)、
+     --crit 紅(嚴重)、--unk 灰(未知)、--amber 琥珀(品牌強調:互動/焦點/
+     刊頭專用);--clawd 吉祥物專用橘(非六色 token,可連吉祥物一起刪)。
+  2. 版面骨架 —— .shell:側欄三段式 RWD(≥1280 全寬 220 / 768–1279 圖示欄 /
+     <768 隱藏+底部 .tabbar);主欄 .main 上限 1180px。
+  3. 模塊註冊表 —— <script> 的 MODULES 陣列:側欄、tabbar、大廳卡片格共用,
+     加一個模塊=加一行+pages 加一個函式。
+  4. 動效 —— reveal 滾動進場(IntersectionObserver)、card-hover 浮起、
+     skeleton、data-flash、toast 進出場、dialog 進場、crit 呼吸燈;全部收在
+     prefers-reduced-motion 殺名單,靜態退化不丟語義。
+  5. 吉祥物 Clawd —— 六動作狀態機(idle/happy/juggle/notify/error/sleep),
+     ?clawd=<mood> 強制預覽;左鍵戳(台詞)、右鍵問答框(此檔為假回覆,
+     接後端的位置見 askClawd());整包不要=刪 MASCOT 段+.clawd-* CSS。
+  6. 資料 —— D 物件(mock);正式站是 BFF /api/*,自行換 fetch。
 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>入口大廳 · demo</title>
+<title>入口大廳 · 範本 v0.16</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700;900&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+/* ============ 1. tokens ============ */
 :root{
   --bg:#0E1116; --panel:#161C24; --line:#232B36;
   --text:#DDE3EA; --muted:#8A94A3; --amber:#E8A33D;
   --ok:#4CC38A; --warn:#D9A03F; --crit:#E5534B; --unk:#57606C;
+  --clawd:#DE886D; /* 吉祥物專用(clawd-on-desk 實測體色),非六色 token */
   --sans:'Noto Sans TC',sans-serif; --serif:'Noto Serif TC',serif; --mono:'JetBrains Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -36,291 +42,519 @@ html{background:var(--bg)}
 body{font-family:var(--sans);color:var(--text);background:var(--bg);line-height:1.45;
   padding-bottom:env(safe-area-inset-bottom)}
 a{color:inherit;text-decoration:none}
+button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .mono{font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
-/* ---------- layout ---------- */
+/* ============ 2. layout(三段式 RWD,同 Layout.tsx) ============ */
 .shell{display:flex;min-height:100vh}
 .side{width:220px;border-right:1px solid var(--line);padding:20px 0;position:sticky;top:0;
   height:100vh;flex-shrink:0}
 .brand{padding:0 20px 18px;border-bottom:1px solid var(--line)}
 .brand .t{font-family:var(--serif);font-weight:900;font-size:19px;letter-spacing:.06em}
+.brand .t .short{display:none}
 .brand .s{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
 .nav{padding:12px 10px}
 .nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;
-  color:var(--muted);font-size:14px;margin-bottom:2px;border-left:2px solid transparent}
+  color:var(--muted);font-size:14px;margin-bottom:2px;border-left:2px solid transparent;
+  transition:color .15s ease}
 .nav a.on{color:var(--text);background:rgba(232,163,61,.07);border-left-color:var(--amber)}
 .nav a:hover{color:var(--text)}
-.nav .ic{font-family:var(--mono);font-size:12px;width:18px;color:var(--muted)}
+.nav .ic{font-family:var(--mono);font-size:12px;width:18px;text-align:center;color:var(--muted)}
 .nav a.on .ic{color:var(--amber)}
 .main{flex:1;min-width:0;max-width:1180px;padding:22px 26px 90px}
-
-/* ---------- banner ---------- */
-.banner{display:flex;align-items:center;gap:10px;padding:11px 16px;border:1px solid var(--line);
-  border-radius:6px;background:var(--panel);margin-bottom:18px;font-size:14px}
-.banner .dot{flex-shrink:0}
-.banner .lag{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
-.banner b{font-weight:700}
-.banner.warn{border-color:rgba(217,160,63,.45)}
-
-/* ---------- 晨報刊頭 (signature) ---------- */
-.brief{background:var(--panel);border:1px solid var(--line);border-radius:6px;
-  padding:22px 24px 18px;margin-bottom:22px;position:relative}
-.brief .mast{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.brief h1{font-family:var(--serif);font-weight:900;font-size:26px;letter-spacing:.14em;color:var(--text)}
-.brief .issue{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
-.brief .rule{height:1px;background:linear-gradient(90deg,var(--amber),transparent 70%);
-  margin:12px 0 14px;opacity:.85}
-.brief .body{font-size:14.5px;color:var(--text)}
-.brief .body p{margin-bottom:10px}
-.brief .body p b{color:var(--amber);font-weight:700}
-.brief .more{display:none}
-.brief.open .more{display:block}
-.brief .toggle{background:none;border:none;color:var(--muted);font-family:var(--mono);
-  font-size:12px;cursor:pointer;padding:4px 0 0}
-.brief .toggle:hover{color:var(--amber)}
-.brief .foot{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
-
-/* ---------- module grid ---------- */
-.sec-label{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.12em;
-  margin:0 0 10px 2px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;
-  cursor:pointer;transition:border-color .15s}
-.card:hover{border-color:var(--amber)}
-.card .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.card .name{font-size:15px;font-weight:700}
-.card .big{font-family:var(--mono);font-size:24px;font-weight:600;margin-bottom:2px}
-.card .sub{font-size:12.5px;color:var(--muted)}
-.card .big .u{font-size:13px;color:var(--muted);font-weight:400}
-
-/* ---------- status dot ---------- */
-.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
-.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}
-.dot.unk{background:var(--unk)}
-.dot.crit{background:var(--crit);animation:breathe 2s ease-in-out infinite}
-@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(229,83,75,.5)}50%{box-shadow:0 0 0 5px rgba(229,83,75,0)}}
-@media (prefers-reduced-motion:reduce){.dot.crit{animation:none}}
-
-/* ---------- module page ---------- */
-.pg-head{display:flex;align-items:baseline;gap:14px;margin:2px 0 16px}
-.pg-head h2{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:.06em}
-.pg-head .back{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.pg-head .back:hover{color:var(--amber)}
-.wall{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.host{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:13px 14px}
-.host .top{display:flex;align-items:center;gap:8px;margin-bottom:2px}
-.host .hn{font-family:var(--mono);font-size:13.5px;font-weight:600}
-.host .vlan{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted);
-  border:1px solid var(--line);border-radius:3px;padding:1px 5px}
-.host .st{font-size:11.5px;color:var(--muted);margin-bottom:9px}
-.bar{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.bar .k{font-family:var(--mono);font-size:10px;color:var(--muted);width:28px}
-.bar .tr{flex:1;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
-.bar .fl{height:100%;background:var(--muted);border-radius:2px}
-.bar .fl.hi{background:var(--warn)}
-.bar .v{font-family:var(--mono);font-size:10px;color:var(--muted);width:32px;text-align:right}
-.host .up{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:7px}
-.host.off{opacity:.55}
-
-.alist .al{display:flex;gap:12px;align-items:flex-start;background:var(--panel);
-  border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-bottom:10px}
-.al .dot{margin-top:6px}
-.al .an{font-family:var(--mono);font-size:13.5px;font-weight:600}
-.al .ad{font-size:12.5px;color:var(--muted);margin-top:3px}
-.al .at{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
-.al .act{margin-top:8px;display:flex;gap:8px}
-.btn{font-family:var(--sans);font-size:12px;padding:5px 12px;border-radius:3px;cursor:pointer;
-  border:1px solid var(--line);background:transparent;color:var(--text)}
-.btn:hover{border-color:var(--amber);color:var(--amber)}
-.stub{border:1px dashed var(--line);border-radius:6px;padding:40px 20px;text-align:center;
-  color:var(--muted);font-size:13.5px}
-.stub .mono{display:block;margin-top:6px;font-size:11px}
-
-/* ---------- bottom nav (mobile) ---------- */
 .tabbar{display:none}
-.toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--panel);
-  border:1px solid var(--amber);color:var(--text);font-size:13px;padding:9px 18px;border-radius:6px;
-  opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
-.toast.show{opacity:1}
-
-/* ---------- RWD ---------- */
-@media(max-width:1279px){.grid{grid-template-columns:repeat(2,1fr)}.wall{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:767px){
+@media (max-width:1279px){ /* 圖示欄 */
+  .side{width:56px}
+  .brand{padding:0 0 18px;text-align:center}
+  .brand .t .full,.brand .s{display:none}
+  .brand .t .short{display:inline}
+  .nav{padding:12px 6px}
+  .nav a{justify-content:center;padding:9px 8px}
+  .nav a .lbl{display:none}
+}
+@media (max-width:767px){ /* 收側欄、出 tabbar */
   .side{display:none}
   .main{padding:16px 14px 90px}
-  .grid{grid-template-columns:1fr 1fr;gap:10px}
-  .card{padding:13px 14px}
-  .card .big{font-size:20px}
-  .wall{grid-template-columns:1fr 1fr;gap:10px}
-  .brief h1{font-size:21px}
-  .brief{padding:16px 16px 14px}
-  .tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(14,17,22,.96);
-    border-top:1px solid var(--line);z-index:50;backdrop-filter:blur(8px);
-    padding-bottom:env(safe-area-inset-bottom)}
-  .tabbar a{flex:1;text-align:center;padding:10px 0 8px;font-size:11px;color:var(--muted)}
+  .tabbar{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:50;
+    border-top:1px solid var(--line);background:rgba(14,17,22,.95);
+    backdrop-filter:blur(16px);padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar a{flex:1;padding:10px 0 8px;text-align:center;font-size:11px;color:var(--muted)}
   .tabbar a.on{color:var(--amber)}
-  .tabbar .ti{display:block;font-family:var(--mono);font-size:15px;margin-bottom:1px}
+  .tabbar .ic{display:block;font-family:var(--mono);font-size:15px;margin-bottom:1px}
+}
+
+/* ============ 3. 組件 ============ */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)}
+.dot.crit{background:var(--crit)} .dot.unk{background:var(--unk)}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(229,83,75,.5)}50%{box-shadow:0 0 0 5px rgba(229,83,75,0)}}
+.dot-crit-breathe{animation:breathe 2s ease-in-out infinite}
+
+.banner{display:flex;align-items:center;gap:10px;padding:11px 16px;border:1px solid var(--line);
+  border-radius:6px;background:var(--panel);margin-bottom:18px;font-size:14px}
+.banner .lag{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
+.banner.warn{border-color:rgba(217,160,63,.45)}
+
+/* 晨報刊頭(簽名元素:serif 大字+琥珀細線) */
+.brief{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:22px 24px 18px;margin-bottom:22px}
+.brief .mast{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.brief h1{font-family:var(--serif);font-weight:900;font-size:26px;letter-spacing:.14em}
+.brief .issue{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.brief-rule{height:1px;background:linear-gradient(90deg,var(--amber),transparent 70%);
+  opacity:.85;margin:12px 0 14px}
+.brief .body{font-size:14.5px}
+.brief .body p{margin-bottom:10px}
+.brief .body b{color:var(--amber)}
+
+.sec-label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--muted);
+  margin:24px 0 10px 2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.card{display:block;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:14px 16px}
+.card .head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.card .head .ic{font-family:var(--mono);font-size:12px;color:var(--amber)}
+.card .head .dot{margin-left:auto}
+.card .num{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:8px}
+.card .num small{font-size:13px;color:var(--muted);font-weight:400;margin-left:4px}
+.card .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.sites{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.site{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--panel);
+  border:1px solid var(--line);border-radius:6px;font-size:13px}
+.site .ic{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:3px;transition:width .4s ease}
+.bar.warn i{background:var(--warn)} .bar.crit i{background:var(--crit)}
+.row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);
+  font-size:14px}
+.row .t{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto}
+.btn{border:1px solid var(--line);border-radius:6px;padding:6px 12px;font-size:12.5px;
+  transition:border-color .15s ease}
+.btn:hover{border-color:var(--amber)}
+.btn-press:active{transform:translateY(1px)}
+
+/* ============ 4. 動效(與正式站 index.css 逐字一致) ============ */
+@keyframes skeleton-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+.skeleton{background:var(--unk);border-radius:3px;opacity:.55;animation:skeleton-pulse 1.6s ease-in-out infinite}
+@keyframes data-flash{from{color:var(--amber)}}
+.data-flash{animation:data-flash 700ms ease-out}
+@keyframes toast-in{from{opacity:0;transform:translateY(6px)}}
+.toast-in{animation:toast-in 180ms ease-out}
+@keyframes toast-out{to{opacity:0;transform:translateX(12px)}}
+.toast-out{animation:toast-out 220ms ease-in forwards}
+@keyframes dialog-in{from{opacity:0;transform:scale(.96)}}
+.dialog-in{animation:dialog-in 150ms ease-out}
+@keyframes routefade{from{opacity:0}to{opacity:1}}
+.route-fade{animation:routefade 150ms ease-out}
+@keyframes reveal-up{from{opacity:0;transform:translateY(12px)}}
+.reveal{opacity:0}
+.reveal.reveal-in{opacity:1;animation:reveal-up .5s ease backwards}
+.reveal-stagger>*{opacity:0}
+.reveal-stagger.reveal-in>*{opacity:1;animation:reveal-up .45s ease backwards}
+.reveal-stagger.reveal-in>*:nth-child(2){animation-delay:45ms}
+.reveal-stagger.reveal-in>*:nth-child(3){animation-delay:90ms}
+.reveal-stagger.reveal-in>*:nth-child(4){animation-delay:135ms}
+.reveal-stagger.reveal-in>*:nth-child(5){animation-delay:180ms}
+.reveal-stagger.reveal-in>*:nth-child(6){animation-delay:225ms}
+.reveal-stagger.reveal-in>*:nth-child(7){animation-delay:270ms}
+.reveal-stagger.reveal-in>*:nth-child(n+8){animation-delay:315ms}
+.card-hover{transition:border-color .15s ease,transform .15s ease}
+.card-hover:hover{transform:translateY(-2px);border-color:var(--amber)}
+.card-hover:active{transform:translateY(0) scale(.99)}
+
+/* toast 容器 */
+.toasts{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;flex-direction:column;gap:8px}
+@media (max-width:767px){.toasts{bottom:calc(64px + env(safe-area-inset-bottom))}}
+.toast{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;padding:10px 14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+
+/* ============ 5. 吉祥物 Clawd(六動作;參數取自 clawd-on-desk 實測) ============ */
+.mascot{position:fixed;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:40;pointer-events:none}
+@media (min-width:768px){.mascot{right:20px;bottom:18vh}}
+.mascot .anchor{position:relative}
+.mascot button{pointer-events:auto;display:block}
+.mascot svg{width:68px;height:auto;display:block}
+@media (min-width:768px){.mascot svg{width:76px}}
+.mascot .bubble{position:absolute;bottom:100%;right:0;margin-bottom:8px;width:max-content;
+  max-width:190px;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:6px 10px;font-size:11.5px;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.mascot .chat{position:absolute;bottom:100%;right:0;margin-bottom:8px;width:320px;
+  max-width:calc(100vw - 24px);background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.4);pointer-events:auto;
+  display:flex;flex-direction:column;font-size:13px}
+.mascot .chat.hidden{display:none}
+.mascot .chat .head{display:flex;justify-content:space-between;align-items:baseline;
+  border-bottom:1px solid var(--line);padding:8px 12px;font-family:var(--mono);
+  font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.mascot .chat .log{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;
+  gap:8px;padding:10px 12px}
+.mascot .chat .q{align-self:flex-end;max-width:85%;border:1px solid rgba(232,163,61,.4);
+  background:rgba(232,163,61,.1);border-radius:6px;padding:8px 12px;white-space:pre-wrap}
+.mascot .chat .a{align-self:flex-start;max-width:92%;border:1px solid var(--line);
+  border-radius:6px;padding:8px 12px;white-space:pre-wrap}
+.mascot .chat .in{display:flex;gap:8px;border-top:1px solid var(--line);padding:10px 12px}
+.mascot .chat input{flex:1;min-width:0;background:none;border:1px solid var(--line);
+  border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;outline:none;font-family:inherit}
+.mascot .chat input:focus{border-color:var(--amber)}
+.hidden{display:none}
+
+@keyframes clawd-breathe-idle{0%,100%{transform:scale(1,1) translateY(0)}50%{transform:scale(1.02,.98) translateY(.5px)}}
+.clawd-breathe-idle{animation:clawd-breathe-idle 3.2s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes clawd-blink{0%,10%,100%{transform:scaleY(1)}5%{transform:scaleY(.1)}}
+.clawd-blink{transform-box:fill-box;transform-origin:center;animation:clawd-blink 4s ease-in-out infinite}
+.clawd-eyefollow{transition:transform .2s ease-out}
+@keyframes clawd-bounce{0%,15%,100%{transform:translateY(0) scaleY(1)}20%{transform:translateY(0) scaleY(.85)}
+  40%{transform:translateY(-18px) scaleY(1.05)}50%{transform:translateY(-21px) scaleY(1)}
+  60%{transform:translateY(-18px) scaleY(1.05)}80%{transform:translateY(0) scaleY(.85)}85%{transform:translateY(0) scaleY(1)}}
+.clawd-bounce{animation:clawd-bounce 1s ease-in-out infinite;transform-origin:50% 100%;display:block}
+@keyframes clawd-wave-l{0%{transform:rotate(20deg)}100%{transform:rotate(80deg)}}
+@keyframes clawd-wave-r{0%{transform:rotate(-20deg)}100%{transform:rotate(-80deg)}}
+.clawd-wave-l{transform-box:fill-box;transform-origin:100% 50%;animation:clawd-wave-l .4s infinite alternate ease-in-out}
+.clawd-wave-r{transform-box:fill-box;transform-origin:0% 50%;animation:clawd-wave-r .4s infinite alternate ease-in-out}
+@keyframes clawd-spark-c{0%{opacity:0}10%{opacity:1}30%{opacity:0}100%{opacity:0}}
+@keyframes clawd-spark-o{0%{opacity:0}20%{opacity:1}40%{opacity:0}100%{opacity:0}}
+.clawd-spark-c{opacity:0;animation:clawd-spark-c 1.5s infinite step-end}
+.clawd-spark-o{opacity:0;animation:clawd-spark-o 1.5s infinite step-end}
+@keyframes clawd-rock{0%,50%,100%{transform:rotate(0) translateY(0)}25%{transform:rotate(-3deg) translateY(.3px)}75%{transform:rotate(3deg) translateY(.3px)}}
+.clawd-rock{transform-box:fill-box;transform-origin:50% 100%;animation:clawd-rock 1.2s ease-in-out infinite}
+@keyframes clawd-arm-jl{0%,50%,100%{transform:rotate(20deg)}25%{transform:rotate(35deg)}75%{transform:rotate(5deg)}}
+@keyframes clawd-arm-jr{0%,50%,100%{transform:rotate(-20deg)}25%{transform:rotate(-5deg)}75%{transform:rotate(-35deg)}}
+.clawd-arm-jl{transform-box:fill-box;transform-origin:50% 50%;animation:clawd-arm-jl 1.2s ease-in-out infinite}
+.clawd-arm-jr{transform-box:fill-box;transform-origin:50% 50%;animation:clawd-arm-jr 1.2s ease-in-out infinite}
+@keyframes clawd-packet{0%{transform:translate(2px,10px)}8%{transform:translate(4px,4px)}18%{transform:translate(6px,0)}
+  30%{transform:translate(8px,-1px)}42%{transform:translate(10px,0)}50%{transform:translate(14px,10px)}
+  58%{transform:translate(12px,4px)}68%{transform:translate(10px,0)}80%{transform:translate(8px,-1px)}
+  92%{transform:translate(4px,4px)}100%{transform:translate(2px,10px)}}
+.clawd-packet{animation:clawd-packet 1.2s infinite}
+@keyframes clawd-eyetrack{0%,100%{transform:translate(-1px,-1px)}15%{transform:translate(0,-1.5px)}
+  30%{transform:translate(1px,-1px)}45%{transform:translate(1px,.5px)}50%{transform:translate(1px,-1px)}
+  65%{transform:translate(0,-1.5px)}80%{transform:translate(-1px,-1px)}90%{transform:translate(-1px,.5px)}}
+.clawd-eyetrack{animation:clawd-eyetrack 2.4s ease-in-out infinite}
+@keyframes clawd-heavy{0%,100%{transform:scale(1,1) translateY(0)}50%{transform:scale(1.05,.9) translateY(1.5px)}}
+.clawd-heavy{transform-box:fill-box;transform-origin:50% 100%;animation:clawd-heavy 2.5s ease-in-out infinite}
+@keyframes clawd-fan{0%{transform:rotate(0)}100%{transform:rotate(-60deg)}}
+.clawd-fan{transform-box:fill-box;transform-origin:50% 0%;animation:clawd-fan .4s infinite alternate ease-in-out}
+@keyframes clawd-smoke{0%{transform:translate(7.5px,6px) scale(.5);opacity:0}20%{opacity:.6}
+  100%{transform:translate(7.5px,-6px) scale(1.8);opacity:0}}
+.clawd-smoke{opacity:0;animation:clawd-smoke 3s infinite ease-out}
+@keyframes clawd-errflash{0%,100%{opacity:1}50%{opacity:.15}}
+.clawd-errflash{animation:clawd-errflash .8s ease-in-out infinite}
+@keyframes clawd-sleep-breathe{0%,80%,100%{transform:scale(1,1)}30%,40%{transform:scale(1.02,1.25)}}
+.clawd-sleep-breathe{transform-box:fill-box;transform-origin:50% 100%;animation:clawd-sleep-breathe 4.5s ease-in-out infinite}
+@keyframes clawd-z1{0%{transform:translate(5px,8px) scale(.4);opacity:0}10%{opacity:1}30%{transform:translate(9px,4px) scale(.6)}
+  50%{transform:translate(4px,0) scale(.8)}70%{transform:translate(8px,-4px) scale(1)}90%{opacity:.8}
+  100%{transform:translate(6px,-8px) scale(1.1);opacity:0}}
+@keyframes clawd-z2{0%{transform:translate(8px,9px) scale(.3);opacity:0}10%{opacity:1}30%{transform:translate(5px,5px) scale(.5)}
+  50%{transform:translate(9px,1px) scale(.7)}70%{transform:translate(6px,-3px) scale(.9)}90%{opacity:.8}
+  100%{transform:translate(8px,-7px) scale(1);opacity:0}}
+@keyframes clawd-z3{0%{transform:translate(6px,7px) scale(.5);opacity:0}10%{opacity:1}30%{transform:translate(9px,3px) scale(.7)}
+  50%{transform:translate(4px,-1px) scale(.9)}70%{transform:translate(8px,-5px) scale(1.1)}90%{opacity:.8}
+  100%{transform:translate(5px,-9px) scale(1.2);opacity:0}}
+.clawd-z1{opacity:0;animation:clawd-z1 6s infinite ease-in-out}
+.clawd-z2{opacity:0;animation:clawd-z2 6s infinite ease-in-out;animation-delay:2s}
+.clawd-z3{opacity:0;animation:clawd-z3 6s infinite ease-in-out;animation-delay:4s}
+@keyframes clawd-badge-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+.clawd-badge{transform-box:fill-box;animation:clawd-badge-bounce 1s ease-in-out infinite}
+
+/* ============ 6. reduced-motion 殺名單(靜態退化不丟語義) ============ */
+@media (prefers-reduced-motion: reduce){
+  .dot-crit-breathe,.skeleton,.data-flash,.toast-in,.toast-out,.dialog-in,.route-fade,
+  .clawd-breathe-idle,.clawd-blink,.clawd-bounce,.clawd-wave-l,.clawd-wave-r,
+  .clawd-spark-c,.clawd-spark-o,.clawd-rock,.clawd-arm-jl,.clawd-arm-jr,.clawd-packet,
+  .clawd-eyetrack,.clawd-heavy,.clawd-fan,.clawd-smoke,.clawd-errflash,
+  .clawd-sleep-breathe,.clawd-z1,.clawd-z2,.clawd-z3,.clawd-badge{animation:none !important}
+  .reveal,.reveal-stagger>*{opacity:1 !important;transform:none !important;animation:none !important}
+  .card-hover:hover,.card-hover:active{transform:none}
+  *{transition-duration:.01ms !important}
 }
 </style>
 </head>
 <body>
+
 <div class="shell">
   <aside class="side">
-    <div class="brand"><div class="t">入口大廳</div><div class="s">home.arpa · portal v0-demo</div></div>
-    <nav class="nav" id="sidenav">
-      <a href="#/" data-r="home"><span class="ic">◈</span>大廳</a>
-      <a href="#/m/devices" data-r="devices"><span class="ic">▣</span>設備總覽</a>
-      <a href="#/m/alerts" data-r="alerts"><span class="ic">▲</span>告警中心</a>
-      <a href="#/m/services" data-r="services"><span class="ic">≡</span>服務目錄</a>
-      <a href="#/m/security" data-r="security"><span class="ic">◉</span>安全面板</a>
-      <a href="#/m/power" data-r="power"><span class="ic">⚡</span>電力</a>
-      <a href="#/m/game" data-r="game"><span class="ic">▶</span>遊戲</a>
-      <a href="#/m/life" data-r="life"><span class="ic">✦</span>生活</a>
-    </nav>
+    <div class="brand">
+      <div class="t"><span class="full">入口大廳</span><span class="short">廳</span></div>
+      <div class="s">home.arpa · portal v0.16</div>
+    </div>
+    <nav class="nav" id="sidenav"></nav>
   </aside>
-
   <main class="main" id="view"></main>
 </div>
+<nav class="tabbar" id="tabbar"></nav>
+<div class="toasts" id="toasts"></div>
 
-<nav class="tabbar" id="tabbar">
-  <a href="#/" data-r="home"><span class="ti">◈</span>大廳</a>
-  <a href="#/m/devices" data-r="devices"><span class="ti">▣</span>設備</a>
-  <a href="#/m/alerts" data-r="alerts"><span class="ti">▲</span>告警</a>
-  <a href="#/m/services" data-r="services"><span class="ti">≡</span>服務</a>
-</nav>
-<div class="toast" id="toast"></div>
+<!-- ============ MASCOT(不要吉祥物=刪到 /MASCOT 為止+.clawd-* CSS) ============ -->
+<div class="mascot" id="mascot">
+  <div class="anchor">
+    <div class="bubble hidden" id="mBubble" role="status"></div>
+    <div class="chat hidden" id="mChat" role="dialog" aria-label="Clawd 問答">
+      <div class="head"><span>CLAWD · SONNET 5 · 唯讀</span>
+        <button id="mChatX" aria-label="關閉問答">✕</button></div>
+      <div class="log" id="mLog"><div style="color:var(--muted);font-size:12.5px">
+        問我這個家的事(範本內為假回覆,接後端見 askClawd)。每次對話都是全新的。</div></div>
+      <div class="in"><input id="mIn" maxlength="2000" placeholder="問一句…">
+        <button class="btn btn-press" id="mAsk">問</button></div>
+    </div>
+    <button id="mBtn" aria-label="戳一下 Clawd" title="Clawd(左鍵戳一下,右鍵問問題)">
+      <span id="mJump"><svg id="mSvg" viewBox="-1 -8 17 24" shape-rendering="crispEdges" aria-hidden="true">
+        <defs>
+          <g id="pz"><rect x="0" y="0" width="4" height="1"/><rect x="2" y="1" width="1" height="1"/>
+            <rect x="1" y="2" width="1" height="1"/><rect x="0" y="3" width="4" height="1"/></g>
+          <g id="pzs"><rect x="0" y="0" width="3" height="1"/><rect x="1" y="1" width="1" height="1"/>
+            <rect x="0" y="2" width="3" height="1"/></g>
+        </defs>
+        <g id="mBody"></g>
+      </svg></span>
+    </button>
+  </div>
+</div>
+<!-- ============ /MASCOT ============ -->
 
 <script>
-/* ------- mock data(對齊拓樸 V7 · 2026-07-07 稽核現況) ------- */
-const hosts=[
- {n:"openwrt",v:"路由",s:"ok",st:"25.12.4 · PPPoE 正常",c:12,m:34,d:41,up:"41d"},
- {n:"router-pve",v:"infra",s:"ok",st:"pve 9.1 · VM101 running",c:18,m:52,d:37,up:"12d"},
- {n:"pve24",v:"infra",s:"ok",st:"9 CT/VM · NUT secondary",c:23,m:61,d:65,up:"3d 04h"},
- {n:"dxp4800",v:"storage",s:"warn",st:"exporter 離線 · 服務正常",c:null,m:null,d:63,up:"—"},
- {n:"switch3f",v:"infra",s:"ok",st:"SNMP 待接",c:null,m:null,d:null,up:"—"},
- {n:"pc40",v:"trusted",s:"unk",st:"關機(正常)",c:null,m:null,d:null,up:"off"},
- {n:"ct100 · mc",v:"game",s:"ok",st:"Fabric 26.2 · TPS 20.0",c:31,m:72,d:38,up:"3d"},
- {n:"ct102 · velocity",v:"game",s:"ok",st:"proxy 正常",c:4,m:29,d:22,up:"3d"},
- {n:"ct201 · monitor",v:"svc",s:"ok",st:"22 targets · 19 up",c:27,m:58,d:52,up:"3d"},
- {n:"ct202 · fwdproxy",v:"svc",s:"ok",st:"squid · denied 0/h",c:2,m:18,d:12,up:"3d"},
- {n:"ct203 · dmz",v:"dmz",s:"ok",st:"Caddy+Authelia · 閘門 up",c:6,m:41,d:19,up:"2d"},
- {n:"ct204 · wazuh",v:"svc",s:"ok",st:"9 agents active",c:34,m:68,d:24,up:"2d"},
- {n:"ct250 · lab",v:"srv",s:"unk",st:"常態關機(onboot 0)",c:null,m:null,d:null,up:"off"},
- {n:"ct260 · codex",v:"srv",s:"ok",st:"watchdog 心跳正常",c:9,m:47,d:44,up:"3d"},
- {n:"ct270 · life",v:"srv",s:"ok",st:"NocoDB/HA/Paperless",c:14,m:66,d:31,up:"3d"},
- {n:"vm300 · honeypot",v:"666",s:"crit",st:"stopped(onboot=1)· 待人工裁決",c:null,m:null,d:null,up:"down 18h"},
+/* ============ 模塊註冊表(同 modules.ts):加模塊=這裡+pages 各加一條 ============ */
+const MODULES=[
+  {key:'home',route:'#/',label:'大廳',short:'大廳',icon:'◈'},
+  {key:'devices',route:'#/devices',label:'設備總覽',short:'設備',icon:'▣'},
+  {key:'alerts',route:'#/alerts',label:'告警中心',short:'告警',icon:'▲'},
+  {key:'services',route:'#/services',label:'服務目錄',short:'服務',icon:'≡'},
+  {key:'security',route:'#/security',label:'安全面板',short:'安全',icon:'◉'},
+  {key:'power',route:'#/power',label:'電力',short:'電力',icon:'⚡'},
+  {key:'game',route:'#/game',label:'遊戲',short:'遊戲',icon:'▶'},
+  {key:'life',route:'#/life',label:'生活',short:'生活',icon:'✦'},
 ];
-const alerts=[
- {s:"crit",n:"VM300HoneypotDown",d:"onboot=1 卻停機 · cowrie/vm300 兩 target no route · 原因未查",t:"18h",act:["重啟 VM300","靜音 24h"]},
- {s:"warn",n:"DXPNodeExporterDown",d:"192.168.30.3:9100 connection refused · NAS 本體正常(Jellyfin 200)· 疑 linger 未生效",t:"1d 2h",act:["待 SSH 開窗","靜音 3d"]},
-];
-const mods=[
- {r:"devices", n:"設備總覽", big:"14<span class='u'>/16</span>", sub:"2 台非預期 · 2 台計畫性離線", s:"warn"},
- {r:"alerts",  n:"告警中心", big:"2", sub:"1 critical · 1 warning · 0 silences", s:"crit"},
- {r:"services",n:"服務目錄", big:"12<span class='u'>/13</span>", sub:"Vaultwarden 經 CF Tunnel 正常", s:"ok"},
- {r:"security",n:"安全面板", big:"37", sub:"今日封鎖 · 絆線 0 事件(第 3 天)", s:"ok"},
- {r:"power",   n:"電力",     big:"市電", sub:"CP1500 · 電池 100% · 負載 —%", s:"ok"},
- {r:"game",    n:"遊戲",     big:"2<span class='u'> 在線</span>", sub:"mc.lailai74143.com · TPS 20.0", s:"ok"},
- {r:"life",    n:"生活",     big:"1<span class='u'> 行程</span>", sub:"借貸未結 3 筆 · RSS 待接", s:"ok"},
-];
+const TABBAR=[MODULES[0],MODULES[1],MODULES[2],{key:'more',route:'#/more',label:'更多',short:'更多',icon:'⋯'}];
 
-/* ------- helpers ------- */
-const V=document.getElementById("view");
-const esc=s=>s;
-function bar(k,v){if(v==null)return "";const hi=v>=80?" hi":"";
- return `<div class="bar"><span class="k">${k}</span><span class="tr"><span class="fl${hi}" style="width:${v}%"></span></span><span class="v">${v}%</span></div>`}
-function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");
- clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1800)}
-
-/* ------- pages ------- */
-function pgHome(){
- V.innerHTML=`
-  <div class="banner warn"><span class="dot warn"></span>
-   <span><b>2 個注意</b>：VM300 已停機（onboot=1，待裁決）、DXP node_exporter 離線——其餘全站正常</span>
-   <span class="lag">數據延遲 4s</span></div>
-
-  <section class="brief" id="brief">
-   <div class="mast"><h1>今日快報</h1><span class="issue">第 127 期 · 2026-07-08 · 週三</span></div>
-   <div class="rule"></div>
-   <div class="body">
-    <p><b>全站概況</b>——夜間無新告警。Prometheus 22 targets 中 19 up：dxp4800 exporter 仍拒連（NAS 服務面正常，待 SSH 開窗查 linger）；cowrie 兩項 down 屬 VM300 停機的預期連帶。</p>
-    <div class="more">
-     <p><b>安全</b>——portscan-autoban 過去 24h 封鎖 37 個來源（前日 41）；SSH22 絆線連續第 3 天零事件；Cowrie 因 VM300 停機無新樣本。</p>
-     <p><b>行程</b>——今日 1 項：19:30 家庭聚餐。借貸未結 3 筆，無逾期。</p>
-     <p><b>建議</b>——VM300 停機已 18 小時，若非刻意保留，建議今晚裁決重啟並查 onboot 未生效原因。</p>
-    </div>
-   </div>
-   <button class="toggle" onclick="document.getElementById('brief').classList.toggle('open');this.textContent=this.textContent.includes('展開')?'▲ 收合全文':'▼ 展開全文'">▼ 展開全文</button>
-   <div class="foot">generated 06:00 by CT260 notifier · deepseek tier-1</div>
-  </section>
-
-  <div class="sec-label">MODULES</div>
-  <div class="grid">
-   ${mods.map(m=>`
-    <a class="card" href="#/m/${m.r}">
-     <div class="head"><span class="name">${m.n}</span><span class="dot ${m.s}"></span></div>
-     <div class="big">${m.big}</div>
-     <div class="sub">${m.sub}</div>
-    </a>`).join("")}
-  </div>`;
-}
-
-function pgDevices(){
- V.innerHTML=`
-  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>設備總覽</h2>
-   <span class="back mono" style="margin-left:auto">19/22 targets up</span></div>
-  <div class="wall">
-   ${hosts.map(h=>`
-    <div class="host${h.s==='unk'?' off':''}">
-     <div class="top"><span class="dot ${h.s}"></span><span class="hn">${h.n}</span><span class="vlan">${h.v}</span></div>
-     <div class="st">${h.st}</div>
-     ${bar("cpu",h.c)}${bar("mem",h.m)}${bar("disk",h.d)}
-     <div class="up">uptime ${h.up}</div>
-    </div>`).join("")}
-  </div>`;
-}
-
-function pgAlerts(){
- V.innerHTML=`
-  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>告警中心</h2>
-   <span class="back mono" style="margin-left:auto">firing 2 · silences 0</span></div>
-  <div class="alist">
-   ${alerts.map(a=>`
-    <div class="al"><span class="dot ${a.s}"></span>
-     <div style="flex:1">
-      <div class="an">${a.n}</div>
-      <div class="ad">${a.d}</div>
-      <div class="act">${a.act.map(x=>`<button class="btn" onclick="toast('demo：「${x}」將經 CT260 webhook 執行（M3）')">${x}</button>`).join("")}</div>
-     </div>
-     <span class="at">${a.t}</span>
-    </div>`).join("")}
-  </div>
-  <div class="stub" style="margin-top:14px">近 24h 告警時間軸（M2 實作）<span class="mono">GET /api/alerts?range=24h</span></div>`;
-}
-
-function pgStub(name,api){
- V.innerHTML=`
-  <div class="pg-head"><a class="back" href="#/">← 大廳</a><h2>${name}</h2></div>
-  <div class="stub">此模塊屬 M2 實作範圍——demo 僅示意導航與骨架<span class="mono">${api}</span></div>`;
-}
-
-/* ------- router ------- */
-const routes={
- "home":pgHome,"devices":pgDevices,"alerts":pgAlerts,
- "services":()=>pgStub("服務目錄","GET /api/services"),
- "security":()=>pgStub("安全面板","GET /api/security"),
- "power":()=>pgStub("電力","GET /api/power"),
- "game":()=>pgStub("遊戲","GET /api/game"),
- "life":()=>pgStub("生活","GET /api/life"),
+/* ============ mock 資料(換成你的 fetch) ============ */
+const D={
+  hosts:{up:12,total:13},
+  alerts:{crit:0,warn:1,firing:[{name:'Watchdog',sev:'warning',desc:'告警管線心跳(常駐)',since:'3d'}]},
+  services:{up:23,total:24},
+  security:{events:4,note:'Wazuh 24h'},
+  power:{watts:86,ups:'ONLINE 100%'},
+  game:{online:2,note:'mc.example.com · TPS 20.0'},
+  life:{today:2,note:'09:00 站立會議 · 14:00 回診'},
+  sites:[['GRAFANA','儀表板'],['KUMA','探活'],['HA','家庭自動化'],['NAS','檔案站'],
+         ['VAULT','密碼庫'],['RSS','閱讀器'],['MUSIC','音樂'],['MCSM','遊戲面板']],
+  brief:{date:'2026-07-11 · 週五',body:'<p><b>全站綠燈。</b>12/13 主機在線(VM300 蜜罐計畫性停機);告警僅常駐 Watchdog 心跳 1 條 warning。</p><p>UPS 在線、電池 100%;昨夜備份全數新鮮;MC 伺服器 2 人在線。</p>'},
 };
-function route(){
- const h=location.hash||"#/";
- const r=h.startsWith("#/m/")?h.slice(4):"home";
- (routes[r]||pgHome)();
- document.querySelectorAll("[data-r]").forEach(a=>a.classList.toggle("on",a.dataset.r===r));
- window.scrollTo(0,0);
+
+/* ============ helpers ============ */
+const $=(s,el=document)=>el.querySelector(s);
+const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function toast(msg,kind='ok'){
+  const t=document.createElement('div');
+  t.className='toast toast-in';
+  t.innerHTML=`<span class="dot ${kind}"></span>${esc(msg)}`;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{t.classList.replace('toast-in','toast-out');
+    t.addEventListener('animationend',()=>t.remove(),{once:true});},4000);
 }
-addEventListener("hashchange",route);route();
+
+/* ============ pages(加頁=加一個函式+MODULES 一行) ============ */
+const cardData=()=>[
+  {m:MODULES[1],num:`${D.hosts.up}<small>/ ${D.hosts.total} 在線</small>`,sub:'VM300 計畫停機',dot:D.hosts.up<D.hosts.total?'warn':'ok'},
+  {m:MODULES[2],num:`${D.alerts.crit+D.alerts.warn}<small>firing</small>`,sub:D.alerts.crit?`${D.alerts.crit} critical`:'僅常駐 warning',dot:D.alerts.crit?'crit':(D.alerts.warn?'warn':'ok')},
+  {m:MODULES[3],num:`${D.services.up}<small>/ ${D.services.total} 綠燈</small>`,sub:'Kuma 探活',dot:'ok'},
+  {m:MODULES[4],num:`${D.security.events}<small>事件</small>`,sub:D.security.note,dot:'ok'},
+  {m:MODULES[5],num:`${D.power.watts}<small>W</small>`,sub:D.power.ups,dot:'ok'},
+  {m:MODULES[6],num:`${D.game.online}<small>在線</small>`,sub:D.game.note,dot:'ok'},
+  {m:MODULES[7],num:`${D.life.today}<small>今日行程</small>`,sub:D.life.note,dot:'ok'},
+];
+const pages={
+  '#/':()=>`
+    <div class="banner ${D.alerts.crit?'warn':''}">
+      <span class="dot ${D.alerts.crit?'crit dot-crit-breathe':'ok'}"></span>
+      <span><b>${D.alerts.crit?'有嚴重告警':'全站正常'}</b> · ${D.hosts.up}/${D.hosts.total} 主機在線</span>
+      <span class="lag">SSE · 15s</span>
+    </div>
+    <section class="brief reveal">
+      <div class="mast"><h1>今日快報</h1><span class="issue">${D.brief.date}</span></div>
+      <div class="brief-rule"></div>
+      <div class="body">${D.brief.body}</div>
+    </section>
+    <div class="sec-label">MODULES · 模塊</div>
+    <div class="grid reveal-stagger">${cardData().map(c=>`
+      <a class="card card-hover" href="${c.m.route}">
+        <div class="head"><span class="ic">${c.m.icon}</span>${c.m.label}<span class="dot ${c.dot}"></span></div>
+        <div class="num">${c.num}</div><div class="sub">${esc(c.sub)}</div>
+      </a>`).join('')}
+    </div>
+    <div class="sec-label">SITES · 常用網站</div>
+    <div class="sites reveal-stagger">${D.sites.map(([n,d])=>`
+      <a class="site card-hover" href="javascript:void 0"><span class="ic">↗</span>${n}<span style="margin-left:auto;color:var(--muted);font-size:11px">${d}</span></a>`).join('')}
+    </div>`,
+  '#/alerts':()=>`
+    <div class="sec-label">ALERTS · 告警中心</div>
+    <section class="card reveal">
+      ${D.alerts.firing.map(a=>`
+        <div class="row"><span class="dot ${a.sev==='critical'?'crit dot-crit-breathe':'warn'}"></span>
+          <div><div>${esc(a.name)}</div><div style="font-size:12px;color:var(--muted)">${esc(a.desc)}</div></div>
+          <span class="t">${a.since}</span>
+          <button class="btn btn-press" onclick="toast('已靜音 ${esc(a.name)} 1 小時')">靜音1h</button>
+        </div>`).join('')||'<div style="color:var(--muted);padding:12px 2px;font-size:13px">目前無 firing 告警。</div>'}
+    </section>`,
+  '#/devices':()=>`
+    <div class="sec-label">DEVICES · 設備總覽</div>
+    <div class="grid reveal-stagger">${[['pve24','PVE 宿主',34,'ok'],['CT201','監控棧',52,'ok'],['CT260','工具機',18,'ok'],['VM300','蜜罐(停機)',0,'unk']].map(([n,d,cpu,st])=>`
+      <div class="card card-hover"><div class="head"><span class="ic">▣</span>${n}<span class="dot ${st}"></span></div>
+        <div class="sub" style="margin-top:6px">${d}</div>
+        <div class="bar ${cpu>80?'crit':cpu>60?'warn':''}"><i style="width:${cpu}%"></i></div>
+        <div class="sub">CPU ${cpu}%</div></div>`).join('')}
+    </div>`,
+};
+const stub=(m)=>()=>`
+  <div class="sec-label">${m.key.toUpperCase()} · ${m.label}</div>
+  <section class="card reveal"><div style="color:var(--muted);font-size:13.5px;padding:6px 2px">
+    佔位頁:結構同上,依 <span class="mono">pages['${m.route}']</span> 自行填內容。</div>
+    <div class="skeleton" style="height:14px;width:60%;margin:12px 0 8px"></div>
+    <div class="skeleton" style="height:14px;width:40%"></div></section>`;
+MODULES.concat(TABBAR).forEach(m=>{if(!pages[m.route])pages[m.route]=stub(m);});
+
+/* ============ router(hash;View Transitions 可用則 crossfade) ============ */
+function render(){
+  const r=pages[location.hash]?location.hash:'#/';
+  const paint=()=>{
+    $('#view').innerHTML=`<div class="route-fade">${pages[r]()}</div>`;
+    hookReveal();
+    document.querySelectorAll('#sidenav a,#tabbar a').forEach(a=>
+      a.classList.toggle('on',a.getAttribute('href')===r||(r!=='#/'&&a.getAttribute('href')!=='#/'&&r.startsWith(a.getAttribute('href')))));
+  };
+  document.startViewTransition&&!REDUCED?document.startViewTransition(paint):paint();
+}
+$('#sidenav').innerHTML=MODULES.map(m=>`<a href="${m.route}"><span class="ic">${m.icon}</span><span class="lbl">${m.label}</span></a>`).join('');
+$('#tabbar').innerHTML=TABBAR.map(m=>`<a href="${m.route}"><span class="ic">${m.icon}</span>${m.short}</a>`).join('');
+addEventListener('hashchange',render);
+
+/* 滾動進場:reduced 不掛=內容直接可見,絕不「JS 沒跑=藏死」 */
+function hookReveal(){
+  const els=document.querySelectorAll('.reveal,.reveal-stagger');
+  if(REDUCED){els.forEach(el=>el.classList.add('reveal-in'));return;}
+  const io=new IntersectionObserver(es=>es.forEach(e=>{
+    if(e.isIntersecting){e.target.classList.add('reveal-in');io.unobserve(e.target);}
+  }),{threshold:.15});
+  els.forEach(el=>io.observe(el));
+}
+render();
+
+/* ============ MASCOT 六動作狀態機(同 Mascot.tsx;不要=整段刪) ============ */
+const QUIPS=['嗨,我是 Clawd,本站吉祥物。','值班中。全站狀態盡收眼底。','嗶。今天防火牆也很硬。',
+  '你戳我?我在盯 Prometheus。','綠燈就是最好的消息。','本站由 Claude Code 施工。',
+  '再戳就 git blame 你。','目標:crit 保持 0。'];
+const M={poke:0,happy:false,juggling:false,chat:false,eye:[0,0],raf:0,bt:0,ht:0,
+  forced:new URLSearchParams(location.search).get('clawd')};
+if(!['idle','happy','juggle','notify','error','sleep'].includes(M.forced))M.forced=null;
+
+function mood(){
+  if(M.forced)return M.forced;
+  const h=new Date().getHours(),night=h>=23||h<7;
+  return M.happy?'happy':D.alerts.crit>0?'error':night?'sleep':M.juggling?'juggle':'idle';
+}
+const packet=(fill,delay,park)=>`<g class="clawd-packet" style="animation-delay:${delay};transform:${park}">
+  <circle r="1.2" fill="${fill}"/><circle cx="-.35" cy="-.35" r=".45" fill="var(--text)" opacity=".6"/>
+  <circle cx=".3" cy=".4" r=".6" fill="#000" opacity=".2"/></g>`;
+const sparkle=(at,delay)=>`<g transform="${at}" fill="var(--amber)">
+  <rect class="clawd-spark-c" x="-.5" y="-.5" width="1" height="1" style="animation-delay:${delay}"/>
+  <path class="clawd-spark-o" style="animation-delay:${delay}" d="M -.5,-1.5 h1 v1 h-1 z M -.5,.5 h1 v1 h-1 z M -1.5,-.5 h1 v1 h-1 z M .5,-.5 h1 v1 h-1 z"/></g>`;
+function drawMascot(){
+  const m=mood(),warn=D.alerts.warn>0,sploot=m==='error'||m==='sleep';
+  const notify=(M.forced==='notify')||(M.forced===null&&warn&&!['error','happy','sleep'].includes(m));
+  let s=`<rect x="${sploot?-1:3}" y="15" width="${sploot?17:9}" height="1" fill="#000" opacity=".5"/>`;
+  if(notify)s+=`<g class="clawd-badge" fill="var(--amber)"><rect x="12" y="-1" width="1" height="2"/><rect x="12" y="2" width="1" height="1"/></g>`;
+  if(!sploot){
+    if(m==='juggle')s+=packet('var(--crit)','0s','translate(2px,10px)')+packet('var(--amber)','-0.4s','translate(8px,-1px)')+packet('var(--ok)','-0.8s','translate(14px,10px)');
+    if(m==='happy')s+=sparkle('translate(0 2)','0s')+sparkle('translate(15 4)','.7s');
+    s+=`<g fill="var(--clawd)"><rect x="3" y="13" width="1" height="2"/><rect x="5" y="13" width="1" height="2"/>
+        <rect x="9" y="13" width="1" height="2"/><rect x="11" y="13" width="1" height="2"/></g>
+      <g class="${m==='juggle'?'clawd-rock':''}"><g class="clawd-breathe-idle">
+        <rect x="2" y="6" width="11" height="7" fill="var(--clawd)"/>
+        <g class="${m==='happy'?'clawd-wave-l':m==='juggle'?'clawd-arm-jl':''}"><rect x="0" y="9" width="2" height="2" fill="var(--clawd)"/></g>
+        <g class="${m==='happy'?'clawd-wave-r':m==='juggle'?'clawd-arm-jr':''}"><rect x="13" y="9" width="2" height="2" fill="var(--clawd)"/></g>`;
+    if(m==='happy')
+      s+=`<g fill="var(--bg)"><rect x="3" y="9" width="1" height="1"/><rect x="4" y="8" width="1" height="1"/><rect x="5" y="9" width="1" height="1"/>
+          <rect x="9" y="9" width="1" height="1"/><rect x="10" y="8" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/></g>`;
+    else
+      s+=`<g class="${m==='juggle'?'clawd-eyetrack':'clawd-eyefollow'}" ${m==='juggle'?'':`style="transform:translate(${M.eye[0]}px,${M.eye[1]}px)"`} fill="var(--bg)">
+          <g class="clawd-blink"><rect x="4" y="8" width="1" height="2"/><rect x="10" y="8" width="1" height="2"/></g></g>`;
+    s+=`</g></g>`;
+  }
+  if(m==='error'){
+    const puff=`<rect x="-1" y="-1" width="2" height="2" rx=".5" opacity=".9"/><rect x="0" y="-2" width="2" height="2" rx=".5" opacity=".55"/>`;
+    s+=`<g fill="var(--muted)"><g class="clawd-smoke">${puff}</g>
+        <g class="clawd-smoke" style="animation-delay:1s;translate:-2px 0">${puff}</g>
+        <g class="clawd-smoke" style="animation-delay:2s;translate:2px 0">${puff}</g></g>
+      <g class="clawd-heavy"><g fill="var(--clawd)">
+        <rect x="3" y="9" width="1" height="1"/><rect x="5" y="9" width="1" height="1"/>
+        <rect x="9" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/>
+        <rect x="1" y="10" width="13" height="5"/><rect x="-1" y="13" width="2" height="2"/></g>
+        <g class="clawd-fan"><rect x="13" y="11" width="2" height="2" fill="var(--clawd)"/></g>
+        <g fill="var(--bg)">
+          <rect x="3" y="12" width=".6" height="2.2" transform="rotate(45 3.3 13.1)"/><rect x="3" y="12" width=".6" height="2.2" transform="rotate(-45 3.3 13.1)"/>
+          <rect x="10" y="12" width=".6" height="2.2" transform="rotate(45 10.3 13.1)"/><rect x="10" y="12" width=".6" height="2.2" transform="rotate(-45 10.3 13.1)"/></g></g>
+      <text x="7.5" y="5" text-anchor="middle" font-size="3.5" font-weight="700" fill="var(--crit)" class="clawd-errflash mono">ERROR</text>`;
+  }
+  if(m==='sleep'){
+    s+=`<g fill="var(--muted)"><use href="#pz" class="clawd-z1"/><use href="#pzs" class="clawd-z2" opacity=".8"/><use href="#pz" class="clawd-z3" opacity=".6"/></g>
+      <g class="clawd-sleep-breathe"><g fill="var(--clawd)">
+        <rect x="3" y="9" width="1" height="1"/><rect x="5" y="9" width="1" height="1"/>
+        <rect x="9" y="9" width="1" height="1"/><rect x="11" y="9" width="1" height="1"/>
+        <rect x="1" y="10" width="13" height="5"/><rect x="-1" y="13" width="2" height="2"/><rect x="14" y="13" width="2" height="2"/></g>
+        <g fill="var(--bg)"><rect x="3.5" y="12.5" width="2" height=".4"/><rect x="9.5" y="12.5" width="2" height=".4"/></g></g>`;
+  }
+  $('#mBody').innerHTML=s;
+  $('#mJump').className=m==='happy'?'clawd-bounce':'';
+  $('#mascot').dataset.mood=m;
+}
+drawMascot();
+if(!REDUCED){ /* 雜耍排程:首次 7s,每 16s 一輪 3.6s */
+  setTimeout(()=>{M.juggling=true;drawMascot();setTimeout(()=>{M.juggling=false;drawMascot();},3600);},7000);
+  setInterval(()=>{M.juggling=true;drawMascot();setTimeout(()=>{M.juggling=false;drawMascot();},3600);},16000);
+  addEventListener('mousemove',e=>{ /* 眼神跟隨(rAF 節流) */
+    cancelAnimationFrame(M.raf);
+    M.raf=requestAnimationFrame(()=>{
+      const r=$('#mSvg').getBoundingClientRect();
+      const dx=Math.max(-1.5,Math.min(1.5,Math.round((e.clientX-r.left-r.width/2)/100)*.5));
+      const dy=Math.max(-1,Math.min(1,Math.round((e.clientY-r.top-r.height/2)/100)*.5));
+      if(dx!==M.eye[0]||dy!==M.eye[1]){M.eye=[dx,dy];
+        const g=$('#mBody .clawd-eyefollow');if(g)g.style.transform=`translate(${dx}px,${dy}px)`;}
+    });
+  });
+}
+setInterval(drawMascot,60000); /* 睡覺判定對表 */
+$('#mBtn').addEventListener('click',()=>{ /* 左鍵戳:台詞+happy 2.5s */
+  const wasAsleep=mood()==='sleep';
+  const b=$('#mBubble');
+  if(!M.chat){b.textContent=wasAsleep?'……吵醒我了。':QUIPS[M.poke%QUIPS.length];
+    b.classList.remove('hidden');b.classList.add('toast-in');
+    clearTimeout(M.bt);M.bt=setTimeout(()=>b.classList.add('hidden'),3500);}
+  M.poke++;
+  if(!REDUCED){M.happy=true;drawMascot();
+    clearTimeout(M.ht);M.ht=setTimeout(()=>{M.happy=false;drawMascot();},2500);}
+});
+/* 右鍵問答框:askClawd() 是接後端的位置(正式站 POST /api/clawd/chat {question}) */
+function askClawd(q,done){
+  setTimeout(()=>done(`(範本)你問「${q.slice(0,40)}」——這裡是假回覆,接你的後端吧。每次對話都是全新的。`),600);
+}
+$('#mBtn').addEventListener('contextmenu',e=>{e.preventDefault();
+  M.chat=true;$('#mBubble').classList.add('hidden');
+  $('#mChat').classList.remove('hidden');$('#mChat').classList.add('dialog-in');$('#mIn').focus();});
+function closeChat(){M.chat=false;$('#mChat').classList.add('hidden');
+  $('#mLog').querySelectorAll('.q,.a').forEach(n=>n.remove());} /* 關閉即銷毀=每次全新 */
+$('#mChatX').addEventListener('click',closeChat);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&M.chat)closeChat();});
+$('#mAsk').addEventListener('click',sendChat);
+$('#mIn').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+function sendChat(){
+  const q=$('#mIn').value.trim();if(!q)return;
+  $('#mIn').value='';
+  $('#mLog').insertAdjacentHTML('beforeend',`<div class="q">${esc(q)}</div>`);
+  askClawd(q,a=>{$('#mLog').insertAdjacentHTML('beforeend',`<div class="a">${esc(a)}</div>`);
+    $('#mLog').scrollTop=$('#mLog').scrollHeight;});
+}
+/* ============ /MASCOT ============ */
 </script>
 </body>
 </html>
