@@ -919,7 +919,9 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
 portal        8088   portal:0.10.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.11.0 滾動進場已備妥待使用者部署,見版本史尾;
+              0.11.0 滾動進場+0.12.0 吉祥物 Clawd 已備妥待使用者部署——
+              finish-portal-0120.sh 錨點自適應(0.10.0/0.11.0 都收,直跳可),
+              0110 腳本作廢;見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1083,7 +1085,19 @@ portal        8088   portal:0.10.0 本地 build(python:3.13.5-slim+pin;待辦49 
               的 transition 簡寫同優先度整組蓋掉 stagger 的 transition 型進場
               (首頁卡淡入全滅)→進場改 CSS animation(與 transition 互不搶簡寫);
               走查加「動畫真的在播」斷言(computed animationName)防同類回歸。
-              部署 finish-portal-0110.sh(錨點 0.10.0→0.11.0)
+              部署 finish-portal-0110.sh(錨點 0.10.0→0.11.0;已被 0120 取代作廢)
+              0.12.0(2026-07-11 施工,使用者點名「右邊有點空+會動的吉祥物」):
+              大廳吉祥物 Clawd——components/Mascot.tsx,SVG 像素小螃蟹
+              (crispEdges rect 網格,零新色:--amber 身/--warn 影/--text 眼白/
+              --bg 瞳嘴)。待機浮動+眨眼+右螯招手+✻ 閃爍+游標閃爍;瞳孔跟隨
+              滑鼠(mousemove+rAF 節流);點擊跳+台詞 8 句輪播。住模塊 stagger
+              網格第 8 子(手機 2 欄補滿末列、xl col-span-2 補右側空白);
+              kiosk 豁免(Kiosk 複用 <Home/>,走查抓到螃蟹上牆→return null);
+              六 class 全進 reduced-motion 殺名單+JS REDUCED 雙層。
+              審查 CONFIRMED 修 1:key remount 重播跳躍連坐重置子孫常駐動畫
+              (連續戳=永不眨眼)→改 class 開關+onAnimationEnd;minor 修 1:
+              role="status" 活區固定容器化。走查 23/23(新增相位不歸零防回歸)。
+              部署 finish-portal-0120.sh(錨點自適應 0.10.0/0.11.0→0.12.0)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

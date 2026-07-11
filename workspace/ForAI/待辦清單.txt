@@ -904,8 +904,15 @@
     kiosk 豁免=內容直接可見;告警橫幅/firing 列不延遲);②card-hover 卡片互動
     (hover 浮起+按壓回彈)。審查 CONFIRMED 修 1(card-hover transition 簡寫蓋掉
     stagger 進場→改 CSS animation 脫鉤);走查 15 斷言全過(含「動畫真的在播」)。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0110.sh
-      (分類器攔正式服務換版;體感驗收三點見腳本尾註)→ 反饋。
+    【進度 2026-07-11(0.12.0 吉祥物 Clawd,使用者點名「右邊有點空+會動的吉祥物」)】
+    Mascot.tsx 像素小螃蟹住進大廳模塊格空位(手機補滿末列、桌面跨兩格補右側):
+    待機浮動/眨眼/揮螯/✻ 閃爍、瞳孔跟滑鼠、點擊跳+台詞 8 句輪播;kiosk 豁免;
+    reduced-motion 殺名單+JS 雙層。審查 CONFIRMED 修 1(key remount 連坐重置
+    待機動畫→class 開關+onAnimationEnd)+minor 修 1(role="status" 活區固定
+    容器);走查 23/23。版本三處 0.12.0;細節見 V7 §5 portal 版本史+缺改記錄。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0120.sh
+      (取代 0110——錨點自適應,0110 沒跑也直接上,滾動進場一併帶上;
+      分類器攔正式服務換版;體感驗收三點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

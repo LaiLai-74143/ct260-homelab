@@ -2941,3 +2941,29 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   keyframe+animation-delay 級聯),與 transition 機制脫鉤。
 - 流程教訓:走查斷言「class 有掛」≠「動畫在播」——補 computed animationName
   斷言防同類回歸(walkthrough 15/15)。
+
+## 2026-07-11 portal 0.12.0 大廳吉祥物 Clawd(使用者:「右邊有點空」+「會動的 Claude Code 吉祥物」)
+- 新 components/Mascot.tsx:SVG 像素小螃蟹(shape-rendering:crispEdges,rect 網格),
+  只用既有 token(身體 --amber、陰影/腳 --warn、眼白 --text、瞳孔/嘴 --bg,零新色)。
+  待機:浮動 clawd-bob 2.8s+眨眼 clawd-blink 5.6s+右螯招手 clawd-wave 3.6s+
+  ✻ spark-twinkle+終端游標 cursor-blink;瞳孔跟隨滑鼠(window.mousemove+rAF 節流
+  +同值守衛,SVG transform 屬性與群組 CSS 動畫分屬不同元素);點擊跳 clawd-jump
+  +台詞 8 句輪播(終端風 $ clawd --idle/--poke)。六個新 class 全進 reduced-motion
+  殺名單;JS 側 REDUCED 擋游標跟隨+跳躍。
+- 佈局:Home 模塊 stagger 網格第 8 子——手機 2 欄補滿第 4 列、桌面 xl 3 欄
+  col-span-2 補滿第 3 列右側空白;純裝飾無數據依賴、無 fixed 子元素。
+- 走查首輪即抓:Kiosk 輪播第一屏複用 <Home/> → 螃蟹上牆。修=Mascot 內
+  kiosk 豁免(render 時 pathname 判定 return null+effect 免掛 listener)。
+- 審查(2 鏡頭 8 agents,42.8 萬 tokens)CONFIRMED 修 1(兩鏡頭同時逮到,
+  4/6 票坐實):<span key={poke}> 重播跳躍會把整棵 svg 連根 remount,
+  bob/眨眼/招手三個常駐動畫每次點擊全重置歸零(覆核者以 DOM 節點標記消失
+  +getAnimations currentTime 歸零實證);連續戳=螃蟹永不眨眼/揮螯。
+  修=跳躍改 class 開關+onAnimationEnd 收尾,不再換 key。教訓:0.11.0 的
+  「動畫分屬不同元素」只防簡寫互蓋,防不了父層 key remount 連坐子孫——
+  重播一次性動畫優先 class 開關,key remount 只用於無常駐動畫的子樹。
+  minor 修 1:role="status" 活區改固定容器+內部 keyed span(汰換整個活區
+  節點會漏/重複播報,對齊 Toast.tsx 模式)。
+- 走查 23/23(新增防回歸:戳完眨眼 getAnimations currentTime 相位延續不歸零、
+  跳完 class 收乾淨);桌面/手機截圖目視成形。版本三處 0.12.0。
+- 部署:finish-portal-0120.sh 備妥,compose 錨點自適應(0.10.0/0.11.0 都收)——
+  使用者 0110 若未跑則直跳帶上滾動進場、0110 作廢;交使用者 CT260 跑(慣例)。
