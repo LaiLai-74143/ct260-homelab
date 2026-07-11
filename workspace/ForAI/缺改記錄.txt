@@ -2988,3 +2988,23 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   reduced-motion 靜默可見且不玩球、kiosk 無、手機右下定位、無 page error);
   走查選擇器教訓:role="status" 會撞 Toast 容器,泡泡加 class 精準選。
 - 部署:finish-portal-0130.sh(錨點自適應 0.10~0.12→0.13.0)交使用者 CT260 跑。
+
+## 2026-07-11 portal 0.14.0 吉祥物六動作(參考 clawd-on-desk)
+- 使用者給參考專案 rullerzhou-afk/clawd-on-desk(Electron 桌寵,12 動畫狀態,
+  感知 AI 助手狀態),要求六動作+「看能不能直接用該專案的圖片動畫」。
+- 素材查證:該專案源碼 AGPL-3.0,但 assets/LICENSE 為 All Rights Reserved,
+  明文「may NOT copy, modify, distribute, or use」;本 repo 推在 GitHub,打包
+  即再散布 → 不取用其素材,照其狀態機自繪(素材實為動畫 SVG,技術同路)。
+- 六動作狀態機(比原專案更貼題:感知 portal 全站真實狀態,useAlerts 共用快取):
+  idle(蹲起+眨眼+眼睛跟滑鼠)/happy(被戳 2.5s,^^眼+jump)/juggle(三球
+  cascade,同弧錯相位 0/.35/.7s,每 16s 一輪)/notify(warning firing→琥珀!
+  徽章疊加,本體照常——homelab 常駐 1 條 warning 不鎖死)/error(critical
+  firing→××眼+紅!徽章+clawd-shake 發抖)/sleep(23:00–07:00 無 crit→閉眼線
+  +zzz 浮升+clawd-breathe 慢呼吸;被戳出「……吵醒我了。」)。
+  優先序 happy>error>sleep>juggle>idle;?clawd=<mood> 強制預覽(驗收/走查)。
+- viewBox 擴 0 -6 14 18 留頭頂徽章空間;新 keyframes:clawd-shake/breathe/
+  badge-bounce/zzz-float,全進殺名單;reduced 下動畫靜默但表情差分保留
+  (error 的紅!/××眼仍可見,狀態語義不丟)。
+- 走查 19/19(六 mood 強制+自然映射 mock crit→error+happy 2.5s 回落+眼睛
+  跟滑鼠+fixed/全頁/reduced/kiosk/無錯);六動作截圖目視成形。
+- 部署:finish-portal-0140.sh(錨點自適應 0.10~0.13→0.14.0)交使用者 CT260 跑。

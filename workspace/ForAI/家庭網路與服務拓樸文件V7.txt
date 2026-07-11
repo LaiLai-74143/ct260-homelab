@@ -919,9 +919,10 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
 portal        8088   portal:0.12.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.12.0 於 2026-07-11 使用者部署上線(大廳截圖驗證);0.13.0 吉祥物
-              改版(fixed 漂浮全頁+官方形象+顛球)備妥待使用者部署——
-              finish-portal-0130.sh 錨點自適應(0.10~0.12 都收);見版本史尾;
+              0.12.0 於 2026-07-11 使用者部署上線(大廳截圖驗證);0.13.0(fixed
+              漂浮+官方形象)與 0.14.0(六動作狀態機)已備妥——直接跑
+              finish-portal-0140.sh(錨點自適應 0.10~0.13 都收,0130 作廢);
+              見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1111,7 +1112,20 @@ portal        8088   portal:0.12.0 本地 build(python:3.13.5-slim+pin;待辦49 
               豁免;大廳模塊格回 7 卡。使用者點名跳過多數決審查以求快;
               走查 21/21(fixed 不隨滾動/全頁面存在/顛球起停/泡泡自動收/
               reduced 靜默/手機定位)。部署 finish-portal-0130.sh(錨點
-              自適應 0.10~0.12→0.13.0)
+              自適應 0.10~0.12→0.13.0;被 0140 取代作廢)
+              0.14.0(2026-07-11 施工,使用者給參考專案 clawd-on-desk 要六動作):
+              素材查證=該專案 assets/LICENSE 為 All Rights Reserved(明文禁
+              copy/use;Clawd 角色歸 Anthropic),repo 在 GitHub 打包即再散布
+              → 不取用,照其狀態機自繪。六動作接全站真實狀態(useAlerts 共用
+              快取):idle 蹲起+眨眼+眼睛跟滑鼠/happy 被戳 ^^眼+跳 2.5s/
+              juggle 三球 cascade 每 16s/notify=warning firing 琥珀!徽章疊加
+              (不鎖本體,homelab 常駐 warning 考量)/error=critical firing
+              ××眼+紅!+發抖/sleep=23:00–07:00 無 crit 閉眼+zzz+慢呼吸
+              (被戳「……吵醒我了。」)。優先序 happy>error>sleep>juggle>idle;
+              ?clawd=<mood> 強制預覽。viewBox 擴 0 -6 14 18 留徽章頭頂空間;
+              新 keyframes shake/breathe/badge-bounce/zzz-float 全進殺名單,
+              reduced 下表情差分保留(紅!/××眼靜態可見,狀態語義不丟)。
+              走查 19/19。部署 finish-portal-0140.sh(錨點自適應 0.10~0.13)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

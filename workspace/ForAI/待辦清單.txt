@@ -916,8 +916,12 @@
     滾動);②形象換官方像素小傢伙(--clawd #D97757 官方橘,明文偏離 token);
     ③蹲下起立+眨眼+眼睛跟滑鼠+偶爾顛足球(7s 首輪、每 16s 一輪 3.2s);
     ④點擊跳+台詞泡泡。使用者點名跳過多數決審查以求快;走查 21/21。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0130.sh
-      (錨點自適應 0.10~0.12 都收;體感驗收四點見腳本尾註)→ 反饋。
+    【進度 2026-07-11(0.14.0 吉祥物六動作,參考 clawd-on-desk)】
+    參考專案素材 All Rights Reserved 不可取用 → 自繪六動作接 portal 真實狀態:
+    idle/happy(被戳)/juggle 三球/notify(warning→琥珀!)/error(crit→××眼
+    +紅!+發抖)/sleep(23–07 無 crit)。?clawd=<mood> 可強制預覽。走查 19/19。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0140.sh
+      (錨點自適應 0.10~0.13 都收,0130 作廢;驗收三點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
