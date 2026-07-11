@@ -918,11 +918,9 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.14.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.14.0 於 2026-07-11 使用者部署上線(截圖驗證:漂浮吉祥物+notify
-              徽章);0.15.0(吉祥物視覺對齊 clawd-on-desk)+0.16.0(右鍵 Clawd
-              問答)已備妥——直接跑 finish-portal-0160.sh(錨點自適應 0.10~0.15
-              都收,0150 作廢;含 CT260 life-chat /clawd 部署段);見版本史尾;
+portal        8088   portal:0.16.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.16.0 於 2026-07-11 使用者部署上線並實測問答正常(含 0.15 吉祥物
+              重繪與 0160b Read 權限修正;CT260 life-chat rev=0160b);見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網

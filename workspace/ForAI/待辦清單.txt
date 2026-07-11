@@ -933,9 +933,9 @@
     每問全新,關框連畫面都銷毀。管線=BFF /api/clawd/chat(Remote-User 閘門)
     → CT260 life-chat :5002 新 /clawd 端點;零新基建(5002+token 全沿用),
     限速與生活助理共池 6/分。走查 16/16。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0160.sh
-      (A 段更新 life-chat 服務+E2E 真問一句;B 段 portal 錨點自適應 0.10~0.15
-      都收,0150 作廢連 0.15 吉祥物一起帶上;驗收五點見腳本尾註)→ 反饋。
+    ▶ ✔ 0.16.0 已上線(2026-07-11 使用者跑 0160 兩輪+0160b Read 權限修正,
+      實測「功能正常」;二次教訓見缺改記錄:kill 多 PID 引號坑、權限規則
+      絕對路徑雙斜線、重啟判定改 /health rev)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
