@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { MODULES, TABBAR } from '../modules'
 import { useStream } from '../api'
+import Mascot from './Mascot'
 
 function isActive(route: string, pathname: string): boolean {
   return route === '/' ? pathname === '/' : pathname.startsWith(route)
@@ -46,7 +47,7 @@ export default function Layout() {
             <span className="hidden xl:inline">入口大廳</span>
             <span className="xl:hidden">廳</span>
           </div>
-          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.12</div>
+          <div className="mt-0.5 hidden font-mono text-[11px] text-muted xl:block">home.arpa · portal v0.13</div>
         </div>
         <nav className="px-1.5 py-3 xl:px-2.5" aria-label="模塊導航">
           {MODULES.map((m) => {
@@ -100,6 +101,10 @@ export default function Layout() {
           )
         })}
       </nav>
+
+      {/* 吉祥物(0.13.0):fixed 漂浮全頁面;掛在 Layout 根層=無 transform 祖先、
+          kiosk(頂層路由不走 Layout)自然豁免 */}
+      <Mascot />
     </div>
   )
 }

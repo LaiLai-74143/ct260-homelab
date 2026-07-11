@@ -2967,3 +2967,24 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   跳完 class 收乾淨);桌面/手機截圖目視成形。版本三處 0.12.0。
 - 部署:finish-portal-0120.sh 備妥,compose 錨點自適應(0.10.0/0.11.0 都收)——
   使用者 0110 若未跑則直跳帶上滾動進場、0110 作廢;交使用者 CT260 跑(慣例)。
+
+## 2026-07-11 portal 0.13.0 吉祥物改版(使用者點名四點;0.12.0 上線收案)
+- 0.12.0 使用者部署上線(大廳截圖:Clawd 卡+--poke)。隨即反饋改版四點:
+  全頁面/固定不隨滾動(紅圈=右側中下,手機右下)/形象換官方橘色像素小傢伙
+  +蹲起+偶爾顛球/跳過多數決審查以儘快驗收。
+- Mascot.tsx 重寫:①掛載搬 Home 模塊格→Layout 根層(fixed 漂浮全頁;kiosk
+  不走 Layout=自然豁免,拔掉 pathname 判定);②形象照官方貼紙重繪(三段
+  rect 疊 1px 圓角不覆畫、側耳、白腳槽、黑方眼);③新動效:clawd-squat
+  蹲起循環(origin 釘地+squash&stretch)、clawd-kick+clawd-ball 顛球
+  (同 1.06s 週期,首次 7s、setInterval 16s 一輪 3.2s)、保留眨眼/眼睛跟
+  滑鼠(半格步進)/clawd-jump(class 開關模式沿用 0.12.0 教訓);④台詞
+  泡泡(固定活區容器 display 切換,不汰換節點)。撤:招手/✻/終端行。
+- token:--clawd #D97757(Claude 官方 terracotta)入 :root——使用者點名官方
+  形象色,明文偏離六色 token(第二例,前例 kiosk #000),僅 Mascot 使用。
+- 佈局:外層 pointer-events-none 只留按鈕可點,不擋內容;z-40(tabbar/toast
+  z-50 之下);手機 bottom=calc(72px+safe-area)。大廳模塊格回 7 卡。
+- 驗收:依使用者要求跳過審查 workflow;走查 21/21(position:fixed+滾動座標
+  不變、三頁存在、顛球起停與回待機、泡泡 3.5s 自動收、戳完相位不歸零防回歸、
+  reduced-motion 靜默可見且不玩球、kiosk 無、手機右下定位、無 page error);
+  走查選擇器教訓:role="status" 會撞 Toast 容器,泡泡加 class 精準選。
+- 部署:finish-portal-0130.sh(錨點自適應 0.10~0.12→0.13.0)交使用者 CT260 跑。

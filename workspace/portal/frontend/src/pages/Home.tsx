@@ -1,7 +1,6 @@
 import { useAlerts, useBrief, useDataLag, useOverview } from '../api'
 import StatusBanner from '../components/StatusBanner'
 import BriefCard from '../components/BriefCard'
-import Mascot from '../components/Mascot'
 import ModuleCard, { type ModuleCardData } from '../components/ModuleCard'
 import Reveal from '../components/Reveal'
 import PageSkeleton from '../components/Skeleton'
@@ -78,11 +77,9 @@ export default function Home() {
             </div>
           )}
           <div className="mb-2.5 ml-0.5 font-mono text-[11px] tracking-[.12em] text-muted">MODULES</div>
+          {/* 吉祥物 0.13.0 起改 fixed 漂浮(掛 Layout 全頁面),不再佔模塊格 */}
           <Reveal stagger className="grid grid-cols-2 gap-2.5 md:gap-3.5 xl:grid-cols-3">
             {cards.map((c) => <ModuleCard key={c.route} m={c} />)}
-            {/* 吉祥物 Clawd(0.12.0):7 張模塊卡後補格——2 欄補滿第 4 列、
-                3 欄跨兩格補滿第 3 列(使用者:「右邊有點空」) */}
-            <Mascot className="xl:col-span-2" />
           </Reveal>
         </>
       )}

@@ -918,10 +918,10 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.10.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.11.0 滾動進場+0.12.0 吉祥物 Clawd 已備妥待使用者部署——
-              finish-portal-0120.sh 錨點自適應(0.10.0/0.11.0 都收,直跳可),
-              0110 腳本作廢;見版本史尾;
+portal        8088   portal:0.12.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              0.12.0 於 2026-07-11 使用者部署上線(大廳截圖驗證);0.13.0 吉祥物
+              改版(fixed 漂浮全頁+官方形象+顛球)備妥待使用者部署——
+              finish-portal-0130.sh 錨點自適應(0.10~0.12 都收);見版本史尾;
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
               0.2.2=遊戲頁玩家數走 MCSM 使用者級 /api/auth/?advanced=true)
               入口大廳 BFF(FastAPI 唯讀聚合 prometheus/alertmanager/loki compose 內網
@@ -1097,7 +1097,21 @@ portal        8088   portal:0.10.0 本地 build(python:3.13.5-slim+pin;待辦49 
               審查 CONFIRMED 修 1:key remount 重播跳躍連坐重置子孫常駐動畫
               (連續戳=永不眨眼)→改 class 開關+onAnimationEnd;minor 修 1:
               role="status" 活區固定容器化。走查 23/23(新增相位不歸零防回歸)。
-              部署 finish-portal-0120.sh(錨點自適應 0.10.0/0.11.0→0.12.0)
+              部署 finish-portal-0120.sh(錨點自適應 0.10.0/0.11.0→0.12.0;
+              2026-07-11 使用者已部署,大廳截圖驗證)
+              0.13.0(2026-07-11 施工,使用者點名四點改版):吉祥物從大廳
+              模塊格搬成 fixed 漂浮全頁面(掛 Layout 根層,桌面 right-20px/
+              bottom-18vh、手機右下 tabbar 上方;pointer-events-none 只留按鈕
+              可點);形象換 Claude Code 官方像素小傢伙(橘方塊+黑方眼+側耳+
+              白腳;--clawd #D97757 官方橘=繼 kiosk #000 後第二個明文偏離
+              六色 token,僅吉祥物用);平時蹲下起立(clawd-squat 3.2s,origin
+              釘地)+眨眼+眼睛跟滑鼠;偶爾顛足球(首次 7s、每 16s 一輪 3.2s,
+              白像素球 clawd-ball 與本體 clawd-kick 同 1.06s 週期);點擊跳+
+              台詞泡泡(固定活區容器,display 切換)。kiosk 不走 Layout=自然
+              豁免;大廳模塊格回 7 卡。使用者點名跳過多數決審查以求快;
+              走查 21/21(fixed 不隨滾動/全頁面存在/顛球起停/泡泡自動收/
+              reduced 靜默/手機定位)。部署 finish-portal-0130.sh(錨點
+              自適應 0.10~0.12→0.13.0)
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測

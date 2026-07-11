@@ -910,9 +910,14 @@
     reduced-motion 殺名單+JS 雙層。審查 CONFIRMED 修 1(key remount 連坐重置
     待機動畫→class 開關+onAnimationEnd)+minor 修 1(role="status" 活區固定
     容器);走查 23/23。版本三處 0.12.0;細節見 V7 §5 portal 版本史+缺改記錄。
-    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0120.sh
-      (取代 0110——錨點自適應,0110 沒跑也直接上,滾動進場一併帶上;
-      分類器攔正式服務換版;體感驗收三點見腳本尾註)→ 反饋。
+    ▶ ✔ 0.12.0 已上線(2026-07-11 使用者跑 0120,大廳截圖驗證)。
+    【進度 2026-07-11(0.13.0 吉祥物改版,使用者點名四點)】
+    ①全頁面 fixed 漂浮(掛 Layout,桌面右側中下/手機右下 tabbar 上方,不隨
+    滾動);②形象換官方像素小傢伙(--clawd #D97757 官方橘,明文偏離 token);
+    ③蹲下起立+眨眼+眼睛跟滑鼠+偶爾顛足球(7s 首輪、每 16s 一輪 3.2s);
+    ④點擊跳+台詞泡泡。使用者點名跳過多數決審查以求快;走查 21/21。
+    ▶ 待使用者:CT260 跑 bash ~/workspace/portal/scripts/finish-portal-0130.sh
+      (錨點自適應 0.10~0.12 都收;體感驗收四點見腳本尾註)→ 反饋。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；

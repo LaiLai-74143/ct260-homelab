@@ -14,6 +14,9 @@
   --warn: #D9A03F;
   --crit: #E5534B;
   --unk: #57606C;
+  /* 吉祥物專用官方橘(Claude 品牌 terracotta)——非六色 token,僅 Mascot 使用
+     (偏離:使用者點名官方形象色,2026-07-11;同 kiosk #000 前例) */
+  --clawd: #D97757;
 }
 
 html {
@@ -123,27 +126,36 @@ body {
 .card-hover:hover { transform: translateY(-2px); }
 .card-hover:active { transform: translateY(0) scale(0.99); }
 
-/* ---- 吉祥物 Clawd(0.12.0):大廳模塊格空位的像素小螃蟹;全部進下方殺名單。
-   浮動(svg)/跳躍(外層 span)/眨眼(眼群組)/招手(右螯群組)各掛不同元素,
-   transform 動畫互不搶(0.11.0 簡寫互蓋教訓) ---- */
-@keyframes clawd-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+/* ---- 吉祥物 Clawd(0.13.0):fixed 漂浮全頁面的官方像素形象;全部進下方殺名單。
+   蹲起/顛球(svg)、跳躍(外層 span)、眨眼(眼群組)各掛不同元素,transform 動畫
+   互不搶(0.11.0 簡寫互蓋教訓);idle/kick 同掛 svg 但由 React 二選一切 class ---- */
+/* 待機:蹲下起立循環(origin 釘地,蹲進地面;蹲時橫向微脹=squash & stretch) */
+@keyframes clawd-squat {
+  0%, 58%, 100% { transform: scaleY(1) scaleX(1); }
+  66%, 76% { transform: scaleY(0.84) scaleX(1.07); }
+  86% { transform: scaleY(1.04) scaleX(0.98); }
 }
-.clawd-bob { animation: clawd-bob 2.8s ease-in-out infinite; }
+.clawd-idle { animation: clawd-squat 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+/* 顛球:小跳+前傾,與球同 1.06s 週期 */
+@keyframes clawd-kick {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  35% { transform: translateY(-5px) rotate(-8deg); }
+}
+.clawd-kick { animation: clawd-kick 1.06s ease-in-out infinite; transform-origin: 50% 100%; }
+/* 足球:腳邊彈起到頭頂高度再落下,轉半圈 */
+@keyframes clawd-ball {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(180deg); }
+}
+.clawd-ball { animation: clawd-ball 1.06s ease-in-out infinite; }
 /* 眨眼:長週期壓扁一瞬;transform-box 讓 origin 落在眼睛自身中心 */
 @keyframes clawd-blink {
   0%, 91%, 97%, 100% { transform: scaleY(1); }
   94% { transform: scaleY(0.12); }
 }
 .clawd-eye { transform-box: fill-box; transform-origin: center; animation: clawd-blink 5.6s infinite; }
-/* 右螯緩慢招手:繞臂根(群組左下)小角度擺動 */
-@keyframes clawd-wave {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(-16deg); }
-}
-.clawd-claw { transform-box: fill-box; transform-origin: 10% 90%; animation: clawd-wave 3.6s ease-in-out infinite; }
-/* 點擊跳一下(換 key 重播,同 data-flash 模式) */
+/* 點擊跳一下(class 開關+onAnimationEnd 收尾;不換 key——remount 會連坐重置
+   子孫常駐動畫,0.12.0 審查 CONFIRMED) */
 @keyframes clawd-jump {
   0%, 100% { transform: translateY(0); }
   30% { transform: translateY(-7px); }
@@ -151,23 +163,11 @@ body {
   72% { transform: translateY(-3px); }
 }
 .clawd-jump { animation: clawd-jump 480ms ease-out; }
-/* ✻ 星芒閃爍(Claude Code 簽名字符) */
-@keyframes spark-twinkle {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 1; }
-}
-.spark-twinkle { display: inline-block; animation: spark-twinkle 2.2s ease-in-out infinite; }
-/* 終端游標閃爍 */
-@keyframes cursor-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-.cursor-blink { animation: cursor-blink 1.1s steps(1) infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .dot-crit-breathe, .skeleton, .data-flash, .toast-in, .toast-out, .dialog-in,
-  .route-fade, .clawd-bob, .clawd-eye, .clawd-claw, .clawd-jump,
-  .spark-twinkle, .cursor-blink { animation: none !important; }
+  .route-fade, .clawd-idle, .clawd-kick, .clawd-ball, .clawd-eye,
+  .clawd-jump { animation: none !important; }
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
   /* reveal 的隱藏態由 Reveal.tsx 在 reduced 時整組不掛;這裡雙保險直接顯示 */
