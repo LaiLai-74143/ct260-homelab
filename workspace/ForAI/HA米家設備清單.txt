@@ -1,5 +1,5 @@
 # HA / 米家設備清單（便查快照）
-生成：2026-07-02 14:46（Asia/Taipei）  由 ForAI/ha-device-inventory-gen.py 生成，重跑即刷新。
+生成：2026-07-11 16:31（Asia/Taipei）  由 ForAI/ha-device-inventory-gen.py 生成，重跑即刷新。
 來源：HA CT270 core.device_registry（名稱/型號/雲端MAC）+ OpenWrt leases/neigh/uci（線上MAC/IP/在線/靜態）。
 註：小米雲端 MAC 與線上實機 MAC 部分不同（攝影機/路由器已於腳本 CLOUD_TO_WIRE 修正）；IP 不入 HA，取自 OpenWrt。
 
@@ -7,32 +7,33 @@
 ------------------------------------------------------------------------------------------------------------------------------------------
 BE3600Pro 主路由      xiaomi.router.rn01        AP/路由        192.168.50.41   04:67:61:58:c5:0a  04:67:61:24:62:a9  WiFiMain       在線  
 rn04_minet_3a62       xiaomi.router.rn04        AP/路由        192.168.50.42   04:67:61:59:8e:6d  04:67:61:24:3a:62  WiFiSub        在線  
-胤樺房間吊燈-1        yeelink.light.colorb      WiFi           192.168.50.56   ec:4d:3e:15:f9:23  ec:4d:3e:15:f9:23  lt-yinhua-1    在線  
+胤樺房間主燈-3        yeelink.light.colorb      WiFi           192.168.50.56   ec:4d:3e:15:f9:23  ec:4d:3e:15:f9:23  lt-yinhua-1    在線  
 監視器（大門口）      isa.camera.cw501d         WiFi           192.168.50.67   18:50:73:0e:d2:52  18:50:73:0e:d2:51  cam-door       在線  
-胤樺房間吊燈-2        yeelink.light.colorb      WiFi           192.168.50.87   ec:4d:3e:15:7c:bf  ec:4d:3e:15:7c:bf  lt-yinhua-2    在線  
+胤樺房間主燈-1        yeelink.light.colorb      WiFi           192.168.50.87   ec:4d:3e:15:7c:bf  ec:4d:3e:15:7c:bf  lt-yinhua-2    在線  
+3F浴室燈              yeelink.light.colorb      WiFi           192.168.50.99   ec:4d:3e:16:1c:02  ec:4d:3e:16:1c:02  lt-bathroom    有租約
 胤樺的電扇            dmaker.fan.p45            WiFi           192.168.50.116  cc:da:20:5c:02:be  cc:da:20:5c:02:be  fan-yinhua     在線  
 胤樺的音箱            xiaomi.wifispeaker.oh2p   WiFi           192.168.50.135  90:fb:5d:d8:e2:57  90:fb:5d:d8:e2:57  spk-yinhua     在線  
 客廳的音箱            xiaomi.wifispeaker.oh2p   WiFi           192.168.50.181  90:fb:5d:dd:df:cd  90:fb:5d:dd:df:cd  spk-living     有租約
-胤樺房間副燈          yeelink.light.colorb      WiFi           192.168.50.184  ec:4d:3e:15:5f:3b  ec:4d:3e:15:5f:3b  lt-yinhua-side 在線  
+胤樺房間副燈          yeelink.light.colorb      WiFi           192.168.50.184  ec:4d:3e:15:5f:3b  ec:4d:3e:15:5f:3b  lt-yinhua-side 有租約
 胤樺的除濕機          xiaomi.derh.13l           WiFi           192.168.50.186  1c:ea:ac:ee:59:e5  1c:ea:ac:ee:59:e5  derh-yinhua    在線  
-胤樺房間吊燈-3        yeelink.light.colorb      WiFi           192.168.50.196  ec:4d:3e:15:9f:eb  ec:4d:3e:15:9f:eb  lt-yinhua-3    在線  
+胤樺房間主燈-2        yeelink.light.colorb      WiFi           192.168.50.196  ec:4d:3e:15:9f:eb  ec:4d:3e:15:9f:eb  lt-yinhua-3    在線  
 AppleTV遥控           miir.tvbox.ir01           IR遙控(雲)     -               -                  -                  -              雲/子設備
 爸爸房間火災檢測      lumi.sensor_smoke.mcn02   Zigbee(雲)     -               18:c2:3c:8a:61:d2  18:c2:3c:8a:61:d2  -              雲/子設備
 看魚                  chuangmi.camera.039c01    WiFi           -               b8:88:80:8c:28:b3  b8:88:80:8c:28:b3  -              離線  
 胤樺房間火災檢測      lumi.sensor_smoke.mcn02   Zigbee(雲)     -               18:c2:3c:8a:60:0a  18:c2:3c:8a:60:0a  -              雲/子設備
 胤樺房間門            isa.magnet.dw2hl          BLE(雲)        -               18:50:73:01:42:26  18:50:73:01:42:26  -              雲/子設備
+胤樺房間門口感應器    xiaomi.motion.pir1        WiFi           -               98:32:68:f5:70:9a  98:32:68:f5:70:9a  -              離線  
 胤樺的充電器          njcuk.fitting.ad1204      WiFi           -               3c:cd:73:1f:a0:53  3c:cd:73:1f:a0:53  -              離線  
 胤樺的冷氣            miir.aircondition.ir02    IR遙控(雲)     -               -                  -                  -              雲/子設備
 胤樺的插座1           cuco.plug.v3              WiFi           -               14:d8:81:33:7b:c1  14:d8:81:33:7b:c1  -              離線  
 電腦遠程開機卡        cddz.plug.pc01m           BLE-Mesh(雲)   -               ac:8c:46:a1:35:68  ac:8c:46:a1:35:68  -              雲/子設備
 
-HA 內建/非實體（無設備 MAC）：Sun、Backup、Google 翻譯 en com
+HA 內建/非實體（無設備 MAC）：Sun、Backup、Google 翻譯 en com、S24U、Workday Sensor、胤樺房間主燈
 
 OpenWrt 在線/有租約但非 HA（供對照，未納入 HA 管理）：
   192.168.31.2    00:f0:4d:00:a0:97  -  static:PVE
   192.168.40.4    bc:fc:e7:d6:f6:f3  PC  static:PC
   192.168.50.89   00:2b:70:88:93:71  Abyss-de-S24-Ultra
-  192.168.50.99   ec:4d:3e:16:1c:02  lt-bathroom  static:lt-bathroom
   192.168.50.108  6a:27:4b:4d:b4:27  vivo-X100
   192.168.50.155  c4:f7:c1:6d:8c:d8  keting
   192.168.50.168  e6:d9:9c:d5:0d:05  -

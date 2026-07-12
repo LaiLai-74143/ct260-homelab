@@ -117,6 +117,12 @@ SERVICE_GROUPS: list[dict] = [
          "note": "Java 49169 / Bedrock 43915;公網 WAN DNAT(蜂巢/外網直達,與發證無關);"
                  "hairpin 僅 PC40,手機在家 Wi-Fi 用公網名不通"},
     ]},
+    {"group": "開發", "items": [
+        {"name": "opencode", "url": "http://192.168.20.60:4096",
+         "url_hl": "https://opencode.hl.lailai74143.com", "kuma": "opencode", "host": "ct260",
+         "pc40": False, "phone": True,
+         "note": "AI 編碼代理(Grok);正常走 SSO,直連 4096 為後備(需 Basic 密碼,PC40 未放行)"},
+    ]},
     {"group": "基礎", "items": [
         # 威脅面緩解(M2 §7 決策8):Vaultwarden 只列名稱+綠燈,不附公網 URL
         {"name": "Vaultwarden", "url": None, "kuma": "vaultwarden", "host": "dxp4800",

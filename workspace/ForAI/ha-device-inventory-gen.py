@@ -12,7 +12,7 @@ PVE = "pve24"                # ssh alias -> codex-admin@192.168.20.5（可 sudo 
 HA_CTID = "270"
 DEVREG = "/opt/homeassistant/config/.storage/core.device_registry"
 
-# 已知「雲端 MAC → 線上實機 MAC」偏移（見拓樸V6 §2.6 / 缺改記錄 2026-07-02）
+# 已知「雲端 MAC → 線上實機 MAC」偏移（見拓樸V7 §2.6 / 缺改記錄 2026-07-02）
 CLOUD_TO_WIRE = {
     "18:50:73:0e:d2:51": "18:50:73:0e:d2:52",   # 監視器（大門口）isa.camera：線上 +1
     "04:67:61:24:62:a9": "04:67:61:58:c5:0a",   # 主路由 rn01 → WiFiMain .50.41

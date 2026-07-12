@@ -64,6 +64,7 @@ https://gate.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 127.0.0.1:9092 {
 		header_up X-Gate-Client {remote_host}
@@ -82,6 +83,7 @@ https://prometheus.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 10.80.80.11:9090
 }
@@ -96,6 +98,7 @@ https://grafana.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 10.80.80.11:3002
 }
@@ -106,6 +109,7 @@ https://kuma.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 10.80.80.11:3001
 }
@@ -116,6 +120,7 @@ https://homepage.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 10.80.80.11:3000
 }
@@ -128,9 +133,47 @@ https://portal.hl.lailai74143.com {
 	forward_auth 127.0.0.1:9091 {
 		uri /api/authz/forward-auth
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
 	}
 	reverse_proxy 10.80.80.11:8088
 }
 
 # 之後逐一收編（待辦③f，每次一個服務）：複製上面模板改 host 與後端即可。
 #   （app 走 API token 的服務要對 app 路徑 bypass，在 Authelia access_control rules 處理）
+
+# 受保護服務 #6:opencode(CT260 192.168.20.60:4096;SPA + SSE,Caddy 自動 flush;上游 Basic 由 env 注入)
+https://opencode.hl.lailai74143.com {
+	import hl_tls
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
+	}
+	reverse_proxy 192.168.20.60:4096 {
+		header_up Authorization "{env.OPENCODE_UPSTREAM_AUTH}"
+	}
+}
+
+# 受保護服務 #6b:opencode 官方 App 入口(HTTPS + 客戶端 Basic 透傳;無 Authelia)
+# 事由:原生 App 擋 cleartext HTTP、又不會走 Authelia cookie SSO → 瀏覽器 http://20.60:4096 通但 App 不通。
+# 僅 tailnet 可解(*.hl→100.100.1.2);零公網 record。認證=後端 OPENCODE_SERVER_PASSWORD(user=opencode)。
+# App 填:https://opencode-app.hl.lailai74143.com  + user opencode + 密碼
+https://opencode-app.hl.lailai74143.com {
+	import hl_tls
+	reverse_proxy 192.168.20.60:4096
+}
+
+# 受保護服務 #7:Agent Control Center(agenthub;CT260 192.168.20.60:8300)
+# 事由:手機開一個網址管理各 LXC 的 AI agent(狀態板/對話/Diff/Log/核准)。
+#   ★ 此站可操作各 agent、觸發指令 → 一律走 Authelia SSO,不可比照 opencode-app 開 Basic 旁門。
+#   後端 FastAPI(SPA 同源供應 + /api/events SSE);SSE 由 forward_auth 後正常 flush。
+#   僅 tailnet 可解(*.hl→100.100.1.2);零公網 record。
+https://agents.hl.lailai74143.com {
+	import hl_tls
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
+	}
+	reverse_proxy 192.168.20.60:8300
+}

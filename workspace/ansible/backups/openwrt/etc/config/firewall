@@ -2150,3 +2150,23 @@ config rule
 	option proto 'all'
 	option target 'REJECT'
 
+config rule 'allow_monitor_to_ct260_archive'
+	option name 'Allow-Monitor-To-CT260-Archive-5003'
+	option src 'service'
+	option src_ip '10.80.80.11'
+	option dest 'servers'
+	option dest_ip '192.168.20.60'
+	option dest_port '5003'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule 'allow_monitor_to_ct260_opencode'
+	option name 'Allow-Monitor-To-CT260-OpenCode-4096'
+	option src 'service'
+	option src_ip '10.80.80.11'
+	option dest 'servers'
+	option dest_ip '192.168.20.60'
+	option dest_port '4096'
+	option proto 'tcp'
+	option target 'ACCEPT'
+

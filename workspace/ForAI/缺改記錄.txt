@@ -3332,3 +3332,120 @@ v2 載入守衛(裝的還是 v1 就拒跑)。
 文件同步:拓樸 §5(portal 段+版本史 0.19.0/0.19.1 條)+§10(archive-svc 邸報段)+
 FreshRSS 晨報行、監控告警 §5(晨報指標行)、待辦清單 49(0.19.0 上線確認+0.19.1 進度)。
 ✔全上線:2026-07-12 使用者跑 finish-portal-0191.sh,Agent 覆核 portal:0.19.1 Up、rss 38 筆。
+
+### opencode 收編 SSO(2026-07-12;CT260 opencode → CT203 Caddy+Authelia)
+起因:使用者要用手機接 CT260 opencode(headless server :4096)。先查明 opencode 自身
+Basic 密碼會讓 Vite web UI 的 crossorigin 子資源不帶認證→401→白屏(改由 Authelia 同源
+cookie 攜帶則正常)。裁決=SSO + 密碼守後門:正常訪問只走 Authelia,直連 :4096 仍需密碼。
+變更:①CT260 opencode 轉常駐 opencode-serve.service(User=codex、EnvironmentFile=
+~/.config/homelab/opencode.env〔600,OPENCODE_SERVER_PASSWORD〕、bind 0.0.0.0:4096、enable),
+取代先前 tmux/nohup(其間一度無密碼裸奔,已關)。②CT203 Caddy 加 opencode.hl 站(模板同
+portal.hl:forward_auth Authelia + reverse_proxy 192.168.20.60:4096);上游 Authorization
+由 caddy.service.d/10-opencode-auth.conf 之 OPENCODE_UPSTREAM_AUTH(Basic base64,600,不寫進
+Caddyfile)注入。③Authelia 不改:default_policy two_factor 已涵蓋、cookie domain hl.* 已含子域;
+session 8h/remember_me 2d/inactivity 30m 同其他 .hl 站=使用者要的「當天登入單一入口」語義。
+零改動:DNS(*.hl 萬用域→100.100.1.2)、LE wildcard 證、防火牆(CT203→CT260:4096 已由 §4.4
+TSGate proto-all 放行)皆免動。
+不硬封直連之由:CT260 為 unprivileged LXC 無 CAP_NET_ADMIN(容器內裝不了 nft)、叢集未啟用
+PVE fw(無 cluster.fw);啟 datacenter fw 風險外溢,故改以 opencode 自身密碼守後門(等同
+grafana :3002 直連後備模式)。使用者裁決採此(AskUserQuestion)。
+施作:使用者跑 finish-opencode-sso.sh(pve24,sudo pct exec/push,含備份+validate+失敗自動
+回滾+自測)。自測:opencode.hl 未登入 302、grafana.hl 回歸 302、後端 200。Agent 獨立複驗:
+opencode-serve active+enabled、僅單一 opencode 進程、:4096 監聽、env 600。
+坑:finish 腳本直接改 CT203 live /etc/caddy/Caddyfile,未走「源檔 CT260 ~/workspace/
+ct-dmz-proxy/Caddyfile → pct push」流程 → 已把源檔同步成 live(否則下次 push 會蓋回、丟 opencode 區塊)。
+待辦:xai OAuth 未登,web UI 進去仍「No models」——需在 CT260 跑
+`opencode auth login -p xai -m "xAI Grok OAuth (Headless / Remote / VPS)"` 才有模型。
+文件同步:本檔;拓樸 §3 DNS 備註(受保護服務清單)+§10.7 Caddy 站點+結語受保護服務行。
+回滾:見 finish-opencode-sso.sh 檔尾 ROLLBACK 一行。
+
+追修(同日 16:30,opencode.hl 已登 SSO 仍跳瀏覽器 Basic 彈窗):
+根因(3 Sonnet 子代理分頭實測一致):瀏覽器快取的舊 Authorization: Basic(opencode:…,先前
+直連 :4096 留下)被 Caddy forward_auth 一併轉給 Authelia;Authelia 4.39 預設 authn_strategies
+= HeaderAuthorization(Basic) 先於 CookieSession 且「驗證失敗即短路」→ 帳號 opencode 不存在
+→ 直接 401+WWW-Authenticate: Basic,session cookie 根本不被評估 → 瀏覽器彈原生視窗。
+修法:opencode 站 forward_auth 區塊加 1 行 `header_up -Authorization`(forward_auth 是
+reverse_proxy 語法糖,支援 header_up;只剝「送 Authelia 那一路」的 Authorization,
+送後端 opencode 的 env 注入不受影響——caddy adapt JSON 驗證:Authelia handler 得 delete、
+後端 handler 仍 set)。站台局部,其他 .hl 站不動。
+不採 Authelia 端修法之由:server.endpoints.authz 一旦自訂=整體取代非增量(漏列內建端點即消失)
+且 authn_strategies 改動全域生效波及所有 .hl 站;Caddy 端一行、可逆、半徑最小。
+施作:使用者跑 finish-opencode-authfix.sh(pve24;備份+push 源檔+validate+失敗回滾+自測)。
+自測:帶 stale Basic 401→302 ✔、不帶 302 ✔、grafana.hl 回歸 302 ✔。
+防禦性一致化選項(未做,待使用者裁決):同一顆雷對任何 forward_auth 站都成立(誰先被瀏覽器
+快取一組壞 Basic 誰中獎),可把 `header_up -Authorization` 加到其餘五個 .hl 站。
+教訓:①Authelia forward-auth 預設「見 Authorization 就走 Basic 且失敗短路」——凡後端自帶
+Basic 的服務收編 SSO,forward_auth 一律剝 Authorization;②瀏覽器 Basic 快取以 host 為界,
+同 host 換認證機制(Basic→SSO)必炸,設計時就該預想。
+
+追修二(同日 ~16:47,PC 仍彈窗→查實第二根因):CT203 caddy 進程 env OPENCODE_UPSTREAM_AUTH
+只剩 5 字元「Basic」——finish-opencode-sso.sh 寫 drop-in 時 Environment=VAR=Basic <b64>
+值含空格未加引號,systemd「Invalid environment assignment, ignoring」把 b64 段丟棄
+(且原文洩入 CT203 journal=舊密碼外洩)→ 過 SSO 後 Caddy 送後端的 Authorization 無憑證
+→ opencode 401 Basic → 彈窗與根因一長一樣,誤判已修。
+修:finish-opencode-envfix.sh(pve24)=①密碼輪替(洩漏值作廢)②drop-in 改
+Environment="VAR=Basic <b64>" 整段引號(mktemp+pct push,棄巢狀 sh -c)③兩端重啟
+④驗證補上「登入後→後端」段:caddy env 值長 >70、journal 無 Invalid、以注入值直打後端 200。
+教訓:③systemd Environment= 值含空格必整段引號;④驗證「已載入」不等於「值正確」——要驗長度
+/內容;⑤驗證必須覆蓋登入後的完整路徑(unauth 302 只證前半段,兩種 401 彈窗肉眼同形)。
+手機卡點(16:43):非設定問題——Authelia 日誌示第一階段(帳密)已過、TOTP 從未提交=卡在
+2FA 畫面;指引補輸 6 位數驗證碼即過。
+✔全上線:2026-07-12 PC+手機皆經 opencode.hl 過 Authelia 進 web UI;xai OAuth 已登
+(SuperGrok 訂閱,headless device-code),Grok 模型運行中。opencode.json 加 ForAI 參考路徑
+(使用者自行設定)。
+防禦性一致化(同日收尾,使用者裁決=做):finish-hl-authstrip.sh 把 header_up -Authorization
+補到其餘六個 forward_auth 站(gate/prometheus/grafana/kuma/homepage/portal——先前口徑「五個」
+漏算 gate.hl)。Agent 覆核:CT203 live strip=7、caddy active;七站帶壞 Basic 回歸皆 302。
+影響面=僅剝「送 Authelia 那路」,各後端 header 不變;已知無任何腳本/APP 靠 Authelia 帳密
+走 Basic 直打 .hl 站(API/腳本皆內網直連)。opencode-serve 常駐確認:enabled+
+Restart=on-failure(開機自啟+崩潰自拉)。
+
+### portal 0.19.2:服務目錄加「開發/opencode」卡 + Kuma 探活(2026-07-12 收尾)
+變更:①OpenWrt 加 Allow-Monitor-To-CT260-OpenCode-4096(service/10.80.80.11→
+192.168.20.60 tcp/4096,照 Archive-5003 模板無 SNAT)——半徑:opencode 有 Basic 密碼,
+Kuma 探活收 401=活著。②Kuma monitor「opencode」(使用者 UI 手建,HTTP、Accepted=401)。
+③portal registry.py 新增「開發」組 opencode 卡(url_hl 走 SSO、直連 4096 後備標註、
+kuma="opencode"、host=ct260)+ main.py 版號 0.19.2。
+坑(deploy 走錯一次):portal image=本地 build pin(compose 釘 image: portal:0.19.x),
+首版 0192 腳本只 pct push 檔案+force-recreate → 跑的仍是舊 image、/api/services 無 opencode;
+補 docker build -t portal:0.19.2 + compose 換 tag(精確字串+改後 grep 驗恰 1 處,吸取 0190
+sed 錨點教訓)後成功。教訓:⑥「檔案推上去了」≠「容器跑的是新碼」——凡 image pin 的服務,
+部署必含 build+換 tag;驗證等就緒(health 200)再查,別在 Up 3 秒時 grep。
+驗證:CT201→4096=401 ✔;/api/services 含 opencode+「開發」組 ✔;health/overview/services
+皆 200 ✔;portal 卡 kuma_ok=true(Agent 覆核)=Kuma 綠燈+名字匹配全通。
+另:opencode-serve 重啓套用使用者 AGENTS.md(Agent 代跑 systemctl restart via pve24)。
+文件同步:拓樸 §4.4(新規則行)+§5 portal 段(0.19.2 版本史+image tag)+本檔。
+回滾:見 finish-portal-0192.sh 檔尾(uci delete + 三檔還原 + up -d)。
+
+### opencode-serve:Restart=always + 拉起發 TG(2026-07-12)
+事由:09:46 UTC 服務被外部 SIGTERM 停掉——journal 只有 Deactivated、無 Stopping... 行
+(排除 systemctl stop);pve24 宿主與 CT260 皆無 OOM/pkill 痕跡,TERM 源頭不明。
+systemd 視 SIGTERM 為乾淨退出 → 原 Restart=on-failure 不觸發,服務躺到手動拉起。
+變更:①drop-in /etc/systemd/system/opencode-serve.service.d/20-restart-always.conf:
+Restart=always(手動 systemctl stop 不受影響,不會被反拉)+ ExecStartPost=-通知腳本。
+②新腳本 CT260 ~/.local/bin/opencode-up-notify.sh:等 :4096 回 401(至多 30s)→
+NRestarts 分辨「自動拉起(≥1)」vs「開機/手動(=0,stop 會歸零)」→ 複用
+~/.config/homelab/notify-telegram.env 發 TG(tg_send 同 watchdog-ct201 模式);
+log 落 ~/.local/state/homelab-notify/opencode-up.log。
+防呆:腳本永遠 exit 0 + ExecStartPost 帶 `-` 前綴——通知失敗絕不能把 start 判成失敗。
+驗證:kill -TERM 主行程 → 3s 拉回 active、NRestarts=1、:4096=401;
+「啟動」+「自動拉起(第 1 次)」兩則 TG 皆送達,log 無 send failed。
+本條起 2026-07-12 稍早「Restart=on-failure(開機自啟+崩潰自拉)」口徑作廢。
+回滾:pct exec 260 -- rm /etc/systemd/system/opencode-serve.service.d/20-restart-always.conf
+&& systemctl daemon-reload && systemctl restart opencode-serve(腳本可留,無害)。
+
+### opencode-app.hl:官方 App HTTPS+Basic 入口(2026-07-12)
+事由:手機瀏覽器 http://192.168.20.60:4096 + Basic 已通,官方 App 同設定仍 Error。
+根因:原生 App 擋 cleartext HTTP;https://opencode.hl 又走 Authelia cookie SSO(App 不會)。
+變更:CT203 Caddy 新增 https://opencode-app.hl.lailai74143.com
+  - import hl_tls(LE wildcard);無 forward_auth
+  - reverse_proxy 192.168.20.60:4096(客戶端 Authorization Basic 原樣透傳)
+  - 既有 opencode.hl(SSO+注入)不動
+  源檔:CT260 ~/workspace/ct-dmz-proxy/Caddyfile
+  腳本:~/workspace/ct-dmz-proxy/finish-opencode-app-hl.sh(整檔推送+validate+失敗回滾+探活)
+驗證:Basic→/global/health=200;無認證=401;opencode.hl 無認證仍 302(SSO 回歸)。
+App 填:URL=https://opencode-app.hl.lailai74143.com user=opencode pass=OPENCODE_SERVER_PASSWORD
+  (手機須 Tailscale;*.hl→100.100.1.2,零公網 record)。
+回滾:ssh pve24 'sudo pct exec 203 -- cp -a /etc/caddy/Caddyfile.before-opencode-app-<TS>
+  /etc/caddy/Caddyfile && sudo pct exec 203 -- systemctl restart caddy'
+  (CT260 備份 ~/ _backups/Caddyfile.before-opencode-app-<TS>)

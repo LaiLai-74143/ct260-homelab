@@ -137,14 +137,22 @@ export default function LifeChat() {
         <div className="mt-2 rounded-card border border-warn/45 px-3 py-2 text-[12.5px]">{error}</div>
       )}
 
-      <div className="mt-2.5 flex gap-2">
-        <input
+      <div className="mt-2.5 flex items-end gap-2">
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send() }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            // 手機軟鍵盤 Enter=換行;桌面 Enter=送出、Shift+Enter=換行
+            const mobile = window.matchMedia('(pointer: coarse)').matches
+            if (mobile || e.shiftKey) return
+            e.preventDefault()
+            send()
+          }}
           maxLength={4000}
+          rows={2}
           placeholder="輸入訊息…"
-          className="min-w-0 flex-1 rounded-btn border border-line bg-transparent px-3 py-2 text-[13.5px] outline-none transition-colors duration-150 focus:border-amber"
+          className="min-w-0 flex-1 resize-y rounded-btn border border-line bg-transparent px-3 py-2 text-[13.5px] outline-none transition-colors duration-150 focus:border-amber"
         />
         <button
           onClick={send}

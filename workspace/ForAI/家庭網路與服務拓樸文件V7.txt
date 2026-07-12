@@ -469,7 +469,8 @@ monitor-legacy.home.arpa (原 -> 192.168.31.11)
 ```text
 hl.lailai74143.com(SSO 內部子域)由 dnsmasq 回答:*.hl.lailai74143.com -> 100.100.1.2
   (CT203 Tailscale IP,非其 subnet IP 10.60.60.10):auth.hl=Authelia 入口、gate.hl=動態閘門發證頁、
-  prometheus.hl / grafana.hl / kuma.hl / homepage.hl=受保護服務。
+  prometheus.hl / grafana.hl / kuma.hl / homepage.hl / opencode.hl=受保護服務(SSO);
+  opencode-app.hl=官方 App 入口(HTTPS+客戶端 Basic 透傳,無 Authelia;2026-07-12)。
   ★ 指 Tailscale IP 的原因:subnet-router 連不到自己廣播網段內的自身 IP(已知限制)→ 遠端手機
     經 subnet route 到不了 10.60.60.10;改指 100.100.1.2 後所有 tailnet 節點可達。非 tailnet 純 LAN
     客戶端解不到可達位址(可接受,SSO 本為遠端入口)。
@@ -674,6 +675,10 @@ Allow-Monitor-To-CT260-Archive-5003        service/10.80.80.11 -> 192.168.20.60 
   (待辦49 拾遺歸檔:portal BFF 轉發剪藏 CRUD 到 CT260 archive-svc;2026-07-12 使用者跑
    finish-archive-infra.sh,照 5002 模板無 SNAT;半徑=Bearer 獨立 token+/create 限速
    6/分+單飛,見 §10 archive-svc 段)
+Allow-Monitor-To-CT260-OpenCode-4096       service/10.80.80.11 -> 192.168.20.60 tcp/4096
+  (opencode 收編 SSO 後補 Kuma 探活:2026-07-12 使用者跑 finish-portal-0192.sh,照 5003
+   模板無 SNAT;半徑=opencode 有 Basic 密碼,探活以 401=活著,Kuma monitor 名「opencode」
+   Accepted Status Codes=401;portal 服務目錄「開發」組卡片綠燈按此名匹配)
   ★ 蜜罐唯一入內放行(使用者裁決);Loki 無認證,風險注記見《監控告警.txt》§5e。
   ★ 排序:已 reorder 至 Block-Honeypot-To-10.80.80.0 之前(fw4 按 config 順序;REJECT-heavy zone
     加 allow 必查既有 Block 順序,append 殿後會無效)。
@@ -928,10 +933,12 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.19.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+portal        8088   portal:0.19.2 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
               2026-07-12 使用者依序跑 finish-portal-0190.sh、finish-portal-0191.sh
               上線 0.19.0 邸報(自動呈報+批閱+晨報 top-7)與 0.19.1(邸報六部
-              分區+AI 導讀);
+              分區+AI 導讀);同日 finish-portal-0192.sh 上線 0.19.2(服務目錄
+              新增「開發」組 opencode 卡:url_hl 走 SSO、直連 4096 後備、
+              kuma="opencode" 綠燈,掛 ct260;純 registry/版號,無前端改動);
               同日稍早使用者跑 finish-portal-0180.sh 上線:0.17.0(⌘K 面板+
               sparkline+氛圍層+戰情/夜間模式+晨報條列;/api/spark)與 0.18.0
               (拾遺歸檔板塊,/api/archive×5)一次帶上,14 端點驗證過、
@@ -1787,8 +1794,16 @@ CT203  hostname ct-dmz-proxy  VLAN60 10.60.60.10/24  GW 10.60.60.1  DNS 10.60.60
     站點::80 /health→200(Kuma 探活)+ Vaultwarden 反代(→192.168.30.3:50303)+
     auth.hl→127.0.0.1:9091 + 受保護站(forward_auth 前置):prometheus.hl→10.80.80.11:9090、
     grafana.hl→:3002、kuma.hl→:3001、homepage.hl→:3000、portal.hl→:8088(入口大廳,待辦49
-    2026-07-08;M2 服務目錄上線後 homepage.hl 退役)+ :8082 跳轉站(未驗證 http 被 nft
-    redirect 至此 → 302 auth.hl)。
+    2026-07-08;M2 服務目錄上線後 homepage.hl 退役)、opencode.hl→192.168.20.60:4096(CT260
+    opencode-serve:enabled+Restart=always+RestartSec=3——2026-07-12 由 on-failure 改 always,
+    外部 SIGTERM 對 systemd=乾淨退出、on-failure 不拉;ExecStartPost=-~/.local/bin/
+    opencode-up-notify.sh 起服即發 TG(NRestarts 分辨自動拉起/開機手動);
+     上游 Basic 走 caddy env OPENCODE_UPSTREAM_AUTH 注入;forward_auth 加
+     header_up -Authorization 剝客端舊 Basic 防蓋 session——Authelia 見 Authorization 即走
+     Basic 且失敗短路,2026-07-12);
+     opencode-app.hl→同後端 20.60:4096 但無 forward_auth、客戶端 Basic 原樣透傳
+     (官方 App 擋 cleartext HTTP 又不會走 SSO cookie;腳本 finish-opencode-app-hl.sh)+
+     :8082 跳轉站(未驗證 http 被 nft redirect 至此 → 302 auth.hl)。
   cloudflared:active/enabled(Vaultwarden 對外=CF Tunnel → 本機 connector → Caddy → DXP:50303;
     tunnel token 機密由使用者持有)。cutover 已完成;仍 OPEN:AGH vault.* rewrite→10.60.60.10、
     Kuma 探活。runbook:CT260 ~/workspace/ct-dmz-proxy/CUTOVER-runbook.md。
@@ -1919,7 +1934,7 @@ Jellyfin 遠端=Tailscale 經 CT203 subnet-router(僅 30.3:8096;朋友 Share nod
 Minecraft / Honeypot / P2P 是明確 DNAT;VLAN666 隔離;VLAN80 觀測面限制操作能力。
 IoT -> 其他內網段明確 REJECT;trusted zone input 亦為 REJECT(比 V6 記載更嚴)。
 portscan-autoban + cowrie-quarantine 在 raw prerouting 封鎖,已接 Prometheus/Grafana/GeoIP。
-內部服務 SSO(Authelia TOTP)上線於 CT203;受保護服務 prometheus/grafana/kuma/homepage.hl。
+內部服務 SSO(Authelia TOTP)上線於 CT203;受保護服務 prometheus/grafana/kuma/homepage/opencode.hl。
 Tailnet→內網全流量經 CT203 動態閘門:驗證後才轉發、通行證當日 00:00 失效;
   媒體豁免 Jellyfin+Navidrome(靠服務自身帳密);OpenWrt 不再作 subnet-router。
 CT260 codex 無 sudo,降低管理節點 blast radius。
