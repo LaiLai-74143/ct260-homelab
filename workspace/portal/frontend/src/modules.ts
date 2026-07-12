@@ -16,6 +16,7 @@ export const MODULES: ModuleDef[] = [
   { key: 'power', route: '/m/power', label: '電力', shortLabel: '電力', icon: '⚡' },
   { key: 'game', route: '/m/game', label: '遊戲', shortLabel: '遊戲', icon: '▶' },
   { key: 'life', route: '/m/life', label: '生活', shortLabel: '生活', icon: '✦' },
+  { key: 'archive', route: '/m/archive', label: '拾遺歸檔', shortLabel: '拾遺', icon: '▤' },
 ]
 
 // 手機底部 tab:大廳/設備/告警/更多(報告 §3)

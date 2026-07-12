@@ -26,6 +26,8 @@
 !/workspace/guest-portal
 # mc-autosleep MC 自動休眠/喚醒(待辦51;jar 不入庫由 mc-autosleep/.gitignore 排除)
 !/workspace/mc-autosleep
+# 拾遺歸檔 archive-svc+邸報 dibao(待辦49 0.18/0.19;env 由全域 *.env 排除)
+!/workspace/archive-svc
 
 # --- 納管:自製腳本 ~/.local/bin(hl-*、homelab-notify.py、watchdog 等) ---
 !/.local
@@ -40,6 +42,10 @@
 
 # --- 排除:第三方 binary(B5;150MB,版本見 hl-trivy-watch 檔頭) ---
 /.local/bin/trivy
+
+# --- 排除:Grok CLI 符號連結(實體在 ~/.grok/;2026-07-11) ---
+/.local/bin/grok
+/.local/bin/agent
 
 # --- 全域排除:秘鑰/憑證/暫存(即使位於納管目錄內) ---
 snmp-auth.yml

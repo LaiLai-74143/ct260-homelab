@@ -3,7 +3,7 @@
 更新時間：2026-07-03（v2：複雜項目附實作流程）
 本文依 2026-07-03 使用者對「內網評估」逐項裁決整理，供 Agent 作為工作目標。
 - 執行任何一項前照《操作規範與回滾.txt》：先備份、留回滾路徑、變更後驗證。
-- 現況（IP/介面/規則名）一律以《家庭網路與服務拓樸文件V6.txt》為準；本文 IP 僅為示意，
+- 現況（IP/介面/規則名）一律以《家庭網路與服務拓樸文件V7.txt》為準；本文 IP 僅為示意，
   凡標 <angle_brackets> 或「以拓樸為準」者，執行時先查證。
 - 每項完成後：更新拓樸文件 + 缺改記錄，本清單標記 DONE。
 - 新開服務一律：版本 pin（不用 :latest）、納入監控（node_exporter/Kuma）、納入備份、記入拓樸。
@@ -946,8 +946,80 @@
     另:晨報「今日訊息」條列排版+修刊頭星期 off-by-one(既有 bug,審查揪出)。
     走查 31/31;對抗審查 8 發現確認 3 已修(power spark 新鮮度 gate、Ambient
     雙 rAF、星期)駁 5。
-    ▶ 部署:finish-portal-0170.sh 待使用者跑(auto-mode 攔,錨點自適應 0.10~0.16)。
+    ▶ ✔ 0.17.0 於 2026-07-12 隨 0.18.0 同車上線(0170 腳本未單獨跑,被 0180
+      錨點自適應涵蓋;見下一條進度)。
     ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
+    【進度 2026-07-11(0.18.0 拾遺歸檔板塊;概念移植 LYiHub/labs-ArchiveAssistant,
+      使用者點名「加入這個板塊」)】
+    新板塊「拾遺歸檔」:貼 URL/純文字→AI 歸入六部(吏戶禮兵刑工)個人剪藏。
+    /m/archive 列表(六部分組+搜尋+收藏輸入列)+/archive/:id 閱讀器(Serif 大題+
+    琥珀批註摘要+全文,文末改歸六部/刪除有確認框);L0 拾遺卡;⌘K 拾遺分組+g r 跳頁。
+    鏈路:前端→BFF /api/archive×5(app/archive.py 純轉發,BFF 唯讀原則不破)→
+    CT260 archive-svc :5003【新服務,純 stdlib+SQLite;源=~/workspace/archive-svc/;
+    資料=~/.local/state/archive-svc/archive.db(隨 CT260 夜間 vzdump);token=
+    ~/.config/homelab/archive.env(600,BFF 專用可獨立輪替);AI=deepseek.env 之
+    DEEPSEEK_MODEL_FAST 單發歸納(嚴格 JSON+括號深度抽取+六部保底 rites);
+    網頁抓取 stdlib HTMLParser(og:title 優先序+雜訊節點剔除+12000 字截斷);
+    /create 限速 6/分+單飛,422 抓取失敗退還名額】。
+    權限照遊戲控制先例(2026-07-08 裁決同款):PC40 直達與 portal.hl 皆可寫,
+    ARCHIVE_AUTH=remote-user 可收緊。授權:原 app GPL-3.0,私有部署不散布=
+    零揭露義務;僅移植邏輯與 prompt 設計,未搬任何 bundled 素材。
+    驗證:svc 單元+整合(真 DeepSeek 全鏈路)過;BFF mock/live 過;e2e-0180-mock.mjs
+    27/27(含 820/390 斷點);獨立對抗審查(Opus,證僞導向)無 P0/P1,4 項 P2/P3
+    當場修(keep-alive 早退髒連線→close_connection、crontab 重建 pipefail 清空
+    footgun→||true、422 誤吃限速名額→退還、stats 逾時 2.5s 令 overview 負快取生效),
+    svc rev=0180b。
+    ▶ ✔ 0.18.0 已上線(2026-07-12 使用者跑 finish-archive-infra.sh +
+      finish-portal-0180.sh;0.17.0 同車帶上。Agent 覆核:svc rev 0180b/cron 2 行/
+      nft Archive-5003 在/portal:0.18.0 Up/live /api/archive 200;手機 portal.hl
+      截圖 OK。入檔:V7 §4.4/§5/§10+版本史、憑證登記表 §2、缺改記錄同日條)。
+    ▶ 可選後續:Kuma 探活 :5003、文件上傳(PDF/DOCX)v2 評估與 Paperless 分工。
+    【進度 2026-07-12(0.19.0 邸報:自動呈報+批閱+晨報評分制;使用者點名補上
+      林亦影片中未開源的「自動抓消息源按六部分類」管線)】
+    管線:dibao-ingest.py(CT260,cron 台北 05:20/17:20=UTC 21:20/09:20)
+    FreshRSS greader API 拉新件(游標=crawl 高水位,r=o 舊到新;不動使用者已讀態)
+    →DeepSeek fast 批 10 條一 call:中書省擬題+摘要+六部分部、門下省重要性 1-10
+    (同事件多篇只給一篇正常分)→score≥DIBAO_MIN_SCORE(5)經 /ingest 入庫
+    origin=rss(source_url 去重;created_at=送達時間——原文 published 是舊文新貼
+    會弄壞「當日」語意,審查期發現);14 天滾動清理,已「准」收編 manual 的不清。
+    晨報:homelab-notify.py 今日訊息改評分制 top-7(查 /list?origin=rss&sort=score
+    &since_hours=24 直出,零額外 AI call;svc 不可用/空件 fallback 舊 AI 濃縮;
+    備份 ~/_backups/homelab-notify.py.before-dibao-*)。
+    前端 0.19.0:拾遺頁「剪藏·六部/邸報·呈報」切換(邸報平鋪按分排,琥珀分數欄);
+    閱讀器邸報件出「批閱」列:准=收編入六部剪藏庫(origin→manual)、駁=撤下;
+    L0 卡 sub 加「邸報今日 N」;⌘K 只搜剪藏。svc 0190b:origin/score/feed 三欄
+    ALTER 遷移+/ingest+list origin/sort/since_hours 參數+stats 新形狀。
+    驗證:e2e-0190-mock.mjs 23/23;Workflow 對抗驗證(5 路 Opus 證僞+逐發現
+    Sonnet 複核,24 代理):19 確認/0 誤報/55 項無誤,17 修 2 屬設計——重點:
+    ①P1 dibao 批次失敗仍推游標=靜默永久漏件→改「失敗即停,游標停在失敗批前」;
+    ②P1 notify _clean 半形分號替換寫成同形 no-op(肉眼不可辨!)→顯式 U+FF1B,
+    並修 feed 含半形括號弄壞 BriefCard 來源槽+截斷懸掛標點;③P1 0190 部署腳本
+    compose 錨點 regex 停在 [0-7] 收不到現役 0.18(sed 代換被檔內反斜線騙過)→[0-8];
+    ④P2 cron 時區:CT260 系統=UTC,「05:20 台北」須寫 20 21,9(照 write-brief 慣例);
+    ⑤P2 svc since_hours 無界值 datetime 下溢斷線→夾一年;404 keep-alive 漏
+    close_connection→補;其餘 float score 容錯/同秒滿頁游標卡死/--limit 防呆等。
+    已知限制(v1 接受):跨批次同事件去重靠不住(批內 prompt 有教,跨批各自為政,
+    晨報 top-7 可能同事件兩條);邸報只存 title+snippet 節選(不抓全文,點原文看)。
+    ▶ ✔ 0.19.0 已上線(2026-07-12 使用者跑 finish-dibao.sh + finish-portal-0190.sh;
+      Agent 覆核:dibao cron 在、svc 0190b、首班已入 38 筆真實邸報、portal 邸報頁
+      截圖 OK。入檔:V7 §5/§10+版本史+FreshRSS 晨報行、監控告警 §5、缺改記錄同日條)。
+    【進度 2026-07-12(0.19.1 使用者實測回饋兩修)】
+    回饋:①邸報平鋪全疊一起→改與剪藏同款六部分區(吏戶禮兵刑工固定順序、
+    空部隱藏、組內仍分數高→低,Row 去重複部標);②點進邸報件只有連結串
+    「看了個寂寞」→dibao-ingest v2:DeepSeek 批次歸納加 brief 欄(80-160 字
+    AI 導讀;節選只剩連結時用背景知識補脈絡、標「(背景)」、禁虛構原文數據),
+    full_text=【AI 導讀】+原題+有料節選(_clean_snippet:去 URL 後字母<40 省略,
+    HN 連結串正確剔除)+發布註記;既有 38 筆由 dibao-brief-backfill.py 回填
+    (38/38 完成,冪等可重跑;共用 v2 build_full_text)。
+    驗證:e2e 26/26(六部分區+導讀斷言併入 e2e-0190-mock.mjs);Workflow 證僞
+    審查(3 路 Opus finder+逐發現 Sonnet refuter,11 代理):8 發現 7 證僞
+    1 確認——P2:build_full_text 的 fromtimestamp(published) 在 try/except 外,
+    RSS 損毀時間戳(如 ms 級誤植)會整輪崩潰且游標永久卡死→_fmt_epoch 捕捉;
+    另加 backfill v2 載入守衛(裝的還是 v1 就拒跑,免燒 API 半路崩)。
+    CT260 側已上線:v2 已裝(備份 ~/_backups/dibao-ingest.py.before-0191-*)、
+    回填完成、svc /item 出貨即帶導讀;晨報/cron/防火牆無改動。
+    ▶ 待使用者跑:bash ~/workspace/portal/scripts/finish-portal-0191.sh
+      —— CT201 portal 0.19.1(前端六部分區;B5 會抽驗邸報件帶【AI 導讀】)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。

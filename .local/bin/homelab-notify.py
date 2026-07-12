@@ -41,6 +41,7 @@ CONFIG_FILES = [
     HOME / ".config/homelab/ntfy.env",          # 待辦19c：ntfy 互動推播
     HOME / ".config/homelab/ntfy-webhook.env",  # 待辦19c：按鈕要嵌 webhook Bearer
     HOME / ".config/homelab/freshrss.env",      # 待辦30:晨報「今日訊息」RSS 來源
+    HOME / ".config/homelab/archive.env",       # 待辦49 0.19:邸報 top-7 進晨報
 ]
 STATE_FILE = HOME / ".local/state/homelab-notify/state.json"
 COUNTS_FILE = HOME / ".local/state/homelab-notify/daily_counts.json"
@@ -831,8 +832,45 @@ def fetch_rss_unread(cfg, limit=40):
             for it in d.get("items", [])]
 
 
+def fetch_dibao_top7(cfg):
+    """待辦49 0.19:向本機 archive-svc 取近 24h 邸報最高分 7 條(dibao-ingest 05:20 已
+    歸納+評分入庫)。回 [(title, summary, feed)];異常拋出讓上層走 fallback。"""
+    port = cfg.get("ARCHIVE_PORT", "5003")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/list?"
+        + urllib.parse.urlencode({"origin": "rss", "sort": "score",
+                                  "since_hours": "24", "limit": "7"}),
+        headers={"Authorization": "Bearer " + cfg["ARCHIVE_TOKEN"]})
+    d = json.loads(urllib.request.urlopen(req, timeout=8).read().decode())
+    if not d.get("ok"):
+        raise RuntimeError("archive-svc 回非 ok")
+    return [(it.get("title") or "?", it.get("summary") or "",
+             (it.get("feed") or "?")) for it in d.get("items", [])]
+
+
 def rss_section(cfg):
-    """晨報「今日訊息」段(待辦30)。未設定=不出段;讀取失敗/無未讀=誠實註記,不擺舊數據。"""
+    """晨報「今日訊息」段。0.19 起=邸報評分制:AI 生成每條摘要時已給重要性評分,
+    這裡取前 7 高直出(零額外 AI call);格式維持「條;條;條」+尾端(來源)供
+    BriefCard 條列。邸報不可用/為空 → fallback 原 AI 濃縮路徑(待辦30)。"""
+    if cfg.get("ARCHIVE_TOKEN"):
+        try:
+            top = fetch_dibao_top7(cfg)
+        except Exception as e:  # noqa: BLE001
+            log(f"brief: 邸報讀取失敗 {type(e).__name__},fallback AI 濃縮")
+            top = []
+        if top:
+            def _clean(s):  # 半形分號是條目分隔符,內文一律換全形(； 顯式寫,避免肉眼同形)
+                return s.replace(";", "；").strip()
+
+            def _src(f):
+                # BriefCard 來源槽只認最後一組半形括號:feed 內半形括號會弄壞解析,
+                # 一律去掉;截 12 字後掃掉尾端懸掛標點(如 'Hacker News:')
+                f = re.sub(r"[()]", " ", _clean(f))
+                return re.sub(r"\s+", " ", f).strip()[:12].rstrip(" :·-|,、·")
+
+            rows = ";".join(f"{_clean(t)}——{_clean(s)}({_src(f)})" for t, s, f in top)
+            return {"h": "今日訊息", "body": rows}
+        log("brief: 邸報 24h 內無入庫件,fallback AI 濃縮")
     if not cfg.get("FRESHRSS_URL") or not cfg.get("FRESHRSS_API_PASSWORD"):
         return None
     try:

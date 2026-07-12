@@ -49,10 +49,10 @@
 - 相機 forward 規則的 uci 位置已漂移(非 idx 33),功能性排序(在 Block-IoT-To-Storage 前)仍成立。
 - pvesm 用量漂移:SSD-2 ~65%、Nas/DXP4800-Backup-SMB100 ~63%、local-lvm ~8%(§6)。
 
-待清理殘留(稽核附帶發現,未列 V6):
-- MC hairpin 重複兩組(Trusted-Hairpin-* 與具名 VLAN40-Hairpin-*,參數全同、皆 enabled)。
-- temp_allow_pc40_to_openwrt_ssh(PC40→192.168.40.1:52438)存在但不在 §4.4 清單。
-- firewall.@rule[77] 空匿名 section。
+待清理殘留(稽核附帶發現,未列 V6;三項均已於 2026-07-10 打掃窗清理,見 §4.4 打掃窗註記):
+- ✔MC hairpin 重複兩組(Trusted-Hairpin-* 與具名 VLAN40-Hairpin-*,參數全同)——重複組已刪,留具名組。
+- ✔temp_allow_pc40_to_openwrt_ssh(PC40→192.168.40.1:52438)——已轉正=Allow-PC40-To-Router-SSH-52438。
+- ✔firewall.@rule[77] 空匿名 section——已刪。
 ```
 
 ---
@@ -153,9 +153,10 @@ CT270  life-ops                  running
 VM300  honeypot                  stopped   # onboot=1 卻停機,原因未查;重啟需人工(§8)
 ```
 
-電力保護(進行中):nut-client 2.8.1,NUT secondary 監看 ups0@192.168.100.2(VLAN100 帶外、匿名輪詢);
+電力保護(已驗收 2026-07-11):nut-client 2.8.1,NUT secondary 監看 ups0@192.168.100.2(VLAN100 帶外、匿名輪詢);
 斷電 180s → 優雅收 CT/VM → 關宿主(/etc/nut + /usr/local/sbin/nut-graceful-shutdown.sh;沿革見缺改記錄 2026-07-04)。
-BIOS 復電自動開機:待設。全鏈拔線實測:待做。
+BIOS 復電自動開機:pve24/DXP 已設。全鏈拔線實測:2026-07-11 通過——含 UPS killpower 熄燈循環
+(DXP master 關機末端 upsdrvctl shutdown→UPS 整機熄燈休眠→復電自動回輸出;全鏈事後分析見缺改記錄 2026-07-11)。
 監控面(待辦49 電力模塊,2026-07-08 上線):/usr/local/bin/ups-metrics.sh(cron 每分鐘 upsc→
 /var/lib/prometheus/node-exporter/ups.prom,比照 CT202 squid textfile 前例,零新埠零防火牆)
 → pve-node:9100 → portal 電力頁(nut_* 指標;缺席/過期=pending 誠實態)+
@@ -184,9 +185,12 @@ Storage service(正式可路由):192.168.30.3
 10G storage fabric:          192.168.100.2(純 data/SMB/backup,不是管理面)
 legacy(已退役死址):         192.168.31.3(不再使用;nas-legacy 已 NXDOMAIN)
 SSH:                         192.168.30.3:45123(CT260 專屬 key;常態關閉、3h 開窗政策)
-node_exporter:               192.168.30.3:9100(user systemd,My-Big-Nas,linger 已啟用)
-  ★ 2026-07-07 稽核:9100 connection refused(NAS 活著,Jellyfin 8096 正常)→ exporter 行程未跑,
-    疑 NAS 重開後 linger 未生效;待 SSH 開窗以 systemctl --user status 檢查。
+node_exporter:               192.168.30.3:9100(user systemd unit=prometheus-node-exporter.service,
+                             My-Big-Nas,linger 已啟用)
+  ★ 復發 bug(2026-07-07、07-11 兩例):重開機後 exporter 未起。07-11 查實:Linger=yes、
+    user@1000 開機 25s 內有起、unit enabled——非 linger 失效,是 user manager 未把 enabled unit
+    納入啟動事務(內部原因不可觀測:帳號不在 adm/systemd-journal)。start 即癒:
+    systemctl --user start prometheus-node-exporter.service。治本候補=遷 system unit(需 root,未做)。
 ```
 
 承載服務:qBittorrent、Jellyfin、Vaultwarden production、Duplicati、Cloudflare Tunnel、
@@ -313,8 +317,8 @@ HA 米家設備靜態租約(uci dhcp host,leasetime infinite;綁線上實機 MAC
 
 ```text
 Gateway:10.60.60.1(+2001:b011:5c10:9fbc::1/64)   Zone:dmz
-DHCPv4:★未正式停用——dnsmasq 仍生成 pool 10.60.60.100–249(12h),現僅靠 dmz input REJECT+
-       無 DHCP 放行規則而發不出租約(單層防護);要與設計對齊應補 uci dhcp.dmz 停用(待辦)。
+DHCPv4:已正式停用(2026-07-10 打掃窗 uci dhcp.dmz.ignore='1',2026-07-11 uci 核實;
+       原「僅靠 dmz input REJECT 單層防護」缺口已消)。
 IPv6:RA server(SLAAC),見 §4.7。
 
 10.60.60.1     OpenWrt DMZ gateway
@@ -567,7 +571,9 @@ PC40 -> CT100      10.70.70.20   tcp/24444        (Allow-PC40-To-Game-MCSM-Daemo
   2026-07-08;MCSM 網頁即時終端 daemon ws;手機經 dmz→game proto-all 免加,CT100 nft 同步)
 PC40 -> DXP4800    192.168.30.3  tcp/5243,8243(SNAT 192.168.30.1)
 PC40 -> Minecraft public hairpin 49169/tcp、43915/udp
-★ 殘留:temp_allow_pc40_to_openwrt_ssh(PC40 -> 192.168.40.1:52438)temp 前綴仍在,待清理或轉正。
+PC40 -> OpenWrt    192.168.40.1  tcp/52438        (Allow-PC40-To-Router-SSH-52438;原
+  temp_allow_pc40_to_openwrt_ssh,2026-07-10 打掃窗轉正,uci section allow_pc40_router_ssh,
+  2026-07-11 uci 核實)
 
 # CT270 出站代理(HA/dockerd 經 fwdproxy 上網;CT270 直連 WAN 由 deny_ct270_wan 封死)
 CT270 -> CT202 fwdproxy  20.70 -> 10.80.80.10 tcp/3128(Allow-CT270-To-FwdProxy-Egress;
@@ -664,6 +670,10 @@ Allow-Monitor-To-CT260-Webhook-5001        service/10.80.80.11 -> 192.168.20.60 
 Allow-Monitor-To-CT260-LifeChat-5002       service/10.80.80.11 -> 192.168.20.60 tcp/5002
   (待辦49 生活助理:portal BFF 轉發對話到 CT260 life-chat;2026-07-09,照 5001 模板無 SNAT;
    半徑=模型僅唯讀 7 工具+寫入白名單 7 動作 HMAC 提案單+6/分限速,見 §10 life-chat 段)
+Allow-Monitor-To-CT260-Archive-5003        service/10.80.80.11 -> 192.168.20.60 tcp/5003
+  (待辦49 拾遺歸檔:portal BFF 轉發剪藏 CRUD 到 CT260 archive-svc;2026-07-12 使用者跑
+   finish-archive-infra.sh,照 5002 模板無 SNAT;半徑=Bearer 獨立 token+/create 限速
+   6/分+單飛,見 §10 archive-svc 段)
   ★ 蜜罐唯一入內放行(使用者裁決);Loki 無認證,風險注記見《監控告警.txt》§5e。
   ★ 排序:已 reorder 至 Block-Honeypot-To-10.80.80.0 之前(fw4 按 config 順序;REJECT-heavy zone
     加 allow 必查既有 Block 順序,append 殿後會無效)。
@@ -918,10 +928,14 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.16.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              0.17.0 已施工完成(⌘K 面板+sparkline+氛圍層+戰情/夜間模式+
-              晨報條列;新端點 /api/spark)待使用者跑 finish-portal-0170.sh,
-              見版本史尾;
+portal        8088   portal:0.19.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              2026-07-12 使用者跑 finish-portal-0190.sh 上線 0.19.0 邸報(自動呈報
+              +批閱+晨報 top-7);0.19.1(邸報六部分區+AI 導讀,CT260 側已上線)
+              待使用者跑 finish-portal-0191.sh;
+              同日稍早使用者跑 finish-portal-0180.sh 上線:0.17.0(⌘K 面板+
+              sparkline+氛圍層+戰情/夜間模式+晨報條列;/api/spark)與 0.18.0
+              (拾遺歸檔板塊,/api/archive×5)一次帶上,14 端點驗證過、
+              手機 portal.hl 實測 OK;版本細節見版本史尾;
               0.16.0 於 2026-07-11 使用者部署上線並實測問答正常(含 0.15 吉祥物
               重繪與 0160b Read 權限修正;CT260 life-chat rev=0160b);
               0.2.1=registry 可達性旗標對齊發證模型+Kuma 對映實名化;
@@ -1204,6 +1218,45 @@ portal        8088   portal:0.16.0 本地 build(python:3.13.5-slim+pin;待辦49 
               入口/回歸);對抗審查 4 finder+8 verifier:8 發現確認 3(上述
               ★修正)駁 5。部署 finish-portal-0170.sh(錨點自適應 0.10~0.16;
               0160 作廢;auto-mode 攔=交使用者跑,B5 驗 /api/spark 序列)
+              0.18.0(2026-07-11 施工、2026-07-12 使用者部署上線——與 0.17.0
+              同車;使用者點名移植 GitHub LYiHub/labs-ArchiveAssistant 概念):
+              拾遺歸檔板塊——貼 URL/純文字→AI 歸入六部(吏戶禮兵刑工)個人
+              剪藏。前端:/m/archive 列表(六部分組+搜尋+收藏輸入列)+
+              /archive/:id 閱讀器(Serif 大題+琥珀批註摘要+全文;文末改歸
+              六部/刪除有確認框);modules.ts 增 archive 一筆(側欄/更多頁/
+              L0 卡/⌘K 模塊組四處自動生效);⌘K 增「拾遺」分組(標題+摘要
+              可搜直開閱讀器,首開才拉)+g r 跳頁;L0 拾遺卡(overview
+              modules[] 件數+最近一篇)。BFF:app/archive.py 純轉發五端點
+              GET/POST /api/archive、GET/POST /api/archive/{id}、POST
+              /api/archive/{id}/delete——唯讀原則不破(抓取/AI/落地全在
+              CT260 archive-svc :5003,見 §10);requirements 三 pin 不動;
+              權限照遊戲控制先例=PC40 直達與 portal.hl 皆可寫
+              (ARCHIVE_AUTH=remote-user 可收緊);mock 全套(六部樣本+
+              關鍵字假分類)。驗證:e2e-0180-mock.mjs 27/27(1440/820/390
+              三斷點);獨立對抗審查(Opus 證僞導向)無 P0/P1,4 項 P2/P3
+              當場修(archive-svc keep-alive 早退髒連線→close_connection、
+              infra 腳本 crontab 重建 pipefail 清空 footgun→||true、422 誤吃
+              限速名額→退還、BFF stats 逾時 2.5s<3s 令 overview 負快取生效)。
+              部署 finish-portal-0180.sh(錨點自適應 0.10~0.17;前置=
+              finish-archive-infra.sh;auto-mode 攔=交使用者跑)
+              0.19.0(2026-07-12 施工+使用者部署上線;使用者點名補上林亦影片
+              未開源的「自動抓源按六部分類」管線):邸報——CT260
+              dibao-ingest.py(cron 台北 05:20/17:20)FreshRSS→DeepSeek 批
+              10 條:擬題+摘要+六部分部+重要性 1-10(同事件多篇只給一篇
+              正常分),score≥5 /ingest 入庫 origin=rss、14 天滾動、「准」
+              收編 manual 不清;前端拾遺頁「剪藏/邸報」切換+閱讀器批閱列
+              (准=收編入六部剪藏、駁=撤下);L0 卡 sub「邸報今日 N」;⌘K
+              只搜剪藏。晨報「今日訊息」改邸報 top-7(零額外 AI call,
+              fallback 舊濃縮)。svc 0190b(origin/score/feed 遷移+list
+              origin/sort/since_hours+stats 新形狀)。e2e-0190 23/23;
+              Workflow 對抗驗證 19 確認/0 誤報 17 修(游標失敗即停/同形
+              分號 no-op/cron UTC/錨點 regex 等,詳缺改記錄同日條)。
+              0.19.1(2026-07-12 使用者實測回饋兩修;CT260 側已上線、CT201
+              待 finish-portal-0191.sh):①邸報頁改六部分區(同剪藏,組內
+              分數排)②邸報件 full_text 加【AI 導讀】(dibao-ingest v2
+              brief 欄;既有 38 筆 dibao-brief-backfill.py 回填 38/38)。
+              e2e 26/26;證僞審查 1 修=fromtimestamp 損毀時間戳夾捕捉
+              (_fmt_epoch,防整輪崩潰+游標卡死)。
 ```
 
 Prometheus targets:23 個(2026-07-07 加 snmp-switch3f,order 23);2026-07-08 實測
@@ -1380,6 +1433,10 @@ Onboot 1   Unprivileged 1
 user codex(uid/gid 1000)   password locked   sudo 無   SSH key-only
 Codex CLI 0.142.2   config /home/codex/.codex/config.toml   model gpt-5.5   reasoning xhigh
   sandbox workspace-write   cli_auth_credentials_store file
+Grok CLI 0.2.93(2026-07-11)實體 ~/.grok/downloads/grok-linux-x86_64;~/.grok/bin/{grok,agent}
+  與 ~/.local/bin/{grok,agent} 皆 symlink(後者 .gitignore 排除)。~/.grok 700。
+  auth ~/.grok/auth.json(device-auth;600;2026-07-11 已登入)
+  手機用法:WG(§4.9)→SSH 192.168.20.60:22→tmux attach -t grok(既有路徑,零防火牆改動)
 ```
 
 金鑰雙軌+6h 上鎖(待辦22,2026-07-09 上線;使用者自訂方案):
@@ -1453,6 +1510,35 @@ mcp-life-ro.json;log ~/.local/state/life-chat/life-chat.log;cron @reboot+*/5 flo
   與 /chat 共用單飛鎖+6/分限速;log 記 CLAWD 行。Read 路徑外=權限拒絕
   fail-closed;Grep/Glob 無路徑規則可綁=殘餘面,受 Bearer+Remote-User 雙閘
   (使用者本人專用)覆蓋。
+archive-svc(待辦49 拾遺歸檔,2026-07-11 施工、07-12 上線):~/.local/bin/archive-svc.py
+:5003——portal 拾遺板塊後端,Bearer(ARCHIVE_TOKEN,BFF 專用可獨立輪替)。純 stdlib
+(http.server+sqlite3+urllib+HTMLParser,零 pip,rev=0190b)。概念移植
+LYiHub/labs-ArchiveAssistant(GPL-3.0;私有部署不散布=零揭露義務,未搬 bundled 素材):
+六部固定分類(officials吏/treasury戶/rites禮/military兵/justice刑/works工,保底=rites)。
+/create 收 {"input": URL或純文字}:URL→urllib 抓網頁(UA 自報 ShiYi/1.0,15s timeout,
+只收 http/https,og:title>twitter>title>h1 優先序、剔 script/nav/footer 等雜訊節點、
+正文截 12000 字)→DeepSeek DEEPSEEK_MODEL_FAST 單發歸納(限六部 id+title≤28+
+summary≤96 嚴格 JSON;括號深度計數抽取防 markdown 圍欄;temperature 0.3/max 768)
+→SQLite 落地 ~/.local/state/archive-svc/archive.db(隨 CT260 夜間 vzdump,無跨機副本
+——與 MC 世界同屬單碟,量小可接受)。端點:/health(免驗)/list /item /stats(GET)+
+/create /update /delete(POST);限速 6/分+單飛(422 抓取失敗退還名額,409 不計費);
+keep-alive 早退錯誤一律 close_connection(獨立審查修正)。env ~/.config/homelab/
+archive.env(600)+讀 deepseek.env;log ~/.local/state/archive-svc/archive-svc.log;
+cron @reboot+*/5 flock 自癒;源=~/workspace/archive-svc/(含 finish-archive-infra.sh);
+來源=OpenWrt Allow-Monitor-To-CT260-Archive-5003(§4.4)。SSRF 注記:屋主自用剪藏
+工具,內網 URL 抓取屬接受面(真邊界=防火牆 host-scoped+token,BFF 端 PC40/portal.hl
+皆可寫照遊戲控制先例)。
+  0.19 邸報(2026-07-12):~/.local/bin/dibao-ingest.py(cron '20 21,9'=台北
+  05:20/17:20,flock .dibao.lock)FreshRSS greader 拉新件(游標=crawl 高水位
+  dibao-cursor.json;批次失敗即停不推游標;不動使用者已讀態)→DeepSeek fast 批
+  10 條:擬題+摘要+六部+評分 1-10+AI 導讀 brief(v2;full_text=導讀+原題+有料
+  節選,_clean_snippet 去 URL 後字母<40 省略;損毀 published 走 _fmt_epoch 防崩)
+  →score≥DIBAO_MIN_SCORE(5)入庫 origin=rss(source_url 去重;created_at=送達
+  時間;14 天滾動,「准」收編 manual 不清)。晨報今日訊息=邸報 top-7
+  (homelab-notify fetch_dibao_top7;fallback 舊濃縮;備份 ~/_backups/
+  homelab-notify.py.before-dibao-*)。一次性回填工具 dibao-brief-backfill.py
+  (冪等;2026-07-12 對既有 38 筆回填導讀 38/38)。log=dibao.log;env 增
+  DIBAO_MIN_SCORE/DIBAO_MAX_ITEMS/DIBAO_BATCH(archive.env 可選)。
 
 ★hl-tg-bridge(C1 生活助理 TG 雙向橋,2026-07-10):~/.local/bin/hl-tg-bridge——
 Telegram getUpdates 長輪詢(全系統唯一消費者;日後別再起第二個,會互搶 409),
@@ -1523,9 +1609,11 @@ FreshRSS(待辦30,2026-07-08 staged;上線=使用者跑 ~/workspace/monitoring/f
   (image 拉取同樣需 dockerhub 暫時窗)。存取:PC40 Allow-PC40-To-CT270-FreshRSS-8082 +
   rss.home.arpa→20.70(dnsmasq hosts 檔+推 24pve 備援)。憑證:CT260
   ~/.config/homelab/freshrss.env(600;UI 密碼+Google Reader API 密碼分開)。
-  晨報:CT260 homelab-notify --write-brief 新增「今日訊息」段(Google Reader API 拉未讀
-  →DeepSeek 濃縮 5-8 條單段;FRESHRSS_URL 註釋=段落關閉;失敗/無未讀=誠實註記)。
-  訂閱源由使用者在 UI 維護,晨報自動跟進。
+  晨報:CT260 homelab-notify --write-brief「今日訊息」段——0.19(2026-07-12)起=
+  前一日邸報 top-7(archive-svc /list?origin=rss&sort=score&since_hours=24,
+  零額外 AI call;svc 不可用/24h 空件自動 fallback 舊路徑=greader 拉未讀→
+  DeepSeek 濃縮 5-8 條;FRESHRSS_URL 註釋=段落全關)。
+  訂閱源由使用者在 UI 維護,邸報/晨報自動跟進。
   Web/API :8080(health /api/v1/health)。compose 600 內含 DB 密碼。NC_DISABLE_TELE=true。
   資料模型(base Life-Ops id=ppralaha4e76q5o;3 表):People、Transactions、Notes;
   Transactions.counterparty、Notes.people 皆 mm link -> People。admin=LaiLai74143@Gmail.com。
@@ -1857,11 +1945,12 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
 - ✔ctdmz owned_v4 殭屍——已修(2026-07-10:1.21→1.0,ctdmz.nft v3.1,見 §4.8)。
 - CT203 sshd / CT204 ssh.socket 監聽 *:22——裁決關閉或文件定案接受。
 - ✔pve24 孤兒 tailscaled 程序清理(2026-07-10 使用者 pkill -9,gone)。
-- DMZ DHCPv4 正式停用(uci dhcp.dmz),消除單層防護。
+- ✔DMZ DHCPv4 正式停用——已做(2026-07-10 打掃窗 dhcp.dmz.ignore='1',見 §2.7/§4.4)。
 - ✔Navidrome 自動掃描——已建(2026-07-10):CT270 /etc/cron.d/navidrome-scan(*/6h flock
   docker exec navidrome scan;實測 143ms 完掃);源檔副本 CT260 ~/workspace/navidrome/。
-- OpenWrt 殘留清理:MC hairpin 重複兩組、temp_allow_pc40_to_openwrt_ssh、firewall.@rule[77] 空 section、
-  Monitor-To-X no-op SNAT 數條。
+- OpenWrt 殘留清理:✔MC hairpin 重複兩組、✔temp_allow_pc40_to_openwrt_ssh(轉正=Allow-PC40-To-
+  Router-SSH-52438)、✔rule[77] 空 section(三項 2026-07-10 打掃窗完成,見 §4.4)——餘 Monitor-To-X
+  no-op SNAT 數條未清。
 - DNS:裸別名(dxp4800/dxp4800-fast/caddy/mc-server)經 AGH 不可解——補 FQDN 條目或接受並以本文為準。
 ```
 
@@ -1871,7 +1960,8 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
 
 全屋斷電→復電的啟動依賴鏈(DAG)。驗收工具=CT260 hl-coldstart-check
 (@reboot+600s 一次性,13 端點,單則 TG 總結;--dry-run 可手測)。
-與待辦1h UPS 全鏈拔線實測同窗驗收。
+待辦1h UPS 全鏈拔線實測 2026-07-11 通過(21:52 拔電→22:10 coldstart 15/15 全綠;
+killpower 全鏈事後分析見缺改記錄 2026-07-11)。
 
 ```text
 市電恢復
@@ -1879,7 +1969,9 @@ codex-audit-ct250 橫向移動路徑已封閉(見缺改記錄 SSH key 稽核)。
  ├─ routerpve(N95,一樓無 UPS;★BIOS AC power-on 待設=待辦1e)
  │   └─ VM101 OpenWrt(onboot=1)→ PPPoE 撥號+AGH DNS+防火牆+各 VLAN 路由
  │       ——全網「跨 VLAN 可達」的單一前置;它沒起來其他全是孤島
- ├─ pve24(24Bay;★BIOS AC power-on 待設)→ CT 按 startup order 起:
+ │       另承 hl-wol-watch(cron */5,2026-07-11):pve24/DXP 軟關機被晾著
+ │       (短窗復電、UPS 未熄燈)時 WoL 補喚醒;維護停用開關與細節見監控告警.txt 哨兵清單
+ ├─ pve24(24Bay;BIOS AC power-on 已設,2026-07-11 斷電實測自啟 ✓)→ CT 按 startup order 起:
  │   CT100 MC(order=20,up=30)→ CT201 監控(40)→ CT102 mc-proxy(60)→ CT260(90)
  │   → 其餘 onboot=1 無序(202/203/204/205/270)在有序者之後
  │   ├─ CT203:ctdmz-nft.service →(fail-closed 綁定)→ tailscaled——閘門載入失敗

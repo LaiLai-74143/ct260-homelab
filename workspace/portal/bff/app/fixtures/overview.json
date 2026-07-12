@@ -220,6 +220,13 @@
       "bigUnit": " 行程",
       "sub": "借貸未結 3 筆 · RSS 待接",
       "state": "ok"
+    },
+    {
+      "key": "archive",
+      "big": "6",
+      "bigUnit": " 篇",
+      "sub": "邸報今日 4 · 最近:LXC 裡跑 Doc",
+      "state": "ok"
     }
   ],
   "generated_at": "fixture"

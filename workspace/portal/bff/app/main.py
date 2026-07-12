@@ -15,13 +15,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, game_ctrl, grafana_proxy, life_chat, providers
+from . import actions, archive, game_ctrl, grafana_proxy, life_chat, providers
 
 BASE = Path(__file__).resolve().parent
 STATIC_DIR = Path(os.environ.get("PORTAL_STATIC", BASE.parent.parent / "frontend" / "dist"))
 SSE_INTERVAL = int(os.environ.get("PORTAL_SSE_INTERVAL", "15"))
 
-app = FastAPI(title="portal-bff", version="0.17.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="portal-bff", version="0.19.1", docs_url=None, redoc_url=None)
 
 
 def _err(status: int, error: str, hint: str = "") -> JSONResponse:
@@ -272,6 +272,64 @@ async def life_guest_op(request: Request):
         status, payload = await life_chat.guest(body, request.headers.get("Remote-User"))
         return JSONResponse(payload, status_code=status)
     except life_chat.ChatError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+# ---- 拾遺歸檔(0.18.0 待辦49;六部剪藏,轉發 CT260 archive-svc :5003,見 archive.py) ----
+
+@app.get("/api/archive")
+async def archive_list(request: Request, topic: str | None = None, q: str | None = None,
+                       origin: str | None = None, sort: str | None = None):
+    # 0.19.0:origin=manual(剪藏)|rss(邸報);sort=score 供邸報按門下省評分排
+    try:
+        return await archive.list_items(topic, q, origin, sort,
+                                        request.headers.get("Remote-User"))
+    except archive.ArchiveError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.post("/api/archive")
+async def archive_create(request: Request):
+    # 收 URL 或純文字 → archive-svc 抓取+DeepSeek 歸納;同步等結果(≤150s)
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"input": "URL 或一段文字"}')
+    try:
+        return await archive.create(body, request.headers.get("Remote-User"))
+    except archive.ArchiveError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.get("/api/archive/{item_id}")
+async def archive_item(request: Request, item_id: str):
+    try:
+        return await archive.get_item(item_id, request.headers.get("Remote-User"))
+    except archive.ArchiveError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.post("/api/archive/{item_id}")
+async def archive_update(request: Request, item_id: str):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body 非物件")
+    except Exception:  # noqa: BLE001
+        return _err(400, "body 須為 JSON 物件", '{"topic_id"|"title"|"summary": "..."}')
+    try:
+        return await archive.update(item_id, body, request.headers.get("Remote-User"))
+    except archive.ArchiveError as e:
+        return _err(e.status, e.error, e.hint)
+
+
+@app.post("/api/archive/{item_id}/delete")
+async def archive_delete(request: Request, item_id: str):
+    try:
+        return await archive.delete(item_id, request.headers.get("Remote-User"))
+    except archive.ArchiveError as e:
         return _err(e.status, e.error, e.hint)
 
 

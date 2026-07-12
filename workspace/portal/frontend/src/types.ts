@@ -306,6 +306,59 @@ export interface ClawdReply {
   meta?: { turns?: number; secs?: number }
 }
 
+// ---- 拾遺歸檔(0.18.0 待辦49;BFF /api/archive → CT260 archive-svc :5003) ----
+
+export interface ArchiveItem {
+  id: string
+  /** 六部 id(officials/treasury/rites/military/justice/works;字典見 pages/Archive.tsx ARCHIVE_TOPICS) */
+  topic_id: string
+  content_type: 'web' | 'text'
+  title: string
+  summary: string
+  source_url: string | null
+  created_at: string
+  /** 0.19.0:manual=手動剪藏、rss=邸報(dibao-ingest 自動呈報) */
+  origin: 'manual' | 'rss'
+  /** 門下省重要性 1-10(邸報件才有) */
+  score?: number | null
+  /** 來源名(邸報件才有) */
+  feed?: string | null
+}
+
+export interface ArchiveList {
+  ok: boolean
+  /** live 下 ARCHIVE_URL+token 已配置;false 時前端顯示未配置態 */
+  enabled: boolean
+  /** 本請求可否收藏/改/刪(ARCHIVE_AUTH=open 下恆 true,照 game 先例) */
+  allowed: boolean
+  items: ArchiveItem[]
+  total: number
+  by_topic: Record<string, number>
+  generated_at: string
+}
+
+export interface ArchiveItemFull extends ArchiveItem {
+  source_title?: string | null
+  full_text: string
+  /** 網頁正文抓取時超過 12000 字被截斷 */
+  truncated?: boolean
+  /** 歸納用模型(如 deepseek-v4-flash);mock 模式為 "mock" */
+  model?: string | null
+  updated_at?: string
+}
+
+export interface ArchiveItemResult {
+  ok: boolean
+  item: ArchiveItemFull
+  mock?: boolean
+  generated_at: string
+}
+
+export interface ArchiveOpResult {
+  ok: boolean
+  mock?: boolean
+}
+
 // ---- guest-portal 帳號管理(待辦50;生活頁面板) ----
 export interface GuestAccount {
   person: string

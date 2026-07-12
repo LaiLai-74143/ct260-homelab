@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useActionMutation, useActions, useAlerts, useServices } from '../api'
+import { useActionMutation, useActions, useAlerts, useArchive, useServices } from '../api'
 import { MODULES } from '../modules'
 import { SITE_GROUPS } from '../sites'
 import { linkOf } from '../pages/Services'
+import { topicLabel } from '../pages/Archive'
 import { useEnv } from '../env'
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
@@ -12,11 +13,12 @@ import { useToast } from './Toast'
 const KEYJUMP: Record<string, string> = {
   h: '/', d: '/m/devices', a: '/m/alerts', s: '/m/services',
   c: '/m/security', p: '/m/power', m: '/m/game', l: '/m/life',
+  r: '/m/archive',
 }
 const JUMPKEY = Object.fromEntries(Object.entries(KEYJUMP).map(([k, r]) => [r, k]))
 
 interface Item {
-  g: '模塊' | '動作' | '服務' | '網站'
+  g: '模塊' | '動作' | '服務' | '網站' | '拾遺'
   ic: string
   t: string
   /** 額外搜尋鍵(與 t 併入模糊匹配) */
@@ -69,6 +71,7 @@ export default function CommandPalette() {
   const al = useAlerts()
   const sv = useServices(ever)
   const ac = useActions(ever)
+  const ar = useArchive('manual', ever) // ⌘K 只搜剪藏庫;邸報流水不進面板
   const mut = useActionMutation()
 
   const doOpen = () => { setEver(true); setQ(''); setSel(0); setOpen(true) }
@@ -145,8 +148,16 @@ export default function CommandPalette() {
         })
       }
     }
+    // 拾遺收藏(0.18.0):標題+摘要可搜,選中直開閱讀器;未配置/讀取失敗=誠實缺席
+    for (const doc of ar.data?.items ?? []) {
+      out.push({
+        g: '拾遺', ic: '▤', t: doc.title, k: `${doc.summary.slice(0, 40)} archive`,
+        hint: topicLabel(doc.topic_id),
+        run: () => nav(`/archive/${doc.id}`, { viewTransition: true }),
+      })
+    }
     return out
-  }, [open, nav, al.data, sv.data, ac.data, night, toggleNight])
+  }, [open, nav, al.data, sv.data, ac.data, ar.data, night, toggleNight])
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()

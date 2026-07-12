@@ -4,7 +4,7 @@
 本文是監控/告警/notifier 的單一來源：Prometheus 目標、告警規則現況、Alertmanager+Gotify、
 CT260 Telegram notifier + DeepSeek 分層 AI、Grafana 總覽 dashboard、必守修正原則、設計規劃。
 
-  - 節點位址/介面/服務埠以《家庭網路與服務拓樸文件V6.txt》為準。
+  - 節點位址/介面/服務埠以《家庭網路與服務拓樸文件V7.txt》為準。
   - 實際操作命令（查 target / reload / 改規則 / 測鏈路）見《常用脚本.txt》§7-8。
   - 規則上線/階段完成的歷史時序見《缺改記錄.txt》。
 
@@ -248,6 +248,9 @@ inhibit_rules(共 2 條,B1 2026-07-10 起):
 
 程式：CT260 `~/.local/bin/homelab-notify.py`（codex 擁有），cron 每分鐘 + flock。
 狀態/日誌：`~/.local/state/homelab-notify/{state.json,notify.log,daily_counts.json}`。
+另兼晨報 `--write-brief`（cron `0 22`=台北 06:00）：「今日訊息」2026-07-12（portal 0.19）起
+＝前一日邸報 top-7（查 archive-svc :5003，零額外 AI call；svc 掛/空件 fallback 舊 AI 濃縮）——
+細節見拓樸 V7 §10 archive-svc 段（SoT，本文不重列）。
 設定/secret（codex 擁有, chmod 600，勿外流）：
 
 ```text
@@ -626,4 +629,12 @@ portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 if
     本地 build(portal/guest-portal/paperless-ocr)=已知盲區。trivy binary v0.72.0
     (~/.local/bin,gitignore 排除)。首掃即中:paperless 13 CRIT(imagemagick/ffmpeg/
     Django——皆等上游 rebuild)、HA 2 CRIT(Go stdlib);同窗補 diun 漏列的 freshrss。
+★ 2026-07-11 hl-wol-watch(★OpenWrt VM101 root,cron */5,非 CT260):困死救援看門狗
+  ——UPS 短窗復電(pve24 T+3m 軟關後、DXP killpower 前市電回歸)時 UPS 不熄燈,
+  BIOS AC-recovery 無來電邊沿,pve24/DXP 晾在 S5(缺改記錄 2026-07-11 邊界②)。
+  連續 2 輪(約 10 分)ping 不到→etherwake magic packet ×3(pve24=eth1.20、
+  DXP=eth1.30,MAC 寫死於腳本),每主機 3600s 冷卻,恢復清狀態;只 logger 不推 TG
+  (喚醒成功與否由既有 HostRebooted/TargetDown 面接手)。★計畫性關機維護前必
+  touch /etc/hl-wol-watch.off(持久)或 /tmp/hl-wol-watch.off(重啟失效),否則
+  10 分後被喚醒。SoT=CT260 ~/workspace/ops/hl-wol-watch.sh;日誌 logread -e hl-wol-watch。
 ```

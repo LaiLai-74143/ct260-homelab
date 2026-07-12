@@ -38,6 +38,8 @@ CF_TUNNEL_TOKEN    cloudflared.env                     guest-portal 對外隧道
                                                                               Kuma/使用者可見
 LIFE_CHAT_TOKEN/   life-chat.env                       BFF→life-chat 對話     本機自簽發不到期;壞=生活頁對話立即報錯
 SIGNING_KEY
+ARCHIVE_TOKEN      archive.env + CT201 portal.env      BFF→archive-svc 剪藏   本機自簽發不到期;壞=拾遺頁立即報錯
+                                                       (待辦49 拾遺歸檔)      (502 token 不符),使用者立見(2026-07-12)
 SNMP_COMMUNITY     switch3f-snmp.env + CT201           Switch3F 流量監控      Prometheus target snmp-switch3f up==0
                    snmp-auth.yml                                              即為失效訊號(TargetDown 蓋)
 wazuh 三密碼        wazuh.env                          Wazuh 內部棧/API       純內部(CT204 容器間),不對外;壞=
@@ -49,6 +51,8 @@ FRESHRSS_PASSWORD  freshrss.env                        FreshRSS 網頁登入    
 NTFY_PUB/PHONE     ntfy.env(USER/PASS 兩組)            ntfy 帳號本體          token 探活已間接蓋(token 掛在帳號下)
 TELEGRAM_CHAT_ID   notify-telegram.env                 收訊對象               非秘鑰,不會失效
 DIUN_NTFY_TOKEN    ntfy.env + CT201 diun.yml           diun 新版推播          diun 週推有訊=活;壞=靜默(月檢順看)
+grok-auth          ~/.grok/auth.json(CT260,登入後生成) Grok CLI 登入          CLI 自管刷新;壞=grok 啟動即要求重登,
+                                                       (手機 tmux 改碼)       使用者立見,不入哨兵(2026-07-11)
 ```
 
 ## 3. TLS 憑證與金鑰類(哨兵=hl-cert-watch;本表記位置)

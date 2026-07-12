@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { ActionResult, ActionsInfo, Alerts, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, ClawdInfo, ClawdReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services, Spark } from './types'
+import type { ActionResult, ActionsInfo, Alerts, ArchiveItemResult, ArchiveList, ArchiveOpResult, Brief, ChatConfirmResult, ChatMessage, ChatProposal, ChatReply, ClawdInfo, ClawdReply, Game, GameActionResult, GuestListResult, GuestOpResult, HostDetail, Life, LifeChatInfo, Overview, Power, Security, Services, Spark } from './types'
 
 /** 存取場景:手機/遠端經 *.hl(Caddy+Authelia),PC40 走內網 IP —— 服務目錄據此選連結 */
 export const IS_HL = window.location.hostname.endsWith('hl.lailai74143.com')
@@ -239,6 +239,66 @@ export function useClawdMutation() {
   return useMutation<{ status: number; data: ClawdReply }, ActionHttpError, { question: string }>({
     retry: 0,
     mutationFn: (body) => postJson('/api/clawd/chat', body),
+  })
+}
+
+// ---- 拾遺歸檔(0.18.0 待辦49;BFF /api/archive → CT260 archive-svc DeepSeek 歸納) ----
+
+/** 列表:origin='manual'(剪藏,六部分組)|'rss'(邸報,按門下省評分排);
+    enabled=false 供命令面板首開前不拉(同 useServices);寫入後由 mutation invalidate */
+export function useArchive(origin: 'manual' | 'rss' = 'manual', enabled = true) {
+  return useQuery<ArchiveList>({
+    queryKey: ['archive', 'list', origin],
+    queryFn: () => getJson(`/api/archive?origin=${origin}${origin === 'rss' ? '&sort=score' : ''}`),
+    staleTime: 30_000,
+    enabled,
+  })
+}
+
+export function useArchiveItem(id: string | undefined) {
+  return useQuery<ArchiveItemResult>({
+    queryKey: ['archive', 'item', id],
+    queryFn: () => getJson(`/api/archive/${id}`),
+    enabled: !!id,
+    staleTime: 60_000,
+  })
+}
+
+/** 收藏:抓取+AI 歸納同步等(postJson 130s 上限);retry 0(服務端限速 6/分+單飛,絕不自動重試) */
+export function useArchiveCreateMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: ArchiveItemResult }, ActionHttpError, { input: string }>({
+    retry: 0,
+    mutationFn: (body) => postJson('/api/archive', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      qc.invalidateQueries({ queryKey: ['overview'] }) // L0 卡片件數跟上
+    },
+  })
+}
+
+/** 改部/改題/准(origin:'manual'=邸報收編入庫);['archive'] 前綴 invalidate 連單篇快取一起刷 */
+export function useArchiveUpdateMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: ArchiveItemResult }, ActionHttpError, { id: string; topic_id?: string; title?: string; summary?: string; origin?: 'manual' }>({
+    retry: 0,
+    mutationFn: ({ id, ...fields }) => postJson(`/api/archive/${id}`, fields),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      qc.invalidateQueries({ queryKey: ['overview'] }) // 准會挪動 L0 卡的剪藏/邸報件數
+    },
+  })
+}
+
+export function useArchiveDeleteMutation() {
+  const qc = useQueryClient()
+  return useMutation<{ status: number; data: ArchiveOpResult }, ActionHttpError, { id: string }>({
+    retry: 0,
+    mutationFn: ({ id }) => postJson(`/api/archive/${id}/delete`, {}),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      qc.invalidateQueries({ queryKey: ['overview'] })
+    },
   })
 }
 

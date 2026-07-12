@@ -19,7 +19,8 @@ DATA_DIR = Path(os.environ.get("PORTAL_DATA", BASE.parent / "data"))
 # 逐端點 TTL(秒):全部落在報告規定的 3–10s
 # spark 例外(60s):24h/1h 桶的趨勢線,分鐘級新鮮度沒有意義,不值得逐 tick 打 range 查詢
 TTL = {"overview": 5, "alerts": 5, "services": 10, "security": 10,
-       "game": 10, "host": 10, "life": 5, "power": 10, "spark": 60}
+       "game": 10, "host": 10, "life": 5, "power": 10, "spark": 60,
+       "archive": 30}  # 拾遺只在使用者收藏時變動,30s 足矣
 NEG_TTL = float(os.environ.get("PORTAL_NEG_TTL", "30"))
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -146,6 +147,22 @@ async def get_power() -> dict:
     return await _get("power", live.power)
 
 
+async def get_archive_stats() -> dict:
+    """拾遺 L0 卡(0.18.0):未配置回 pending 誠實態;失敗走 UpstreamError 負快取。"""
+    from . import archive
+    if MODE == "mock":
+        return archive._mock_stats()
+    if not archive.enabled():
+        return {"pending": True}
+
+    async def _live() -> dict:
+        try:
+            return await archive.stats()
+        except archive.ArchiveError as e:
+            raise UpstreamError(e.error) from e
+    return await _get("archive", _live)
+
+
 def _life_file() -> Path:
     return DATA_DIR / "life.json"
 
@@ -263,6 +280,14 @@ def _render_module(key: str, d: dict) -> dict:
                     "sub": f"資料 {hrs}h 前——投遞可能中斷", "state": "warn"}
         return {"key": key, "big": str(n), "bigUnit": " 行程",
                 "sub": f"借貸未結 {debts.get('count', 0)} 筆", "state": "ok"}
+    if key == "archive":
+        if d.get("pending"):
+            return {"key": key, "big": "—", "sub": "數據源未接(archive-svc)", "state": "unk"}
+        rss = d.get("rss_today", 0)
+        last = (d.get("last") or {}).get("title") or ""
+        tail = f"最近:{last[:10]}" if last else "六部虛位以待"
+        return {"key": key, "big": str(d.get("manual_total", 0)), "bigUnit": " 篇",
+                "sub": f"邸報今日 {rss} · {tail}", "state": "ok"}
     if key == "power":
         if d.get("pending"):
             return {"key": key, "big": "—", "sub": "數據源未接(nut_exporter)", "state": "unk"}
@@ -279,4 +304,5 @@ async def _modules() -> list[dict]:
         _one_module("power", get_power()),
         _one_module("game", get_game()),
         _one_module("life", get_life()),
+        _one_module("archive", get_archive_stats()),
     ))

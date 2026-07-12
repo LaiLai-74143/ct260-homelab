@@ -1,7 +1,8 @@
 # 缺改記錄（已修正 / 已刪除 / 已完成的歷史）
 
 本文收納從各「現況/操作」文件移出的歷史項目：已修正的錯誤、已作廢的規則、已刪除的設定、已完成的待辦。
-現況事實以《家庭網路與服務拓樸文件V6.txt》為準；本文只記「曾經是什麼、為何改、改成什麼」。
+現況事實以《家庭網路與服務拓樸文件V7.txt》為準；本文只記「曾經是什麼、為何改、改成什麼」。
+（正文歷史條目中的「拓樸V6」係當時檔名，屬歷史事實，不回溯改寫；V6→V7 改版見對應日期條目。）
 
 排序規則（依使用者指定）：
   A 段 = 原文未標註時間者，按網段排序，放在前。
@@ -3166,3 +3167,168 @@ whoosh 中文再確認：`租賃契約` 零命中是「連續中文＝單一 tok
   只報「未確認」不算 ✗(維持原「無假陰性」設計,模組註記已補例外說明);
   --dry-run 實測 14/14 全綠+ssh stub 模擬上鎖=13/13+未確認,兩分支過。
   同步:監控告警.txt §哨兵清單、V7 §12 覆蓋面。
+
+### 待辦1h — UPS 全鏈拔線實測通過 +「UPS 跟著關機」事後分析(2026-07-11)
+- 實測時間線(台灣時間,DXP syslog+ups_tool.log 毫秒級還原;四路唯讀調查+Opus 裁決
+  +反駁覆核,信心 high):21:52:19 拔市電(OB)→ pve24(secondary,180s)21:55 FSD、
+  21:56 優雅關機 ✓ → DXP(master)ups_tool 於 OB 同秒武裝固定 300s 牆鐘計時器
+  (與電池電量脫鉤;電池全程健康,遠高於 15% 門檻)→ 21:57:19.862 到期注入 FSD
+  (SIGUSR1→upsmon set FSD,誤差 10ms)→ 21:57:24 shutdown -h now → 21:57:42 優雅
+  完成(40+ 服務全 Deactivated successfully、RAID md1-md5 全 clean、無 fsck/recovery、
+  preshutdown 傾印在檔=非硬斷)→ 關機最末端 /lib/systemd/system-shutdown/nutshutdown:
+  upsmon -K→upsdrvctl shutdown(shutdown.return,offdelay 20s;此段 rsyslog 已停,
+  天然日誌盲區,屬推證)→ **UPS 切輸出後整機熄燈休眠(面板黑、排插全滅)=killpower
+  設計行為**,只留喚醒電路監聽市電 → ~21:58:49 復市電 → ondelay 30s → 21:59:19 輸出
+  恢復,pve24 BIOS 自啟 21:59:19 / DXP kernel 21:59:18.7,雙機無人碰電源鍵自己醒
+  → 22:10 coldstart-check 15/15 全綠。定性:UPS 熄燈是復電自啟鏈的必要環節
+  (不斷輸出則 BIOS AC-recovery 永不觸發),非故障。
+- CyberPower 註記:CP1500PFCLCD 系列 NUT DDL 支援 shutdown.return/stayoff/load.off;
+  ups.delay.shutdown=20/start=30(upsc 實讀,ups.conf 未覆寫)。已知韌體怪癖:部分
+  韌體 ondelay 從 shutdown 下令起算而非市電回歸,兩種解讀在本次時間線皆自洽,
+  不影響結論;若日後要改 offdelay/ondelay 需先實測該韌體語意。
+- 發現①(設定考古):UGOS「自動關機」實際生效值=300s,且 2026-03-27 即為 300
+  (跨兩版 ups_tool 同值)——早於使用者記憶的 07-04「2→5 分」變更;UI 分鐘數↔
+  ups_tool seconds 的映射未證實(ups_server.json 0640 root:root 讀不到)。
+  日後若調整 UI 值,必須回讀 /var/log/ups/ups_tool.log 的 seconds: 行核對生效。
+- 發現②(復發 bug):DXP prometheus-node-exporter(user unit)重啟後未被拉起,
+  與 07-07 稽核同款;07-11 查實 Linger=yes、user@1000 開機 25s 內有起、unit enabled,
+  病灶=user manager 未把 enabled unit 納入啟動事務(帳號不在 adm/systemd-journal,
+  內因不可觀測)。使用者授權後 systemctl --user start 即癒,Prometheus up=1。
+  治本候補:遷 system unit(需 root)。V7 §1.5 註記已更新。
+- 發現③:DXP SSH 開機未起=「常態關閉、3h 開窗」政策使然(非故障);使用者 22:53
+  UI 開啟=enable --now(wants symlink mtime 佐證),現為 enabled、跨重啟持久性待
+  下次受控重開機驗證。另:CT260 重開機清空 hl-ssh-agent,dxp4800 無 -auto 鑰,
+  斷電後首次連 DXP 需使用者 hl-unlock——屬既有雙軌金鑰設計的已知邊界。
+- 更正兩筆(排查初期誤判,入檔防再犯):①「DXP 被硬斷」誤——優雅完成;
+  ②「UGOS Web UI 遲起」誤——實際 Web=nginx 80/443/5443(開機 26s 就緒),
+  9999/9443/5000 於本機不存在,當時是探錯埠。
+- 同步:V7 §1.2 電力保護(已驗收)、§1.5 node_exporter 註記、§12 pve24 已設+實測日期。
+
+### 待辦1h 後續 — 關機鏈設計缺口分析 + hl-wol-watch 困死救援上線(2026-07-11/12)
+- 缺口分析(使用者追問「DXP 如何確保各機關完才殺 UPS」):答案=不確保,純時間差
+  錯開的開環設計——PC WinNUT 120s、pve24 180s、DXP 300s,無任何握手;NUT 原生
+  FSD+HOSTSYNC 握手在本站不生效(pve24 對 DXP upsd 的 secondary 登入 ACCESS-DENIED,
+  只匿名輪詢,見 2026-07-04 條)。DXP 對自己=結構性保證(killpower 為 systemd
+  system-shutdown 最末步,服務停完/檔案系統卸載後才發,+offdelay 20s)。
+- 邊界①:pve24 最壞關機(CT forceStop 60s+收尾)~T+5:10 vs 斷電 T+5:45,餘裕最薄
+  半分鐘 → 解法=DXP 拉 10 分(見下)。
+- 邊界②(真缺口):市電於 T+3:40~T+5:00(pve24 關完~DXP FSD)回歸 → DXP 取消倒數、
+  UPS 不熄燈 → pve24 PSU 無斷電邊沿,BIOS AC-recovery 不觸發,困死 S5 直到人工開機;
+  PC T+2 後同理。本次實測未踩到(市電 T+6:30 才回)。
+- 救援上線:hl-wol-watch(★OpenWrt VM101 root,cron */5;使用者確認 pve24/DXP BIOS/
+  UGOS WoL 均已開)——連續 2 輪 ping 不到→etherwake ×3(pve24 00:e2:69:90:72:8b@
+  eth1.20、DXP 6c:1f:f7:a7:64:55@eth1.30),3600s 冷卻/主機,恢復清狀態;
+  ★計畫性關機前 touch /etc/hl-wol-watch.off 或 /tmp/…(重啟失效),否則 10 分後被喚醒。
+  OpenWrt 為 apk 制(24.10+,無 opkg),etherwake 1.09-r5 已 apk add;無 sftp-server,
+  推檔用 ssh cat 管道。實測:雙主機在線靜默 ✓、假目標兩輪 observing→WoL 發包 ✓、
+  cron 已掛(與 agh-watchdog/xiaomi-nftset 同 crontab)。SoT=ops/hl-wol-watch.sh。
+  同步:監控告警.txt 哨兵清單、V7 §12 VM101 職責。
+- 建議已給待執行(使用者):UGOS 自動關機 5→10 分(電池 runtime 全載 23 分、後段
+  負載驟降,LOWBATT 15% 保底仍在;pve24 餘裕 2→7 分)。★改完必驗:拔線 10s 微測
+  (7/4 前例安全)→回讀 /var/log/ups/ups_tool.log 應見 seconds: 600——UI 分鐘數↔
+  ups_tool 秒數映射未證實(300s 考古早於「2→5 分」記憶),不可只信 UI。
+  困死窗擴大(T+3:40~T+10)由 hl-wol-watch 接住。
+
+### 文件一致性稽核修正(2026-07-11)
+使用者提交五項「文件庫不一致」說法,逐項查證(4 路唯讀子代理+OpenWrt uci 實機核對)後修正:
+① V6 活指標(屬實):V6→V7 改版=2026-07-07 全站稽核(16 分域/693 項),當時只記在 V7 檔頭
+  「V6→V7 修正摘要」,缺改記錄未記一筆——本條補記。8 檔 13 處「活指標」仍寫 V6
+  (00_索引×4、注意事項×2、網段指導原則、監控告警、待辦清單、常用脚本、hl-工具箱、
+  ha-device-inventory-gen.py、本檔檔頭)全改 V7;本檔正文與待辦清單歷史條目中的「拓樸V6」
+  係當時檔名,屬歷史事實,不回溯改寫。
+② 注意事項 §13 fail-open 過時(屬實):§13.1「整表載入失敗＝fail-open」寫於 07-05,早於
+  07-10 W1 硬化(ctdmz-nft Before=tailscaled+Requires 連坐)。已改寫為 fail-closed 現況+
+  殘餘窗口(運行中手動刪表,靠 CtdmzGateDown 兜底)+restart 傳播語意。
+③ 網段指導原則 DMZ60 脫節(部分屬實):僅 DMZ60 段落過時(三處「no host」+cloudflared 待辦),
+  已改「已落地 CT203/.10+CT205/.11、cloudflared 已遷入;Vaultwarden/Jellyfin 本體留 VLAN30
+  經反代存取=開放問題」;Game70/VLAN67 段落原本就與 V7 一致,未動。
+④ V7 同檔 temp 規則矛盾(屬實):§0 摘要 L54/§4.4 L574/§11 L1867 仍寫「殘留待清理」,但
+  07-10 打掃窗已轉正(§4.4 L686 與本檔 07-10 條互證)。2026-07-11 uci 實機核實:
+  allow_pc40_router_ssh=Allow-PC40-To-Router-SSH-52438 存在、temp_ 規則已無。三處已改✔/轉正。
+  同族追加:V7 §2.7「DMZ DHCPv4 ★未正式停用」亦被 07-10 打掃窗(dhcp.dmz.ignore='1')超越,
+  uci 核實=1,§2.7/§11 已同步✔。
+⑤ 時間戳陳舊(部分屬實):HA米家設備清單=生成器快照,按設計「重跑即刷新」——已重跑
+  (07-02→07-11,實際漂移:燈具更名×4、新增 3F浴室燈、在線→有租約×2);備份索引檔頭 07-02
+  漏更(內容實至 07-10)已補;注意事項/00_索引/網段指導原則檔頭日期已隨本輪更新。
+  說法 b「備份索引多為 06-30」本身過時(07-10 已有實質更新),未採。
+教訓:V7 檔內「稽核基準日敘述」與「之後的打掃窗追記」會自然分叉——動完手要回頭把
+  基準段的舊敘述打✔,別只在尾部追記(本次 ④ 三處+DHCPv4 一處皆此病)。
+
+### Grok CLI 進駐 CT260(2026-07-11)
+使用者要求實裝 Grok Build(xAI Grok CLI)。落點裁決:CT260 本機——手機路徑既有
+(WG break-glass §4.9→Allow-WG-To-CT260-Server-SSH-22→tmux),節點常開,零防火牆/
+零新埠/零新 LXC;CT250 lab 常態關機不合手機隨連場景,故不選。
+官方 install.sh 先下載檢視再執行(僅寫 $HOME、無 sudo,符合 CT260 codex 無 sudo 設計):
+grok 0.2.93 實體 ~/.grok/downloads/grok-linux-x86_64,~/.grok/bin 與 ~/.local/bin 兩層
+symlink(後者照 trivy 前例加 .gitignore 排除,防 23:30 autocommit 收編第三方 binary);
+~/.grok 收 700,auth=~/.grok/auth.json(裝置碼登入後才生成;git 白名單 /* 本就不入庫,
+已 check-ignore 驗證)。反證驗證(2 路子代理)運行面 22 項全過;文件面抓出初版兩處
+措辭誤(「實體在 bin」/把未登入寫成既成),本條與拓樸 §10、登記表 §2 已同步修正。
+同日稍後使用者完成裝置碼登入(auth.json 600 就位),拓樸 §10「尚未登入」★已清。
+文件同步:拓樸 §10(現況)、注意事項 §11(token 戒律)、憑證登記表 §2(不探活,
+壞了使用者立見)。tmux session "grok" 常駐供手機 attach。
+
+### 待辦49 portal 0.18.0 拾遺歸檔板塊(2026-07-11 施工、07-12 上線)
+使用者點名把 GitHub LYiHub/labs-ArchiveAssistant(聚合拾遺)加入入口大廳。可行性
+裁決:原專案是 Kotlin/Compose Android 單機 app(無 web 版無 server 端)——「直接嵌入」
+不可行,走「概念移植」:六部分類(吏戶禮兵刑工)+URL/純文字剪藏+AI 歸納
+(prompt 樣板/嚴格 JSON/括號深度抽取/截斷防腦補等設計沿用),Android 特有(3661 行
+自繪 3D 折頁、LiteRT 本地推理、DataStore)全捨棄。GPL-3.0 私有部署不散布=零揭露
+義務;未搬 bundled 素材(原專案圖片/字型授權「待核驗」)。
+落地三層:CT260 archive-svc :5003(新服務,純 stdlib+SQLite,DeepSeek MODEL_FAST
+歸納;規格見拓樸 §10)/BFF app/archive.py 純轉發×5 端點(唯讀原則不破,mock 全套)
+/前端 /m/archive+/archive/:id+L0 卡+⌘K 拾遺分組+g r(權限照遊戲控制先例,
+PC40+portal.hl 皆可寫)。與原版差異細節見待辦清單 49 之 0.18.0 進度條目。
+驗證:svc 單元+真 DeepSeek 整合過;e2e-0180-mock.mjs 27/27(三斷點);獨立對抗審查
+(Opus 證僞導向)無 P0/P1,4 項 P2/P3 當場修——①svc keep-alive 早退(401/壞 body)
+未排空 request body 汙染同連線下一請求→close_connection(svc rev 0180b);
+②infra 腳本 crontab 重建 `(crontab -l|grep -v X;echo…)|crontab -` 在 grep -v 零輸出
++pipefail 下會把整份 crontab 清空→grep 後補 ||true(⚠既有 finish-life-chat-infra.sh
+同款寫法有同病,只是 CT260 cron 行數多不會觸發——日後照抄模板時帶上 ||true);
+③/create 限速名額被 422 抓取失敗白吃(rate_ok 在 fetch 前)→鎖後計費+422 退還;
+④BFF stats 逾時 10s>providers._one_module 的 3s,svc 掛住時 wait_for 取消不進負快取
+=每個 overview 白等 3s→stats 專用 2.5s timeout 令 UpstreamError 負快取生效。
+部署:auto-mode 攔 cron 持久化+OpenWrt 防火牆(逐步執行也攔)→照例收斂兩支冪等
+finish 腳本交使用者,2026-07-12 使用者跑畢:finish-archive-infra.sh(cron 2 行+
+Allow-Monitor-To-CT260-Archive-5003+CT201 portal.env 補 ARCHIVE_URL/TOKEN)+
+finish-portal-0180.sh(0.17.0 與 0.18.0 同車上線——0170 腳本一直沒跑,0180 錨點
+自適應 0.10~0.17 一次帶上)。Agent 覆核:svc rev 0180b/cron 2 行/nft 規則在/
+portal:0.18.0 Up/live /api/archive 200 空庫,手機 portal.hl 截圖 OK。
+教訓:①pkill -f 在 Agent 的 Bash 工具裡會匹配到自己 shell 的 argv(整段腳本文字都在
+命令列)→自殺 exit 144;殺程序一律 pgrep 取 PID 再 kill(呼應「PVE 宿主 pkill 連坐」
+既有教訓,這次是容器內的變體)。②e2e 走查腳本會改 mock 服務的程序記憶體態
+(create/delete),重跑前必須重啟 mock BFF,否則第二輪起全是被前輪污染的假 FAIL;
+且 fuser 在 CT260 不存在(static-ish 環境勿假設工具在)——按埠殺改用
+ss -tlnp 取 pid。
+文件同步:拓樸 §4.4(5003 放行)、§5 CT201 portal 段(0.18.0)+版本史(0.18.0 條)、
+§10 CT260(archive-svc 段)、憑證登記表 §2(ARCHIVE_TOKEN)、待辦清單 49(進度+上線)。
+可選後續(未做):Kuma 探活 :5003、v2 文件上傳(PDF/DOCX)與 CT270 Paperless 分工。
+
+### 待辦49 portal 0.19.0/0.19.1 邸報(2026-07-12 施工+上線;0.19.1=使用者實測回饋兩修)
+0.19.0:補上林亦影片未開源的自動聚合管線——dibao-ingest.py(FreshRSS greader 游標拉新件
+→DeepSeek 批 10 條擬題+摘要+六部+評分 1-10→score≥5 /ingest 入庫 origin=rss,14 天滾動);
+前端剪藏/邸報切換+批閱准駁;晨報今日訊息改邸報 top-7(零額外 AI call,fallback 舊濃縮)。
+Workflow 對抗驗證(5 Opus finder+逐發現 Sonnet refuter,24 代理):19 確認/0 誤報,17 修
+2 屬設計。重點修:①P1 批次歸納失敗仍推游標=靜默永久漏件→失敗即停,游標停在失敗批前;
+②P1 notify _clean 半形分號替換寫成「同形 no-op」(U+003B→U+003B,肉眼不可辨)→顯式全形
+U+FF1B 並以 codepoint 驗證;③P1 0190 部署腳本 compose 錨點 regex 停在 0.1[0-7] 收不到
+現役 0.18(sed 代換被檔內反斜線騙過)→手改;④P2 cron 時區:CT260 系統=UTC,「台北
+05:20/17:20」須寫 20 21,9(照 write-brief '0 22' 慣例);⑤P2 /list since_hours 無界→
+datetime 下溢 ValueError 斷線→夾 24*366;404 keep-alive 漏 close_connection→補;
+⑥P2 /ingest created_at 用原文 published 會被舊文新貼弄壞「當日」語意→一律入庫時間。
+已知限制(接受):跨批次同事件去重靠不住(top-7 或見同事件兩條);邸報存節選非全文。
+0.19.1(使用者:①邸報全疊一起→六部分區 ②點進「看了個寂寞」只有連結→AI 導讀):
+邸報頁與剪藏同款六部分區(組內分數排,e2e 26/26);dibao-ingest v2 加 brief 欄,
+full_text=【AI 導讀】+原題+有料節選(_clean_snippet 去 URL 後字母<40 省略,HN 連結串
+剔除)+發布註記;既有 38 筆 dibao-brief-backfill.py 回填 38/38(冪等;首批模型回非法
+JSON 自動跳過,重跑即補齊)。證僞審查(3 Opus finder+Sonnet refuter,11 代理):8 發現
+7 證僞 1 確認——P2 build_full_text 的 fromtimestamp(published) 在 try 外,RSS 損毀
+時間戳(如 ms 級誤植)整輪崩潰+游標永久卡死→_fmt_epoch 捕捉回 '?';另 backfill 加
+v2 載入守衛(裝的還是 v1 就拒跑)。
+教訓:①外部 feed 的 epoch 不可信,fromtimestamp 一律包型防呆(超界丟 ValueError);
+②一次性回填腳本照樣過證僞審查再碰正式 DB——它 importlib 載「已裝版」而非 workspace
+版,忘了先裝 v2 會半路崩掉燒 API 額度(守衛擋下);③外源正文可能只有連結串,「存什麼
+給閱讀器」要在 ingest 時設計,raw snippet 不能直接當正文。
+文件同步:拓樸 §5(portal 段+版本史 0.19.0/0.19.1 條)+§10(archive-svc 邸報段)+
+FreshRSS 晨報行、監控告警 §5(晨報指標行)、待辦清單 49(0.19.0 上線確認+0.19.1 進度)。
+待使用者:finish-portal-0191.sh(CT201 前端;CT260 側已全上線)。
