@@ -928,10 +928,10 @@ snmp-exporter 無 host port(內網 snmp-exporter:9116)   prom/snmp-exporter:v0.3
               Prometheus job 參數 module=if_mib,sys_uptime 一次抓兩模組;
               ★單檔 bind-mount 坑:sed -i 換 inode 後容器看的是舊檔,改 prometheus.yml
               後必須 docker restart prometheus,HUP reload 不夠)
-portal        8088   portal:0.19.0 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
-              2026-07-12 使用者跑 finish-portal-0190.sh 上線 0.19.0 邸報(自動呈報
-              +批閱+晨報 top-7);0.19.1(邸報六部分區+AI 導讀,CT260 側已上線)
-              待使用者跑 finish-portal-0191.sh;
+portal        8088   portal:0.19.1 本地 build(python:3.13.5-slim+pin;待辦49 M2+M3+M4;
+              2026-07-12 使用者依序跑 finish-portal-0190.sh、finish-portal-0191.sh
+              上線 0.19.0 邸報(自動呈報+批閱+晨報 top-7)與 0.19.1(邸報六部
+              分區+AI 導讀);
               同日稍早使用者跑 finish-portal-0180.sh 上線:0.17.0(⌘K 面板+
               sparkline+氛圍層+戰情/夜間模式+晨報條列;/api/spark)與 0.18.0
               (拾遺歸檔板塊,/api/archive×5)一次帶上,14 端點驗證過、
@@ -1251,8 +1251,8 @@ portal        8088   portal:0.19.0 本地 build(python:3.13.5-slim+pin;待辦49 
               origin/sort/since_hours+stats 新形狀)。e2e-0190 23/23;
               Workflow 對抗驗證 19 確認/0 誤報 17 修(游標失敗即停/同形
               分號 no-op/cron UTC/錨點 regex 等,詳缺改記錄同日條)。
-              0.19.1(2026-07-12 使用者實測回饋兩修;CT260 側已上線、CT201
-              待 finish-portal-0191.sh):①邸報頁改六部分區(同剪藏,組內
+              0.19.1(2026-07-12 使用者實測回饋兩修,同日使用者跑
+              finish-portal-0191.sh 部署上線):①邸報頁改六部分區(同剪藏,組內
               分數排)②邸報件 full_text 加【AI 導讀】(dibao-ingest v2
               brief 欄;既有 38 筆 dibao-brief-backfill.py 回填 38/38)。
               e2e 26/26;證僞審查 1 修=fromtimestamp 損毀時間戳夾捕捉

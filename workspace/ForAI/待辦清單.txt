@@ -1018,8 +1018,8 @@
     另加 backfill v2 載入守衛(裝的還是 v1 就拒跑,免燒 API 半路崩)。
     CT260 側已上線:v2 已裝(備份 ~/_backups/dibao-ingest.py.before-0191-*)、
     回填完成、svc /item 出貨即帶導讀;晨報/cron/防火牆無改動。
-    ▶ 待使用者跑:bash ~/workspace/portal/scripts/finish-portal-0191.sh
-      —— CT201 portal 0.19.1(前端六部分區;B5 會抽驗邸報件帶【AI 導讀】)。
+    ▶ ✔ 0.19.1 已上線(2026-07-12 使用者跑 finish-portal-0191.sh;Agent 覆核:
+      portal:0.19.1 Up、/api/archive?origin=rss 38 筆——B5 含邸報件導讀抽驗)。
     形態已定：CT201 數據匯聚後端（拉 Prometheus/AM/Kuma + 讀 CT260 晨報 JSON，統一出
     /api/overview /api/brief /api/alerts）+ RWD 前端（折疊模塊、晨報置頂、設備卡片牆）；
     入口唯讀，操作類一律 webhook → CT260（沿用第 19 項白名單機制）。
