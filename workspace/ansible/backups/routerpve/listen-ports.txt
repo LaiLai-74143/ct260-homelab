@@ -6,7 +6,7 @@ tcp 127.0.0.1:25 master
 tcp 127.0.0.1:85 pvedaemon worke
 tcp [::]:22 sshd
 tcp *:3128 spiceproxy work
-tcp *:8006 pveproxy worker
+tcp *:8006 pveproxy
 tcp *:9100 prometheus-node
 udp 0.0.0.0:111 rpcbind
 udp [::]:111 rpcbind
