@@ -12,6 +12,17 @@ groups:
           description: "{{ $labels.instance }} 的 {{ $labels.id }} 記憶體使用率 {{ $value | humanize }}% (>90% 已持續 10 分鐘;此為 PVE API cgroup 準確值)"
           priority: "5"
 
+      # 2026-07-14 CT260 假死教訓:爆炸型 2 分鐘衝頂,10m 窗來不及叫;此條抓快燒(critical=TG+ntfy 雙推)
+      - alert: PveGuestMemBurst
+        expr: 100 * pve_memory_usage_bytes{id=~"(lxc|qemu)/.+"} / pve_memory_size_bytes{id=~"(lxc|qemu)/.+"} > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PVE guest 記憶體爆衝: {{ $labels.id }}"
+          description: "{{ $labels.instance }} 的 {{ $labels.id }} 記憶體 {{ $value | humanize }}% (>95% 已持續 2 分鐘)——爆炸型用量;CT260 另有機內 memguard 會在 avail<20% 強殺元兇,本告警為獨立第二路徑。"
+          priority: "8"
+
       - alert: PveGuestUnexpectedStop
         expr: pve_up{id=~"(lxc|qemu)/.+", id!~"lxc/250|qemu/300"} == 0
         for: 3m

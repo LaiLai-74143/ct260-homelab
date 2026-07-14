@@ -1,0 +1,105 @@
+#!/bin/sh
+# hl-memguard: CT260 記憶體警衛(2026-07-14 workflow 爆 RAM 假死事件後加裝)
+# 動機:LXC 撞 8G→16G 上限後會淹宿主 swap 進入 thrash livelock,核心不開殺(oom_kill=0),
+#       全機假死只能手動重啟。本警衛在撞頂「之前」就地擊殺元兇,把災難降級成單進程死亡。
+# 邏輯(每 10 秒,讀 lxcfs 容器視角 /proc/meminfo):
+#   available < WARN_PCT(25%)→ log + ntfy 警告(每輪事件只發一次,回到 30% 以上解除)
+#   available < KILL_PCT(20%)→ SIGTERM 元兇;下一輪仍低且「同 pid 同 comm」→ SIGKILL
+#             (comm 比對=pid 重用護欄,絕不 -9 沒收過 TERM 的新進程)
+#   元兇挑選:RSS 最大且 >1.5G 的 codex 進程——★刻意不看進程名:全機告急時任何 >1.5G
+#             大戶都是嫌犯(使用者指定的 80% 強殺方針);>800M 檔才限 agent 運行時
+#             (claude|node|bun|opencode)。永不碰 PID<=2、systemd/journald/sshd/
+#             cron/login,也不殺自己。挑不到目標就只嘶吼不動手。
+#   通知經 ntfy,全域 45s 節流(log 不節流、kill 動作本身不節流);log 每小時檢查自輪替。
+# 環境變數:MEMGUARD_DRYRUN=1 只記 log 不殺;MEMGUARD_ONESHOT=1 跑一輪就退(測試用);
+#           MEMGUARD_FORCE_AVAIL=<pct> 假裝可用率(自測用)。
+# 部署:cron @reboot + */5 經 hl-memguard-run.sh flock 自癒(同 ntfy-webhook 慣例)。
+# 在哪跑:CT260(codex-ops),身份 codex,路徑 /home/codex/.local/bin/hl-memguard
+set -u
+
+WARN_PCT=25; KILL_PCT=20; CLEAR_PCT=30
+LOG="$HOME/.local/state/homelab-notify/memguard.log"
+NTFY_ENVF="$HOME/.config/homelab/ntfy.env"
+DRYRUN="${MEMGUARD_DRYRUN:-0}"
+mkdir -p "$(dirname "$LOG")"
+
+log() { printf '[%s] %s\n' "$(date '+%F %T')" "$1" >> "$LOG"; }
+
+last_ntfy=0
+notify() {  # $1=title $2=msg $3=priority;全域 45s 節流(防 DRYRUN/連環目標洗版)
+    # FORCE_AVAIL=合成測試值,絕不推手機(2026-07-14 自測 WARN 外洩到 ntfy 誤報)
+    [ -n "${MEMGUARD_FORCE_AVAIL:-}" ] && { log "ntfy suppressed(FORCE_AVAIL 測試): $1"; return 0; }
+    now=$(date +%s)
+    [ $((now - last_ntfy)) -lt 45 ] && { log "ntfy throttled: $1"; return 0; }
+    last_ntfy=$now
+    url=$(sed -n 's/^NTFY_URL=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    topic=$(sed -n 's/^NTFY_TOPIC=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    tok=$(sed -n 's/^NTFY_PUB_TOKEN=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    [ -z "$url" ] || [ -z "$tok" ] && { log "ntfy config missing, log-only"; return 0; }
+    curl -sf -m 5 -H "Authorization: Bearer $tok" -H "Title: $1" -H "Priority: ${3:-high}" \
+        -d "$2" "$url/${topic:-homelab}" >/dev/null 2>&1 || log "ntfy send failed"
+}
+
+avail_pct() {
+    [ -n "${MEMGUARD_FORCE_AVAIL:-}" ] && { echo "$MEMGUARD_FORCE_AVAIL"; return; }
+    awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{if(t>0 && a>0) printf "%d", a*100/t; else print 100}' /proc/meminfo
+}
+
+# 輸出「pid rss_kb comm」;無合格目標輸出空
+pick_target() {
+    ps -eo pid=,rss=,user=,comm= --sort=-rss | awk -v self=$$ '
+        $3 != "codex" { next }
+        $1 <= 2 || $1 == self { next }
+        $4 ~ /^(systemd|journald|sshd|cron|login|bash|sh|ps|awk)$/ { next }
+        $2 > 1500000 { print $1, $2, $4; found=1; exit }
+        !second && $2 > 800000 && $4 ~ /claude|node|bun|opencode/ { second=$1" "$2" "$4 }
+        END { if (!found && second) print second }'
+}
+
+warned=0; term_pid=""; term_comm=""; crit_n=0; round=0
+while :; do
+    round=$((round + 1))
+    if [ $((round % 360)) -eq 0 ] && [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt 2000 ]; then
+        tail -n 400 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"   # 每小時檢查,自輪替
+    fi
+    AP=$(avail_pct)
+    if [ "$AP" -lt "$KILL_PCT" ]; then
+        TGT=$(pick_target)
+        if [ -z "$TGT" ]; then
+            crit_n=$((crit_n + 1))
+            [ $((crit_n % 6)) -eq 1 ] && log "CRIT avail=${AP}% 但無合格目標(>800M agent 類進程不存在),不動手"
+            [ "$warned" = 0 ] && notify "CT260 記憶體警戒" "可用僅 ${AP}%,但找不到可殺的大戶,請人工查看" high
+            warned=1
+        else
+            crit_n=0
+            pid=$(echo "$TGT" | awk '{print $1}'); rsskb=$(echo "$TGT" | awk '{print $2}'); comm=$(echo "$TGT" | awk '{print $3}')
+            rssg=$(awk -v k="$rsskb" 'BEGIN{printf "%.1f", k/1048576}')
+            # pid 重用護欄:同 pid 且 comm 相符才升級 -9;否則視為新目標重走 TERM
+            if [ "$pid" = "$term_pid" ] && [ "$(ps -o comm= -p "$pid" 2>/dev/null | awk '{print $1}')" = "$term_comm" ]; then
+                log "KILL -9 pid=$pid comm=$comm rss=${rssg}G avail=${AP}%(TERM 無效升級)"
+                [ "$DRYRUN" = 1 ] || kill -9 "$pid" 2>/dev/null
+                notify "CT260 memguard 強殺" "SIGKILL $comm(pid $pid, ${rssg}G),可用 ${AP}%" urgent
+                term_pid=""
+            else
+                log "TERM pid=$pid comm=$comm rss=${rssg}G avail=${AP}%$([ "$DRYRUN" = 1 ] && printf ' (DRYRUN)')"
+                [ "$DRYRUN" = 1 ] || kill -TERM "$pid" 2>/dev/null
+                notify "CT260 memguard 擊殺" "SIGTERM $comm(pid $pid, ${rssg}G),可用 ${AP}%;10 秒未降級將 SIGKILL" urgent
+                term_pid="$pid"; term_comm="$comm"
+            fi
+        fi
+        warned=1
+    elif [ "$AP" -lt "$WARN_PCT" ]; then
+        crit_n=0
+        if [ "$warned" = 0 ]; then
+            log "WARN avail=${AP}%(門檻 ${WARN_PCT}%)"
+            notify "CT260 記憶體警戒" "可用記憶體剩 ${AP}%,低於 ${WARN_PCT}%;逼近 ${KILL_PCT}% 將強殺最大進程" high
+            warned=1
+        fi
+        term_pid=""
+    else
+        [ "$AP" -ge "$CLEAR_PCT" ] && [ "$warned" = 1 ] && { log "CLEAR avail=${AP}%"; warned=0; }
+        term_pid=""; crit_n=0
+    fi
+    [ "${MEMGUARD_ONESHOT:-0}" = 1 ] && exit 0
+    sleep 10
+done

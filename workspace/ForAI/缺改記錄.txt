@@ -3449,3 +3449,233 @@ App 填:URL=https://opencode-app.hl.lailai74143.com user=opencode pass=OPENCODE_
 回滾:ssh pve24 'sudo pct exec 203 -- cp -a /etc/caddy/Caddyfile.before-opencode-app-<TS>
   /etc/caddy/Caddyfile && sudo pct exec 203 -- systemctl restart caddy'
   (CT260 備份 ~/ _backups/Caddyfile.before-opencode-app-<TS>)
+
+### CT260 記憶體爆滿全機假死:workflow 82 子代理 fan-out(2026-07-14)
+事由:台北 07:20 agenthub 內 Claude session 的 agenthub-full-review workflow 進入 Verify 階段,
+41 條發現×2 證偽者=82 個 opus 子代理一次入隊,2 分鐘記憶體 1.1G→7.94G 撞 8G cgroup 頂,
+續吃宿主 swap 至 0(SwapFree 3.66G→0)→ thrash livelock 全機假死。宿主 oom_kill 全程=0
+(核心可回收就不殺=無自癒無屍體);容器 journal 23:11:45Z 後斷流;通知哨兵全在 CT260 自身
+=全站告警靜默。07:25 使用者 PVE GUI vzshutdown(等 101s 強殺)+vzstart 救回。
+證據:CT201 Prometheus pve_memory_usage_bytes / node_memory_SwapFree_bytes / node_vmstat_oom_kill
+曲線+pvesh get /nodes/24bay-pve/tasks(root@pam vzshutdown 23:25:48Z)+手機截圖(Verify 4/82)。
+變更:①使用者擴容 8G/2C→16G/6C(順修 V7 §10 規格行——舊載 4G/4G/2 與實況早已漂移;
+  同日稍後 swap 8G→2G 使用者核可、pct set 熱生效);
+②新哨兵 hl-memguard 上線(細節/SoT 見監控告警.txt §9 ★2026-07-14):avail<20% 就地強殺
+  最大進程,把「全機假死」降級為「單進程死亡」;cron @reboot+*/5,已實測 DRYRUN;
+③肇事 workflow 改寫為自適應批次版(SoT=~/workspace/agenthub/.claude/workflows/
+  agenthub-full-review.js):BATCH 閘門(預設 4,args 轉型+夾 [1,8])、批間 haiku 探針
+  (<4.5G 降 2、<2.5G 降 1、恢復升回)、MAX_VERIFY=36 保險絲(截掉的入 unverified 不靜默)、
+  分級證偽(P1 雙 opus xhigh/P2 雙 opus high/P3 單 sonnet,視角串行)、讀檔紀律入 prompt。
+證偽審查(opus,證明它是錯的):FAIL→2 P2 必修已修=args.batch 未轉型(字串"4"→第二批
+  i+size="44"→slice 一次 32 併發=事故重演;負數→無窮迴圈)→Number()+clamp;
+  verify 代理全滅誤歸 rejected(活埋真 P1)→獨立 errored 桶。另修 dedup 重疊組(union-find
+  併連通分量)、探針怪值防呆、memguard pid 重用護欄(同 pid 同 comm 才 -9)+ntfy 45s 節流
+  +log 自輪替+meminfo 缺欄 fail-safe(視為 100%)。
+驗證:memguard DRYRUN 2G 假大戶正確鎖定 TERM、正常水位靜默、flock 二次啟動被擋;
+  workflow node --check 過+clamp 六組邊界值實測("4"→4/-1→1/32→8)。
+教訓:①LXC 記憶體災難的正解是「早殺」不是「多 swap」——swap 配額大於宿主餘裕=把單機
+  事故放大成全機;②多代理 fan-out 的併發上限必須寫在腳本裡,runtime 內建 cap 在 LXC
+  不可靠(lxcfs 核數)且防不了單代理吞大輸出;③哨兵別全住同一台被監控的機器。
+回滾:crontab 刪 hl-memguard 兩行+pkill -f 'bin/hl-memguard';workflow 檔在 agenthub repo
+  可 git revert;V7/監控告警條目隨之撤。
+追記(同日 2、3 收尾):①快燒規則 PveGuestMemBurst 上線 CT201 pve.yml(>95% for 2m,critical;
+  promtool 4 rules SUCCESS+reload+API 確認;備份 pve.yml.before-memburst-20260714;共 37 條);
+②/tmp tmpfs 加 size=4G——tmp.mount drop-in /etc/systemd/system/tmp.mount.d/50-size.conf
+  (★選項須寫 strictatime,首版誤寫 strict-atime 已修);live 重掛三法皆敗:fsconfig 重放
+  superblock uid=100000(userns 內非法)、LIBMOUNT_FORCE_MOUNT2 EINVAL、systemctl restart
+  tmp.mount umount busy(PrivateTmp 服務+活動 session 佔用)→ 接受下次重啟生效,殘窗有
+  memguard avail% 告警兜底。
+追記(2026-07-14 約束版首次實跑=agenthub 全面審查):sonnet 版(主模型參數化 args.model,
+  預設 sonnet 對齊模型政策)84 代理/105 分鐘/~3M tokens,峰值 RAM 1.07Gi/16G(Prometheus
+  lxc/260 曲線),探針全程未降檔、memguard 零事件——對照原版同任務 2 分鐘 1.1→7.94Gi 撞頂,
+  約束驗證通過。產出:43→39→32 條確認缺陷(8 P1)入 agenthub/REVIEW-20260714.md 待整改。
+  腳本再修一處:verify 內層 agent() 拋錯(StructuredOutput retry cap)未接住→整條發現從
+  所有回報桶靜默消失(實跑掉了 ChatView.tsx:46 P3)→ try/catch 進 errored 桶。
+追記(2026-07-14 併發天花板實測):12 探針量得本機 Workflow 在飛上限=2(兩兩成對 6 波),
+  非預期的 4——cap=min(16,核-2) 的核數在 CLI 行程啟動時快取(claude.exe 23:34 起,當時
+  CT260 仍 2 核,加核到 6 是其後的事)。含義:BATCH 放寬對現行程無效,重啟 Claude Code
+  session 後 cap 應升為 4(屆時 BATCH=4 剛好吃滿,腳本免改);再往上=加核(8 核→6)。
+追記(2026-07-14 20×Haiku 併發壓測+memguard v2):Agent 工具平行 20 Haiku 子代理×520MB
+  ×45s 壓 CT260(擴容後首壓):avail 15.6G→最低 5.3G(32.5%),PSI mem avg10 峰值 4.89%,
+  swap 被動換出 211M,20/20 rc=0,memguard 零誤報,釋放後全回收。結論:子代理本地足跡≈0
+  (claude.exe 306→330M,上下文在 API 端)——RAM 風險指標是「單進程 RSS」不是代理數;
+  同款 520M 負載約 22 隻同時全載撞 WARN、24 隻撞 KILL。壓測揭盲點:螞蟻雄兵(多隻中型、
+  名字不在 agent 名單)壓破 20% 時 pick_target 兩檔皆空手,只嘶吼不動手。
+  修復(memguard v2;兩輪對抗審查=3+2 個 opus 異視角,5+4 條發現,採 7 拒 2):
+  ①備援層:主層連 3 輪空手才啟用(一命中即重計,無閂鎖——閂鎖會繞過去抖,審查二修);
+    同 comm 群總 RSS>2G→殺群內最大成員(個別 <300M 也算,正中螞蟻雄兵、避開孤立中型
+    服務);無此群→殺 >300M 最大個體。
+  ②TERM→-9 升級改「TERM 名單掃蕩式」:舊「連兩輪同 pid 榜首」在榜首輪替下永遠升不了級。
+  ③工具類保護名單(bash/sh/ps/awk/flock/sleep)加 <50M 上限——原名單會包庇 3G 的 awk,
+    還反噬備援層殺無辜。
+  ④「束手請人工」推播改獨立旗標:原與 WARN 共用 warned,緩降危機(必經 25% 帶)必失聲
+    =原版蟲,最需要人的時刻不叫。
+  ⑤DRYRUN 抑制擊殺類 ntfy(原會推「已強殺」假消息);警戒/束手類照發。
+  拒:pid 重用加 starttime 比對(10s 窗內同名重用屬理論殘險,註解標明即可);長駐服務
+    白名單(與使用者 80% 強殺方針衝突——危機時誰大誰嫌疑)。
+  殘窗:無 >2G 同名群且個個 <300M 的雜牌軍=只嘶吼+束手推播,人工接手。
+  驗證:DRYRUN 三情境全過=8×294M 螞蟻(群聚合層開火+掃蕩 -9 無重複 TERM)/600M(個體
+  層完整階梯 TERM→-9→re-TERM)/回歸(束手第 1 輪即發、DRYRUN 無擊殺 ntfy);sh -n 過;
+  已重啟載入(pid 換新,flock/cron 自癒鏈不動)。v1 備份=~/.local/bin/hl-memguard.v1-20260714.bak。
+  教訓:pkill -f 的 pattern 會匹配到「cmdline 含整段腳本文字」的 Bash 包裝進程而自傷
+  (壓測清場連坐親殺,與 PVE 宿主 pkill 連坐 LXC 同款病);清場改記 $! 逐 PID 殺。
+  回滾:cp v1 備份蓋回+重啟(pkill -x hl-memguard 後 cron */5 自癒或手動 run.sh)。
+
+### portal 0.19.2 停止鍵卡死修復:busy 收斂改 per-session 權威(2026-07-14)
+事由:使用者手機截圖回報——生成早已輸出完畢,composer 仍亮紅色中斷鍵不回送出鍵。
+根因:①手機鎖屏斷 SSE,漏掉 session 級 status=idle 一次性事件;②輪詢保險用 agent 級
+  status,而 opencode adapter 的 status() 是「近 2 分鐘有活動=running」推定——生成結束
+  仍多掛 2 分鐘,多 session 活動下永不收斂;③approve() 發 status 事件沒帶 session_id,
+  前端 ev.session_id===sid 比對必丟棄(准駁路徑同病)。
+修法(bff+前端;證僞審查 2 opus 3 發現全採):
+  bff opencode.py:status() 改以 _busy(send 的 finally 保證清除)為權威,BFF 重啟歸零
+    =前端自癒;list_sessions 每列帶 gen_status(running/idle;不叫 status——SessionRow
+    的 status 放 agent 級狀態會撞名);approve() 補 session_id。
+  前端 AgentDetail:getSessions 併入 3s 輪詢+SSE onReconnect;busy 改「雙向」收斂——
+    gen_status=running → 亮停止鍵(補漏一次性 running:firstSend 的 ""→sid 過渡、抽屜
+    切進生成中 session;審查抓到初版「只清不設」是卡死的鏡像=首則生成無停止鍵);
+    idle 且 busy 開 >8s → 收掉(busySince 護欄防 202 異步誤收,markBusy 統一蓋章);
+    ensureSession 樂觀蓋 gen_status=running;換 session 改由 gen_status 推導,不再一律清。
+  claude adapter 無 gen_status → 前端不動,沿用 agent 級收斂(hooks 已保 Stop→idle)。
+語義變更:Home 頁 opencode agent 的 running 從「近 2 分鐘有活動」變「BFF 發起的生成
+  進行中」;經 opencode TUI 直跑的生成 BFF 看不見(可接受,portal 不走那條路)。
+驗證:tsc+vite build 過;e2e=臨時 session 發最小提示(deepseek-v4-flash)→ gen_status/
+  agent status 1s 內 running、2s 落 idle,測畢即刪。運維備忘:codex 無 sudo 密碼,
+  agenthub 是 Restart=on-failure——SIGTERM 走 exit 0「不會」被 systemd 重啟,要 kill -9
+  觸發 on-failure 自拉(本次即以此重啟)。
+已知殘餘:bff 重啟瞬間的孤兒生成(opencode 續跑)會被視為 idle=送出鍵早回,文字仍靠
+  輪詢進來,可重送;>8s event loop 飢餓造成的 flicker 由下一拍輪詢自癒。
+回滾:git revert 三檔(bff/app/adapters/opencode.py、frontend/src/pages/AgentDetail.tsx、
+  frontend/src/types.ts)+ npm run build + kill -9 uvicorn 重啟。
+
+### portal 0.19.3 使用者回饋 UI 三修(2026-07-14;UI 迭代類=快改快推不走重審查)
+①使用者訊息換行遺失+誤染 markdown:user text part 原走 <Markdown>(單換行被吞成一行、
+  `*..*` 變斜體)→ 新 UserText 純文字元件(white-space:pre-wrap),>6 行或 >420 字
+  -webkit-line-clamp:6 折疊+「展開全文/收起」;AI 訊息照走 Markdown 不動。
+②複製/重發/分支改 GPT 式純圖示無框(inline SVG,複製後 1.2s 打勾回饋;重發/分支
+  confirm 照舊);.msg-actions 去背景邊框、padding 撐觸控熱區。
+③附件顯示一大坨字:opencode 會在 user 訊息塞回兩個合成 text part(`Called the Read
+  tool…` + `<path>…<content>` 檔案全文),真附件另有 file part → bff get_messages 對
+  user 訊息濾掉合成品(_is_upload_echo:以 uploads_root 實體路徑判別,不誤殺手打字);
+  前端把 image/file part 集中成訊息頂端小卡列(.msg-attach-row,仿 Claude app)。
+驗證:tsc+build 過;e2e=臨時 session 上傳 txt+發送,過濾後 user parts=[text, file] 乾淨;
+  bff kill -9 重啟。檔:ChatView.tsx/styles.css/opencode.py。
+回滾:git revert 三檔+build+重啟。
+
+### portal 0.19.4 使用者回饋 UI 三修之二(2026-07-14;UI 迭代類=快改快推)
+①送出前附件列 wrap 兩欄佔滿縱向 → 單列橫向 nowrap+overflow-x 滑動(.attach-row,
+  chip flex:0 0 auto);②訊息附件移出泡泡:新 .msg-user-wrap(附件橫向滑動列在泡泡
+  「上方」,規則同①),泡泡色 --user-bubble #1c4436(綠,使用者嫌刺眼)→ #232b3a
+  沉穩藍灰;③topbar 的 對話/Diff/Log 分頁列+標題旁 ✎ 改名 整合進 GPT 式右上角=
+  ✎新增對話 icon(slideNav 到無 sid 新對話態)+ ⋮ 選單(對話/Diff/Log 打勾標示當前
+  +改名,重用 .dd-backdrop 疊層)。檔:AgentDetail.tsx/ChatView.tsx/styles.css;
+  純前端,build 即生效免重啟。回滾:git revert+build。
+
+### portal 0.20.0 八功能批次(2026-07-14;使用者裁決「大工程不做、其他都做」+加背景任務)
+範圍:①ntfy 推播 ②跨對話搜尋 ③非破壞性重生成(版本樹)④專案資料夾 ⑤記憶/指令編輯
+  ⑥分享連結 ⑦PWA service worker ⑧背景任務面板(仿 Claude App 截圖)。不做:Artifacts/
+  語音/排程/圖像生成(大工程,使用者裁決)。
+bff 新模組:notify.py(ntfy JSON 發佈,沿用 ~/.config/homelab/ntfy.env;中文 Title 走 header
+  會被 httpx latin-1 拒,故用 JSON 端點;生成≥30s 完成/失敗推、自己按停不推、同 key 節流+
+  每分 10 則風暴閘)、taskreg.py(背景任務註冊表,_bg 包裝生成登記;記憶體態,重啟清空=
+  刻意)、meta_store.py(版本群/專案/分享索引 JSON 落 ~/.local/share/agenthub/meta.json,
+  分享本體 shares/<token>.json)。watcher 4s 輪詢 opencode GET /permission→任務標
+  waiting_approval+🔐 推播;claude hook Notification→🔔 推播(60s 節流)。
+版本樹實作:重發/編輯前先 fork(opencode,不帶 messageID=整段複製,e2e 實測 2→2 則)/
+  deepcopy(claude,連 claude_sid 帶走=舊版可 --resume 續聊)成「⟲ 標題」封存快照,
+  版本群記 meta;◀i/n▶ 列在 composer 上方,切版=換 sid。opencode _archived 集落檔
+  <id>-archived.json(原記憶體態,重啟丟=快照湧回主列表,本次一併根治)。
+對抗審查(3 Opus 審查+每條 2 Sonnet 證僞,9 確認/2 駁回)修正:
+  major①opencode edit/resend 缺 busy 前置守衛→生成中截斷=邊生成邊刪(claude 有擋、
+    opencode 漏)→base.is_busy()+_snapshot_version 前擋+adapter 頂部雙保險;e2e 實測
+    生成中重發=任務標 error「上一輪還在執行」且零截斷零孤兒快照。
+  major②刪對話不撤銷分享→快照永久可讀→delete 端點連動 revoke_share。
+  major③memory 寫入端點=CLAUDE.md/AGENTS.md 覆寫原語,承襲「API_TOKEN 未啟用+0.0.0.0」
+    既有 P1 暴露(LAN 直打 :8300 可持久化提示注入)。程式面無解,根因=部署姿勢;
+    收斂=agenthub.env 填 AGENTHUB_API_TOKEN+CT203 Caddy header_up(root 作業,OPEN)。
+  minor:搜尋無總 deadline(bff wait_for 15s+前端 AbortController)/_seen_approvals 滿千
+    clear 重複推播(改與當前 pending 交集修剪)/>1MB 記憶檔截斷存回砍檔尾(too_large 拒編輯
+    +PUT 409 雙保險)/memory tab 切出切回洗掉 dirty 草稿(載入時保留)/分享頁長按有死的
+    「編輯後重新送出」(無 handler 不渲染)/PWA 舊殼卡一個 reload 週期(virtual:pwa-register
+    controllerchange 自動 reload,bundle 已驗 location.reload 烘入)。
+  駁回:ntfy topic 可猜外洩(CT201 auth deny-all+ACL 已對抗驗證,前提不成立)、專案 chip
+    長按缺 longPressed 守衛(sheet-backdrop z-200 先掛,補發 click 打不到 chip)。
+e2e(全過):tasks 生命週期 running→done/重發 done/error 標記;版本樹 fork→◀1/2▶→刪除
+  連動清 meta(全歸零);專案 CRUD+指派+rows project_id;搜尋 6 hits;memory 讀寫回寫同內容
+  roundtrip;分享 建→讀→traversal 只落 SPA 殼→撤銷 404;ntfy JSON 發佈 OK(上線通知即測試)。
+已知取捨:分享連結仍在 Authelia 之內(收件人要 SSO;真對外需 Caddy /share bypass,未做);
+  分享快照裡的圖片 URL 指 /api/...uploads(未複本);快照 orphan(fork 成功但 resend 失敗)
+  留封存可手刪;PWA 部署語義=改 dist 後首開舊殼、SW 背景換版自動 reload 一次。
+檔:bff/app/{main.py,notify.py,taskreg.py,meta_store.py,agents.yaml,adapters/{base,opencode,
+  claude_headless}.py};frontend/src/{main.tsx,api.ts,types.ts,vite-env.d.ts,styles.css,
+  components/{TasksPanel,ChatView}.tsx,pages/{Home,AgentDetail,Share}.tsx};vite.config.ts
+  (vite-plugin-pwa 新依賴)+public/{manifest.webmanifest,icon-*.png(PIL 生成)}。
+回滾:git revert 上列檔+npm run build+kill -9 uvicorn;meta 資料檔留著無害(舊碼不讀)。
+
+### portal 0.20.1 工具活動摘要=Claude App 同款三層(2026-07-14;UI 迭代類=快改快推)
+動機:使用者比對 Claude App 看 codex 工作的畫面——每輪工具呼叫收合成「Created 2 files,
+  read 2 files, edited 1 files」摘要行,點開列各動作(建立/讀取/更新/編輯/執行+檔名,
+  失敗紅字⚠),再點看完整內容。portal 原本把每個工具各渲染成一個 ▶name 原始塊(opencode
+  的 task 子代理顯示成 ▶task ✓{...} 一坨),要求換成同款。
+澄清(答使用者疑問):①我做的「背景任務」面板(首頁波形圖示)=追蹤 portal 觸發的「生成」
+  (每次送出一筆),等同 Claude App 頂層 Background tasks 清單,與子代理數量無關;當時看空=
+  部署時 kill -9 重啟 bff 清了記憶體任務表(設計)。②使用者指的是「對話內每輪工具活動摘要」=
+  另一個 UI,本次補上。兩者並存不衝突。
+實作(ChatView.tsx 純前端):classify() 工具名(大小寫皆可)→9 類(讀取/建立/更新/執行/
+  搜尋/抓取/子代理/待辦/工具);segment() 把連續 tool part 收成一組;ToolGroup 摘要行
+  =「執行N指令·建立N檔·編輯N檔·讀取N檔·用N工具 +新增-刪除」+狀態圖示(✓綠/⚠紅/spinner橙/
+  ⏸待核准),點開 tg-actions 列 ActionRow(KindIcon 小圖示眼/檔+/筆/終端機…+verb+目標
+  (檔名 base/指令/描述)+狀態變色),再點開=完整 input/output pre(帶捲動)。行差 lineDelta
+  =多重集合真差(只計不同的行,非整段 old/new)近似 Claude 的 +a-d;editDelta 支援 Write
+  (content 全計新增)/Edit(old↔new 差)/MultiEdit(edits 陣列累加)。實測:opencode task
+  →子代理列;claude Read({file_path})→讀取 package.json;分類與 part 形狀對得上。
+非工具 part(思考/文字/圖/檔)照舊逐一渲染;findPending 掃 pending tool 的准駁列不受影響
+  (只換渲染不動資料)。build 過,dist 由 bff 供應免重啟。檔:ChatView.tsx/styles.css。
+回滾:git revert 兩檔+build。
+
+### portal 0.21.0 對話 UI 四改=工具 sheet/暖灰配色/點擊浮現時間/切換標記(2026-07-14;UI 迭代類=快改快推)
+使用者四點回饋(附 Claude App 截圖):①「用N工具」巢狀嵌入展開改成 Claude 同款 bottom
+  sheet(下方拉門,可半高/全高;點具體項目向左拉門進詳情、返回向右,同主頁↔對話的換頁
+  方向,純點擊不吃滑動手勢)②背景改 Claude App 同款灰 ③使用者訊息的「你」與時間、AI 的
+  「Agent」與時間全部拿掉→點一下浮現時間(AI 浮現模型名·時間)、點兩下複製 ④切換模型/
+  努力/讀寫模式要在對話裡以淺色小字印出。
+實作(純前端,bff 只 bump 版本字串):
+①ToolSheet.tsx 新元件:摘要行點擊改開 bottom sheet(z 220,52vh/92vh 兩檔;把手拖曳吸附
+  +點把手/標題切檔、下拉過半關閉;拖曳中 transition:none 跟手、放手清 inline height 吸附
+  補間)。內容=tsheet-track(width 200% 左右兩 pane,transform 0.26s 拉門):pane1 動作列
+  (圖示+動詞+目標+行差+狀態)、pane2 詳情(input/output pre)。共用邏輯抽到 toolMeta.tsx
+  (classify/VERB/targetOf/editDelta/summarize/KindIcon…),ChatView 與 ToolSheet 同源。
+  sheet 存 tool id 渲染時對最新 messages 重對齊(不存 Part 參考)→生成中 3s 輪詢換表後
+  sheet 裡狀態/輸出活著更新。舊巢狀 ActionRow/tg-actions/act-* 展開樣式移除。
+②:root 調色:--bg #262624/--bg-2 #30302e/--bg-3 #3d3c39/--line #45443f/--fg #eceae4/
+  --fg-dim #a3a094/--user-bubble #3a3936(Claude 暖灰;原 GitHub 藍黑 #0d1117 系)。
+③訊息 header(你/Agent/模型/時間)全移除;.chat 加 touch-action:manipulation 關雙擊縮放,
+  onBodyClick 自判單雙擊(300ms):單擊 toggle .msg-meta-pop(user=時間;AI=模型·時間),
+  雙擊複製全文並示「已複製 ✓」1.2s。isInteractive 過濾 button/a/summary/.toolgroup 等,
+  不干擾展開全文/工具行/長按選單。
+④AgentDetail:setModel/Effort/PermissionKeep 真的換檔才 addCtlMark(「模型 → Opus 4.8」
+  「努力 → high」「模式 → …」),存 localStorage per-session(ctlmarks:<agent>:<sid>,
+  上限 80 筆);curCtl latest-ref 防 commands memo 舊閉包誤判。ChatView 依 ts 插進對話流
+  (.ctl-mark 淺色小字置中;分段視窗外舊標記不顯示);新對話首送前無錨點略過。effort 隨
+  模型自動重置走 setEffort 直呼不印(非使用者動作)。
+部署:build 過(index-BA0QKW9b.js)、dist 即時供應;bff version 0.20.0→0.21.0,確認無
+  running 任務後 kill -9 重啟,openapi 回報 0.21.0。已知取捨:切換標記是顯示層(localStorage
+  per 裝置,換手機看不到;不進後端);雙擊複製在桌面會與選字小干擾。
+檔:frontend/src/{components/{ToolSheet.tsx 新,toolMeta.tsx 新,ChatView.tsx},pages/
+  AgentDetail.tsx,styles.css};bff/app/main.py(版本字串)。
+回滾:git revert 上列檔+npm run build+kill -9 uvicorn。
+
+### portal 0.21.1 對話流二修=去框貼齊 Claude App+更深灰(2026-07-14;UI 迭代類=快改快推)
+使用者對照截圖五點:①「思考過程」四字與思考/動作的方框全去掉 ②思考=淺色小字,超過
+  3 行末尾 … 截斷,點開與動作同款下方拉門彈窗 ③動作僅一行,過長在更動行數「前」以 …
+  截斷 ④更動行數擺在動作文字右邊約 3 格,不推到最右 ⑤App 的灰更深一階。
+實作(純前端):抽 BottomSheet.tsx 共用外殼(拖把手半高/全高/下拉關閉,原 ToolSheet 的
+  chrome),ToolSheet 改組合它;思考點開=BottomSheet+全文(.think-full)。.thinking 去
+  border/背景/標題,.thinking-clamp 3 行 -webkit-line-clamp;.tg-summary 去框改純文字
+  (淺灰),成功不掛圖示(僅 ⚠ 失敗/spinner 生成中/⏸ 待核准,同 App),.tg-text flex:0 1
+  auto+min-width:0 → 行數緊跟文字、過長 … 出現在行數前,.act-delta margin-left 12px≈3 格。
+  調色 --bg #262624→#21201e(bg-2 #2b2a28/bg-3 #383734/line #403f3b/user-bubble #343331)。
+  isInteractive 加 .thinking(點思考開彈窗,不觸發單擊浮時間)。
+已知取捨:思考彈窗內容是打開瞬間的快照(生成中不活更新,重開即最新;工具 sheet 仍活更新)。
+檔:frontend/src/{components/{BottomSheet.tsx 新,ToolSheet.tsx,ChatView.tsx},styles.css}。
+build 過、dist 即時生效(bff 免重啟)。回滾:git revert 上列檔+npm run build。

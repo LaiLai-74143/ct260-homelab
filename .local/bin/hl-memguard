@@ -1,0 +1,155 @@
+#!/bin/sh
+# hl-memguard: CT260 記憶體警衛(2026-07-14 workflow 爆 RAM 假死事件後加裝)
+# 動機:LXC 撞 8G→16G 上限後會淹宿主 swap 進入 thrash livelock,核心不開殺(oom_kill=0),
+#       全機假死只能手動重啟。本警衛在撞頂「之前」就地擊殺元兇,把災難降級成單進程死亡。
+# 邏輯(每 10 秒,讀 lxcfs 容器視角 /proc/meminfo):
+#   available < WARN_PCT(25%)→ log + ntfy 警告(每輪事件只發一次,回到 30% 以上解除)
+#   available < KILL_PCT(20%)→ SIGTERM 元兇並記入 TERM 名單;之後每輪(仍在 KILL 區)
+#             先掃名單:該 pid 還活著(同 comm 才 -9=pid 重用護欄;pid 短窗重用且同名
+#             屬已接受殘險)→ SIGKILL。★不綁「連兩輪同為榜首」——螞蟻雄兵下榜首會
+#             輪替,舊判定永遠升不了級(2026-07-14 對抗審查發現之一)。
+#   元兇挑選:RSS 最大且 >1.5G 的 codex 進程——★刻意不看進程名:全機告急時任何 >1.5G
+#             大戶都是嫌犯(使用者指定的 80% 強殺方針);>800M 檔才限 agent 運行時
+#             (claude|node|bun|opencode)。挑不到目標就只嘶吼不動手。
+#   保護名單:systemd/journald/sshd/cron/login 絕對不殺;bash/sh/ps/awk/flock/sleep
+#             僅 <50M 時保護(>50M 工具類照樣是嫌犯——名單本意是護警衛自身小工具,
+#             不是包庇 3G 的 awk;對抗審查發現之二)。永不碰 PID<=2 與自己。
+#   備援層(2026-07-14 20×Haiku 壓測揭露盲點:螞蟻雄兵——多隻中型、名字不在 agent
+#             名單的進程合力壓破 20% 時,上面兩檔都挑不到人,只會嘶吼):KILL 區連續
+#             FB_AFTER(3)輪主層無合格目標才啟用(≈30s 去抖;主層一命中或離開 KILL 區
+#             即重計,無閂鎖)。選法:①同 comm 群總 RSS >2G(成員個別 <300M 也算)→
+#             殺群內最大成員,每輪一隻——螞蟻雄兵正解,且避免錯殺旁邊孤立的中型合法
+#             服務;②無此群 → 殺 RSS 最大且 >300M 的個體(不看名字)。皆無=維持只
+#             嘶吼(已知殘窗:無 >2G 同名群且個個 <300M 的雜牌軍),並以獨立旗標發一次
+#             「束手」urgent 推播——不與 WARN 共用 warned(緩降時 warned 已=1 會壓死它)。
+#   通知經 ntfy,全域 45s 節流(log 不節流、kill 動作本身不節流);log 每小時檢查自輪替。
+# 環境變數:MEMGUARD_DRYRUN=1 只記 log 不殺(擊殺類 ntfy 一併抑制,警戒/束手類照發);MEMGUARD_ONESHOT=1 跑一輪就退(測試用);
+#           MEMGUARD_FORCE_AVAIL=<pct> 假裝可用率(自測用)。
+# 部署:cron @reboot + */5 經 hl-memguard-run.sh flock 自癒(同 ntfy-webhook 慣例)。
+# 在哪跑:CT260(codex-ops),身份 codex,路徑 /home/codex/.local/bin/hl-memguard
+set -u
+
+WARN_PCT=25; KILL_PCT=20; CLEAR_PCT=30
+FB_AFTER=3; FB_MIN_KB=307200; FB_GRP_KB=2097152   # 備援:連 3 輪無目標才啟用;個體下限 300M;同名群總量下限 2G
+LOG="$HOME/.local/state/homelab-notify/memguard.log"
+NTFY_ENVF="$HOME/.config/homelab/ntfy.env"
+DRYRUN="${MEMGUARD_DRYRUN:-0}"
+mkdir -p "$(dirname "$LOG")"
+
+log() { printf '[%s] %s\n' "$(date '+%F %T')" "$1" >> "$LOG"; }
+
+last_ntfy=0
+notify() {  # $1=title $2=msg $3=priority;全域 45s 節流(防 DRYRUN/連環目標洗版)
+    # FORCE_AVAIL=合成測試值,絕不推手機(2026-07-14 自測 WARN 外洩到 ntfy 誤報)
+    [ -n "${MEMGUARD_FORCE_AVAIL:-}" ] && { log "ntfy suppressed(FORCE_AVAIL 測試): $1"; return 0; }
+    now=$(date +%s)
+    [ $((now - last_ntfy)) -lt 45 ] && { log "ntfy throttled: $1"; return 0; }
+    last_ntfy=$now
+    url=$(sed -n 's/^NTFY_URL=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    topic=$(sed -n 's/^NTFY_TOPIC=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    tok=$(sed -n 's/^NTFY_PUB_TOKEN=//p' "$NTFY_ENVF" 2>/dev/null | head -1)
+    [ -z "$url" ] || [ -z "$tok" ] && { log "ntfy config missing, log-only"; return 0; }
+    curl -sf -m 5 -H "Authorization: Bearer $tok" -H "Title: $1" -H "Priority: ${3:-high}" \
+        -d "$2" "$url/${topic:-homelab}" >/dev/null 2>&1 || log "ntfy send failed"
+}
+
+avail_pct() {
+    [ -n "${MEMGUARD_FORCE_AVAIL:-}" ] && { echo "$MEMGUARD_FORCE_AVAIL"; return; }
+    awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{if(t>0 && a>0) printf "%d", a*100/t; else print 100}' /proc/meminfo
+}
+
+# 輸出「pid rss_kb comm」;無合格目標輸出空。$1=fb → 備援層:①同 comm 群總 RSS >FB_GRP_KB
+# → 殺群內最大成員(個別 <FB_MIN_KB 也算);②否則 RSS 最大且 >FB_MIN_KB 的個體。
+pick_target() {
+    ps -eo pid=,rss=,user=,comm= --sort=-rss | awk -v self=$$ -v fb="${1:-}" \
+        -v fbmin="$FB_MIN_KB" -v gmin="$FB_GRP_KB" '
+        $3 != "codex" { next }
+        $1 <= 2 || $1 == self { next }
+        $4 ~ /^(systemd|journald|sshd|cron|login)$/ { next }
+        $4 ~ /^(bash|sh|ps|awk|flock|sleep)$/ && $2 < 51200 { next }
+        fb != "" {
+            if (top == "") { top = $1" "$2" "$4; topkb = $2 }
+            grp[$4] += $2
+            if (!($4 in gtop)) gtop[$4] = $1" "$2" "$4
+            next
+        }
+        $2 > 1500000 { print $1, $2, $4; found=1; exit }
+        !second && $2 > 800000 && $4 ~ /claude|node|bun|opencode/ { second=$1" "$2" "$4 }
+        END {
+            if (fb != "") {
+                best = ""; bs = gmin
+                for (c in grp) if (grp[c] > bs) { bs = grp[c]; best = c }
+                if (best != "") print gtop[best]
+                else if (topkb > fbmin) print top
+            } else if (!found && second) print second
+        }'
+}
+
+warned=0; helpless=0; termed=""; crit_n=0; round=0
+while :; do
+    round=$((round + 1))
+    if [ $((round % 360)) -eq 0 ] && [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt 2000 ]; then
+        tail -n 400 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"   # 每小時檢查,自輪替
+    fi
+    AP=$(avail_pct)
+    if [ "$AP" -lt "$KILL_PCT" ]; then
+        TGT=$(pick_target); FB=""
+        if [ -n "$TGT" ]; then
+            crit_n=0
+        else
+            crit_n=$((crit_n + 1))
+            if [ "$crit_n" -ge "$FB_AFTER" ]; then   # 去抖用 crit_n 現值,主層一命中即重計(不留閂鎖)
+                TGT=$(pick_target fb)
+                [ -n "$TGT" ] && FB="(備援)"
+            fi
+        fi
+        # 掃蕩:上輪 TERM 過、仍在 KILL 區且還活著(同 comm=pid 重用護欄)→ 升級 -9
+        swept=""
+        for e in $termed; do
+            tp=${e%%/*}; tc=${e#*/}
+            if [ "$(ps -o comm= -p "$tp" 2>/dev/null | awk '{print $1}')" = "$tc" ]; then
+                log "KILL -9 pid=$tp comm=$tc avail=${AP}%(TERM 逾時升級)$([ "$DRYRUN" = 1 ] && printf ' (DRYRUN)')"
+                [ "$DRYRUN" = 1 ] || kill -9 "$tp" 2>/dev/null
+                [ "$DRYRUN" = 1 ] || notify "CT260 memguard 強殺" "SIGKILL $tc(pid $tp),可用 ${AP}%" urgent
+                swept="$swept $tp"
+            fi
+        done
+        termed=""
+        if [ -z "$TGT" ]; then
+            [ $((crit_n % 6)) -eq 1 ] && log "CRIT avail=${AP}% 但無合格目標(crit_n=$crit_n;無 >2G 同名群、無 >300M 個體),不動手"
+            # 獨立旗標:緩降必經 WARN 帶把 warned 設 1,共用會壓死此升級推播(對抗審查發現)
+            if [ "$helpless" = 0 ]; then
+                notify "CT260 memguard 束手" "可用僅 ${AP}%,兩層皆找不到可殺目標,請人工查看" urgent
+                helpless=1
+            fi
+            warned=1
+        else
+            helpless=0
+            pid=$(echo "$TGT" | awk '{print $1}'); rsskb=$(echo "$TGT" | awk '{print $2}'); comm=$(echo "$TGT" | awk '{print $3}')
+            rssg=$(awk -v k="$rsskb" 'BEGIN{printf "%.1f", k/1048576}')
+            case " $swept " in
+            *" $pid "*) : ;;   # 本輪已被掃蕩 -9,不再重複 TERM
+            *)
+                log "TERM$FB pid=$pid comm=$comm rss=${rssg}G avail=${AP}%$([ "$DRYRUN" = 1 ] && printf ' (DRYRUN)')"
+                [ "$DRYRUN" = 1 ] || kill -TERM "$pid" 2>/dev/null
+                [ "$DRYRUN" = 1 ] || notify "CT260 memguard 擊殺" "SIGTERM$FB $comm(pid $pid, ${rssg}G),可用 ${AP}%;10 秒未降級將 SIGKILL" urgent
+                termed="$termed $pid/$comm"
+                ;;
+            esac
+        fi
+        warned=1
+    elif [ "$AP" -lt "$WARN_PCT" ]; then
+        crit_n=0; helpless=0
+        if [ "$warned" = 0 ]; then
+            log "WARN avail=${AP}%(門檻 ${WARN_PCT}%)"
+            notify "CT260 記憶體警戒" "可用記憶體剩 ${AP}%,低於 ${WARN_PCT}%;逼近 ${KILL_PCT}% 將強殺最大進程" high
+            warned=1
+        fi
+        termed=""
+    else
+        [ "$AP" -ge "$CLEAR_PCT" ] && [ "$warned" = 1 ] && { log "CLEAR avail=${AP}%"; warned=0; }
+        termed=""; crit_n=0; helpless=0
+    fi
+    [ "${MEMGUARD_ONESHOT:-0}" = 1 ] && exit 0
+    sleep 10
+done
