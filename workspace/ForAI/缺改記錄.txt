@@ -3679,3 +3679,293 @@ e2e(全過):tasks 生命週期 running→done/重發 done/error 標記;版本樹
 已知取捨:思考彈窗內容是打開瞬間的快照(生成中不活更新,重開即最新;工具 sheet 仍活更新)。
 檔:frontend/src/{components/{BottomSheet.tsx 新,ToolSheet.tsx,ChatView.tsx},styles.css}。
 build 過、dist 即時生效(bff 免重啟)。回滾:git revert 上列檔+npm run build。
+
+### portal 0.22.0 子代理卡片+session 級背景任務(2026-07-14;仿 Claude App workflow 卡)
+使用者四點(附 Claude App workflow 截圖):①一輪開多個子代理時顯示子代理卡片:標題+任務
+  數+耗時+每任務一個狀態方框(未跑=空框/正在跑=藍脈動/跑完=白/忙碌待核准=橘/錯誤=紅)
+  ②點卡片開半高拉門彈窗:目的/分類/消耗 tokens/耗時/代理數 ③明細頁 ⋮ 加「背景任務」
+  =首頁同款面板但只過濾本 session ④AI 輸出完畢仍有工具在跑 → 顯示「N 個任務進行中」
+  (橘 ✳ 脈動),點開看明細。
+後端:opencode _map_part 的 tool 加 t0/t1(state.time,秒)與 child_sid(task 的
+  metadata.sessionId);新端點 GET /sessions/{sid}/subagents=列子 session 的
+  {agent,model,tokens(in+out+reasoning),cost}(base 預設回空表,claude 不支援);
+  version 0.21.0→0.22.0。
+前端:ChatView renderToolRun——連續工具裡 task≥2 抽成 SubagentCard(其餘照常摘要行),
+  卡片/彈窗共用 sheetSel 的 tool-id 活更新機制(sub 旗標分流 SubagentSheet/ToolSheet);
+  SubagentSheet 開啟時抓 /subagents 以 child_sid join tokens(fetchSubagents prop,
+  分享頁不給=只少 tokens 欄);useTick 每秒跳耗時;TasksPanel 加 sessionId/title 過濾
+  props,AgentDetail ⋮ 開「背景任務(本對話)」;「N 個任務進行中」只掃最後一輪 AI 的
+  running 工具(避免舊輪凍死的 running 假報),全是 task 時點開走子代理彈窗。
+e2e:opencode 一輪兩 task(明確指示 task 工具)→ 兩 part 各帶 t0/t1(2.2s/5.9s)+
+  child_sid;/subagents 回兩子 session tokens(514/1387);claude 回空表。測試對話
+  ses_09eadf011ffe…(查 package.json name+agents.yaml 計數)留著可肉眼驗卡片。
+已知取捨:方框「忙碌=橘」映射到 pending+request_id(待核准);排隊中(pending 無
+  request_id)=空框;claude 無 t0/t1/tokens → 卡片只少時間與 tokens 欄。task 之間若被
+  文字/思考隔開會各自成段,湊不滿 2 個不成卡(照常摘要行)。
+檔:bff/app/{main.py,adapters/{base,opencode}.py};frontend/src/{types.ts,api.ts,
+  components/{ChatView,TasksPanel,toolMeta}.tsx,pages/AgentDetail.tsx,styles.css}。
+回滾:git revert 上列檔+npm run build+kill -9 uvicorn。
+
+### portal 0.23.0 背景任務改拉門卡片+詳情彈窗;⋮ 收模型/頁面(2026-07-14 使用者四點)
+使用者四點(附 Claude App Background tasks 截圖):①背景任務格式改 App 同款、卡片可
+  折疊細項 ②點任務出彈窗而非直接跳 session ③⋮ 的對話/Diff/Log 合併成「頁面」一項,
+  點了彈窗選 ④模型選擇移入 ⋮ 頂部,模式移到模型原位。
+前端(bff 只 bump version 0.22.0→0.23.0):
+  TasksPanel 重寫:全螢幕 overlay → BottomSheet(defaultFull 全高開,可拖半高);卡片
+  仿 App=狀態圖示+標題+右側耗時(進行中每秒跳)+⌄ 折疊細項(提問預覽/錯誤/開始時間),
+  第二行 agent·種類·狀態字;點卡片開詳情彈窗(BottomSheet 新 lift prop,z 240/241 疊
+  在面板 220/221 上):狀態/Agent/種類/耗時/起訖 + 提問/錯誤全文 + 停止生成(running/
+  待核准才有,■ 從卡片移入這裡)+ 前往對話(彈窗存 task id 不存物件,輪詢後重對齊=
+  活更新);耗時格式改 App 同款 9s/1m 30s/1h 2m。
+  AgentDetail:⋮ 頂部兩項「模型 ‹label›」「頁面 ‹label›」→ ActionSheet 選擇器(加
+  selected ✓;.sheet 加 max-height 78vh 捲動防長模型清單爆版);頁面彈窗含對話/Diff/
+  Log/記憶指令四項(使用者點名三項,記憶指令也是分頁、一併收進去);composer 控制列
+  剩[模式][努力],模式補到模型原位;模型現況仍顯示在 topbar 副標。
+已知取捨:卡片細項預設收合(chevron 展開);首頁「背景任務」共用同一元件,一樣變拉門
+  +彈窗;停止生成從卡片外移進詳情彈窗(多一步,但卡片乾淨=App 同款)。
+檔:frontend/src/{components/{TasksPanel(重寫),BottomSheet,ActionSheet}.tsx,
+  pages/AgentDetail.tsx,styles.css};bff/app/main.py(version)。
+build 過、bundle index-svlT9QeX.js 上線;bff kill -9 重啟(先驗 running=0)、openapi
+  version=0.23.0。回滾:git revert 上列檔+npm run build+kill -9 uvicorn。
+
+### portal 0.23.1 子代理彈窗改 App workflow 卡同款(2026-07-14 使用者附圖「完全一樣」)
+0.22.0 的子代理彈窗(總計行+每列 sq/@分類/model/tokens/耗時/✓)與 Claude App 的
+  Background tasks workflow 卡長相不同,使用者要求完全一樣。
+SubagentSheet 重排成 App 卡結構:圓角卡(bg-3)內=●(進行中藍脈動)+首任務標題+右上
+  總耗時 → 「子代理 已完成/進行中/有錯誤」 → 「N agents · X tokens」(數字白、單位淺)
+  → 「Phases」→「任務 n/n ⌄」可折疊段(n=done 數):狀態方框列 + Agent|Tokens|Time
+  三欄表格(欄頭英文同 App,數值靠右,欄寬固定對齊)。
+已知取捨:每列的 @分類與 model 依 App 版面拿掉(App 沒有這兩欄);tokens 缺(claude)
+  該欄留空。ChatView 不再用 BADGE/ToolStatus(改由方框+n/n 表狀態)。
+檔:frontend/src/{components/ChatView.tsx(SubagentSheet),styles.css(subrow/subs-tot
+  → wfcard/wf-*)};bff/app/main.py(version 0.23.1)。
+bundle index-B5wgSBqh.js 上線;bff 重啟(running=0)version=0.23.1。
+回滾:git revert 上列檔+npm run build+kill -9 uvicorn。
+
+### portal 0.23.2 子代理彈窗補目的行+Phases 依分類分組(2026-07-14 使用者圈圖)
+使用者圈出 App 卡兩處差異:stats 下有一行 dim 目的描述;phase 用名稱(Review/Verify)
+  分組而非寫死「任務」。
+SubagentSheet:①stats 下加 wf-desc 目的行=各任務描述 join「 · 」(oneLine 110)
+  ②Phases 改依子代理分類分組(input.subagent_type,缺則 /subagents 的 agent,再缺
+  歸「任務」)——每組一個 phase 段:組名+done/總數 ⌄ 各自折疊+方框列+Agent|Tokens|Time
+  表(同 App 多 phase 結構);分類在 subs lazy fetch 到位後才補齊的組會重歸組(key
+  依組名,預設展開,無感)。
+檔:frontend/src/{components/ChatView.tsx,styles.css};bff/app/main.py(0.23.2)。
+bundle index-DLHPWin9.js 上線;bff 重啟(running=0)version=0.23.2。回滾同前。
+
+[2026-07-14] portal 0.23.3 子代理彈窗:去互動+提密度
+- 動機:使用者回饋 0.23.2 的 wf 卡「無法交互也不需要交互」,且字體/行距偏大。
+- 實作:①SubagentSheet 移除 phase 折疊(closed state/⌄ button 刪除,phase head 改純 div、恆展開)②wf 系列 CSS 整體縮小:卡 padding 14/16→11/13、標題 16→14px、行 14→12.5px、行距 1.35/1.4、phase 名 17→13.5px、表列 padding 5→2.5px、Tokens/Time 欄 70/76→64/60px。
+- 檔案:frontend/src/components/ChatView.tsx、frontend/src/styles.css、bff/app/main.py(version)。
+- 部署:bundle index-CmTHanPr.js;bff running=0 後 kill -9 自拉,version=0.23.3。
+- 回滾:git revert 上述三檔 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.4 子代理彈窗:折疊鍵復原+再縮字級
+- 動機:使用者更正 0.23.3——phase 折疊(⌄)其實要留(是想要的互動),且字還可以再小。
+- 實作:①SubagentSheet 恢復 closed state+⌄ 折疊按鈕(同 0.23.2 行為,預設展開)②wf CSS 再縮一級:主字 12.5→11.5px、標題 14→13px、phase 名 13.5→12.5px、表頭 11.5→10.5px、卡 padding 11/13→9/11、表列 padding 2.5→2px、Tokens/Time 欄 64/60→58/52px、圓點 8→7px。
+- 檔案:frontend/src/components/ChatView.tsx、frontend/src/styles.css、bff/app/main.py(version)。
+- 部署:bundle index-Cpe7rMAb.js;bff running=0 後 kill -9 自拉,version=0.23.4。
+- 回滾:git revert 上述三檔 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.5 claude 模型清單加入 Fable 5
+- 動機:使用者要在 portal 用 Fable 5 驗證 UI;claude_headless DEFAULT_MODELS 只有 opus/sonnet/haiku。
+- 實作:DEFAULT_MODELS 頂部加 {"id":"fable","label":"Claude Fable 5"}(claude CLI --model 原生支援 fable 別名,--help 已核);default_model 仍為 agents.yaml 的 sonnet。
+- 檔案:bff/app/adapters/claude_headless.py、bff/app/main.py(version)。
+- 部署:純後端改動免 rebuild;bff running=0 後 kill -9 自拉,version=0.23.5;controls API 驗證 models=[fable,opus,sonnet,haiku]。
+- 回滾:git revert claude_headless.py + kill -9 重啟。
+
+[2026-07-14] portal 0.23.6 claude 後端子代理 tokens/耗時接通+子代理內部工具不再漏進主對話
+- 動機:使用者問為何 claude 對話的子代理彈窗看不到 tokens/時間(opencode 有)。實測 claude -p stream-json:子代理事件帶 parent_tool_use_id、assistant 事件有 message.usage——資料都在,是 adapter _ingest 沒接。
+- 實作(claude_headless.py _ingest):①tool_use 蓋 t0、tool_result 蓋 t1(time.time(),所有工具)②parent_tool_use_id≠null 的 assistant 事件:usage(input+cache_creation+output)累計到對應 Task 工具的 tokens 欄,事件本身不進主對話 ③parent≠null 的 user(tool_result)事件跳過——修掉子代理內部工具漏進主對話工具列的 bug(先前「讀取 35 檔」其實是子代理在讀,App 不顯示這些)。
+- 前端:ToolCall 型別加 tokens?;SubagentSheet tokens 雙軌=subs[child_sid].tokens(opencode)|| c.tokens(claude)。
+- 已知限制:usage 的 output_tokens 是 message_start 占位值會低估(大宗是 input+cache_creation,顯示夠用);舊對話(改版前入檔)無 t0/tokens,欄照舊留空。
+- 檔案:bff/app/adapters/claude_headless.py、frontend/src/types.ts、frontend/src/components/ChatView.tsx、bff/app/main.py(version)。
+- 部署:bundle index-tgK8Ns5g.js;bff running=0 後 kill -9 自拉,version=0.23.6;欄位實測用一次 haiku Task 冒煙(parent_tool_use_id/usage 確認存在)。
+- 回滾:git revert 上述四檔 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.7 Fable5 健檢發現收斂:修 4 件、其餘判定不修
+- 動機:使用者在 portal 用 Fable5(3 子代理)對 ChatView/TasksPanel/claude_headless 做唯讀健檢,要求「修有必要的」。
+- 修(4):①claude_headless _load_state 對 _SKEYS 全鍵 setdefault——單一舊 schema/手改壞檔不再放大成整支 list_sessions KeyError(壞檔模擬測試過:3 筆含全缺鍵檔案均正常列出)②TasksPanel session 過濾移到 render 期,state 永存全量——消滅 sessionId 變動時 stale-closure 蓋錯資料的 race,effect 依賴清空 ③ChatView SubagentCard/SubagentSheet 的 tools.map(t=>t.tool!) 非空斷言改 filter+空陣列 early return(hooks 全跑完才 return)——漏 filter 的呼叫端不再白屏 ④subs 查表加 child_sid 真值 guard(subOf)——空字串 id 不再多筆誤配同一筆。
+- 不修(判定):model 值域驗證(打錯別名 CLI 退出碼已可見)、DEFAULT_MODELS 順序 fallback(唯一 agent 已顯式設 default_model)、kindOf 分組粗化(by design)、React index key(append-only 流)、KEEP_FINISHED=50 擠出(極端邊緣)、折疊狀態孤兒(純顯示自癒)。
+- 檔案:bff/app/adapters/claude_headless.py、frontend/src/components/TasksPanel.tsx、frontend/src/components/ChatView.tsx、bff/app/main.py(version)。
+- 部署:bundle index-DkNPhgQl.js;bff running=0 後 kill -9 自拉,version=0.23.7;sessions API 冒煙 ok。
+- 回滾:git revert 上述四檔 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.8 AI 回覆底下的輪次狀態指示+完成統計
+- 動機:使用者要求仿 App:生成中=變動符號、等子代理=…循環、等計時器=進度圈(一圈=計時長)、輸出完=整輪總時間/總 tokens。
+- 資料面:opencode get_messages 對 assistant 加 tokens(input+output+reasoning)/secs(time.completed-created);claude _ingest result 事件收 usage(input+cache_creation+output,不計 cache_read)→asst.tokens、duration_ms→asst.secs,中止/逾時無 result 用牆鐘補 secs。
+- 前端:Message 型別加 tokens?/secs?;ChatView 新 TurnLive(最後一輪+busy 時):running 工具含 task→tl-dots(純 CSS 三點 .→..→... steps 循環);running bash 指令含 sleep N→SVG 進度圈 stroke-dashoffset 動畫 duration=N 秒、負 animationDelay 對齊已流逝(t0);其餘→✳ tl-spin 轉動脈動。busy 且尾組是 user(202 異步首則未進表)也亮 ✳。輸出完(非 busy)→turn-stats 行:耗時=頭尾訊息跨距+尾則 secs(opencode 一輪多則)、tokens=各則加總,歷史輪也顯示。
+- 檔案:bff/app/adapters/opencode.py、bff/app/adapters/claude_headless.py、frontend/src/types.ts、frontend/src/components/ChatView.tsx、frontend/src/styles.css、bff/app/main.py(version)。
+- 已知限制:舊對話(改版前)無 tokens/secs 不顯示統計;計時器偵測限 bash sleep 模式。
+- 部署:bundle index-DotmeEOY.js;bff running=0 後 kill -9 自拉,version=0.23.8。
+- 回滾:git revert 上述檔案 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.9 ⋮ 用量統計(上下文/今日/累積)+壓縮按鈕
+- 動機:使用者要求 ⋮ 加「用量統計」:此 session 當前上下文 token(附壓縮鈕)/今日消耗/累積消耗。
+- 後端:base 加 usage_stats/compact 介面(預設 NotImplementedError→route 回 501)。claude:_ingest 主迴圈每個 assistant 事件的 usage(input+cache_read+cache_creation+output)覆寫 asst.ctx=當下上下文;usage_stats 掃記憶體全 session 訊息加總(今日=ts>=本地午夜);compact=send("/compact") 走一般生成流程。opencode:get_messages assistant 加 ctx(input+output+cache.read+cache.write);usage_stats=主 session 逐則訊息歸日加總+子代理 session 用 session 級 tokens 依 updated 歸日(單輪居多誤差可忽略),全域統計 120s 快取(Semaphore 6 掃);compact=POST /session/{id}/summarize(帶 session 慣用 model)。
+- route:GET …/usage、POST …/compact(202,_bg kind=壓縮;busy 409)。
+- 前端:api getUsage/compactSession;AgentDetail ⋮ 加「用量統計」(sid-gated)→BottomSheet 三列(usage-row/k/v)+壓縮鈕(confirm→markBusy→compactSession)+說明註(舊對話無資料不列入)。
+- 實測:opencode usage 回 ctx 12259/今日 98674/累積 662868;claude 舊對話 0(改版前無 tokens 欄,新輪起累計)。
+- 檔案:bff/app/adapters/{base,claude_headless,opencode}.py、bff/app/main.py、frontend/src/{api.ts,pages/AgentDetail.tsx,styles.css}。
+- 部署:bundle index-sw9jXeMV.js;bff running=0 後 kill -9 自拉,version=0.23.9。
+- 回滾:git revert 上述檔案 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.10 拉門手勢改甩動/慢拉雙軌
+- 動機:使用者要求:按住慢拉=放手看行程過半決定拉出/收回;快速左右甩=不看行程直接照方向定。
+- 實作(AgentDetail 抽屜手勢,session/首頁共用同一套):手勢 ref 加 samples(近 8 筆觸點 t/x);touchmove 逐筆記;放手算末速=最後 ~90ms 窗口位移/時間;|v|>0.45 px/ms=甩動→甩右直接開、甩左直接收(方向可與起手模式相反,支援拉到一半反甩);其下=慢拉→過半(DW/2)開、未過半收(原 0.4/0.6 不對稱閾值改對稱 0.5)。
+- 檔案:frontend/src/pages/AgentDetail.tsx、bff/app/main.py(version)。
+- 部署:bundle index-5_qcur59.js;bff running=0 後 kill -9 自拉,version=0.23.10。
+- 回滾:git revert AgentDetail.tsx + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.11 版本切換改 DeepSeek 式 ‹ i/n › 動作列樣式
+- 動機:使用者附 DeepSeek 截圖,要求「第幾版」比照:只有編輯/重發過(版本 >1)才在回覆底下顯示幾分之幾。
+- 實作:composer 上方的 version-bar(◀ 版本 i/n ▶+長句提示)整塊移除;ChatView 加 versionNav prop({i,n,go}),渲染在最後一輪 AI 回覆的動作列(msg-actions)最左:‹ i/n ›(‹› 沿用動作列按鈕樣式,禁用態 0.3 透明),非最新版時附小字「舊版」(原「續聊會從這版分出」長句捨棄)。AgentDetail 組 prop:versions<2 或找不到 current 給 undefined;go=slideNav 到目標版 sid(方向依前後)。
+- CSS:.version-bar/.ver-btn/.ver-label/.ver-old 刪除 → .ver-pager/.ver-num/.ver-old-tag。
+- 顯示條件不變(getVersions 輪詢);生成中(busy)動作列本來就隱藏,pager 一併隱藏。
+- 檔案:frontend/src/components/ChatView.tsx、frontend/src/pages/AgentDetail.tsx、frontend/src/styles.css、bff/app/main.py(version)。
+- 部署:bundle index-IaKxFw1K.js;bff running=0 後 kill -9 自拉,version=0.23.11。
+- 回滾:git revert 上述三檔 + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.12 版本切換改分支節點樹(每個編輯/重發點各自 ‹i/n›)
+- 動機:使用者更正 0.23.11——要的不是整段對話版本切換,是樹狀分支:hi→重發成 hello,第一條回覆下 1/2=hi、2/2=hello;之後 apple→banana,第二條回覆下也各自 1/2、2/2(類似 ChatGPT/DeepSeek 節點分支)。
+- 資料模型:快照仍是整段複製(引擎限制,claude headless 無法真樹),但 META 快照條目加 branch=分支節點(編輯/重發點是第幾則使用者訊息,1 起算;main.py _branch_ordinal 從 adapter.get_messages 數,AI 回覆歸前一則 user);versions API 帶出 branch。
+- 前端:versionNav 單一 pager → versionsAt(節點 k→{i,n,go})。AgentDetail 組表:同節點快照依時間排、origin(最新版)恆為最後一格;看最新版=每個分支節點都有 pager 且在最後格;看舊版=只有該快照自己的分支節點有 pager(其後訊息屬舊分支,別的節點不對應)。ChatView:groupOrd(AI 群組→回應第幾則 user),pager 掛對應回覆下;最後一輪併進動作列、歷史輪自成一行(同 msg-actions 樣式)。
+- 相容:舊快照(無 branch)歸節點 1;切換仍是換 sid 載整段(底層本來就是快照 session)。
+- 檔案:bff/app/{main.py,meta_store.py}、frontend/src/{types.ts,components/ChatView.tsx,pages/AgentDetail.tsx}。
+- 部署:bundle index-REz9eUd-.js;bff running=0 後 kill -9 自拉,version=0.23.12。
+- 回滾:git revert 上述檔案 + npm run build + kill -9 重啟(META 裡多的 branch 鍵無害)。
+
+[2026-07-14] portal 0.23.13 版本切換改原地渲染(只重畫分支節點以下)
+- 動機:使用者要求切版本不要整頁重載,只重新渲染切換節點及以下的對話。
+- 實作(AgentDetail):verSwitch ref;pager 的 go 改「原地 setSid」(不走 slideNav 整頁滑動;target==sid 不動,避免旗標殘留)。sid 載入 effect 遇 verSwitch:不清空訊息、不走分段渲染——有快取先整份貼上,並 refreshMessages("force") 整表換新;React 依 key(訊息 id)diff,快照=整段複製、共同前綴 id 相同 → 節點以上 DOM 原地保留,只重畫分支點以下。捲動重置 effect 遇 verSwitch 跳過(停在原節點位置)並在此消化旗標(兩個 effect 依定義序執行,載入先讀、捲動後清)。URL ?sid= 由既有同步 effect 照常更新。
+- 已知限制:opencode fork 若給前綴訊息換新 id,key 對不上會整列重畫(無整頁滑動與捲動跳動,只是 DOM 換新);claude deepcopy 保留 id,前綴完整復用。
+- 檔案:frontend/src/pages/AgentDetail.tsx、bff/app/main.py(version)。
+- 部署:bundle index-Bi8e48bk.js;bff running=0 後 kill -9 自拉,version=0.23.13。
+- 回滾:git revert AgentDetail.tsx + npm run build + kill -9 重啟。
+
+[2026-07-14] portal 0.23.14 版本切換原地渲染修正:remount 真兇在路由 key(+審查 7 修)
+- 動機:0.23.13 上線後使用者實測仍整頁重繪、連 session 標題都變成「⟲ xx (fork #1)」,claude/opencode 皆然。
+- 根因:main.tsx 路由 key=pathname+search──pager 切版 setSearch(?sid=)→ key 變 → AgentDetail 整個 unmount+remount,所有 ref/state 歸零,0.23.13 的 verSwitch 原地渲染是死碼從未執行。另實測證實 opencode fork 會給複製訊息換全新 id(msg_f61d79e64…→msg_f61d79e4b…),React key 對不上前綴照樣整列重畫。
+- 實作:
+  - main.tsx:key 改只含 pathname(跨 agent 仍重掛;同 agent 換 ?sid= 不重掛)。
+  - AgentDetail 新增 search→sid 同步 effect(接手原 remount 職責):外部導航(抽屜點對話/新增對話/瀏覽器返回)setSid+清 pendingSid/draft/attachments/editingMsgId/error+setTab(chat)+讀 ?model=+closeDrawer;版本切換/首送是 setSid 在先、setSearch 對齊在後,到此已一致不誤清。
+  - id 別名(顯示層):pager go() 記 pendingPrefix={target,畫面列表};aliasMessages 於新列表到手按位置比內容(role+parts 指紋)建 idAlias(真→顯示)/realIds(反查),前綴沿用畫面 id、分支節點起 break;msgCache 永遠存真 id;編輯/重發/分支 API 用 realIdOf 反查。正常換 session 清空別名。
+  - 標題:看舊版(sid≠versions.origin)鎖顯示 origin 標題,不再跳 fork 名。pager 索引改本地判定(vs.find(sid)),不等 server current 旗標 refetch。
+  - useSlideNav:同 pathname 只換 query 的導航不走 View Transition(不 remount 後整頁滑動只會截到舊畫面再閃新內容;過場交給抽屜滑回動畫)。
+- 對抗審查(workflow 12 代理:3 視角 opus 找茬+逐項 opus 證僞;9 報 9 確認、去重 7 項,全屬「remount 消失後殘留」族):
+  1.(P1)kick 連刷計時器閉包綁舊 sid,換 session 不清 → 舊對話訊息覆蓋新畫面:加 sidRef(每 render 同步)+applyMessages 過期守衛(sid≠sidRef 丟棄),sid effect 再 clearKicks 雙保險。守衛同時擋雙擊 pager 連切與慢 fetch 串線。
+  2.(P1)版本切換不清 editingMsgId → realIds 重建後 realIdOf 反查到他版 id 打 editMessage:go() 裡編輯模式即斷(清 editingMsgId+draft)。
+  3.(P2)error 橫幅跨對話殘留:同步 effect 補 setError("")。
+  4.(P2)diff 檔案清單跨對話殘留:sid effect 補 setDiff([])。
+  5.(P2)model=null 的 session(opencode 未經 portal 送過/bff 重啟後)沿用上一對話模型:syncedSid 改落回 agent 預設。
+  6.(P2)上傳中切走 session 附件掛錯對話:onPickFiles 完成回呼比對 sidRef 丟棄。
+  7.(P2)在途 getMessages 覆寫共享 fullMsgs:同 1 的 applyMessages 守衛涵蓋。
+- 已知限制:對話 >20 則(MSG_CAP 截尾)且兩版長度不同時前綴比對錯位 → 別名建不起來,fork 降級整列重畫(無錯誤資料);編輯樂觀列表短暫把顯示 id 寫進 msgCache,隨後 force 覆蓋;從抽屜直接點開 fork session 標題先顯 fork 名、versions 到手後跳 origin 名。
+- 檔案:frontend/src/{main.tsx,useSlideNav.ts,pages/AgentDetail.tsx}、bff/app/main.py(version)。
+- 部署:bundle index-KUyxMpaf.js(審查修復後);bff running=0 後 kill -9 自拉,version=0.23.14。
+- 回滾:git revert 上述三檔 + npm run build + kill -9 重啟。
+
+[2026-07-15] portal 0.23.15 版本樹祖先鏈+切版不跟底/標記不消失
+- 動機:使用者實測 0.23.14 兩問題:①切版體感仍像重新讀取;②看舊版(hey 1/2)時父節點(hi)的 pager 消失——「有子節點看不到父節點的狀態」,建議 linked list/快照+樹結合。
+- 問題 2 根因:0.23.12 的設計「看舊版只顯示該快照自己節點的 pager」太保守。其實既有資料(每快照 ts+branch)已足以重建樹,免動 bff:快照=「節點某版被取代前的整段終態」→ 看快照 V(branch=K, ts=T)時,祖先節點 n<K 當時的版本 = byOrd[n] 中第一個 ts>T 的快照(它之後才被改),沒有 = origin 最新版。versionsAt 重寫:舊版視角掛出全部 n≤K 節點的 pager(祖先按時刻推索引、自身按 sid 定位),可直接從舊版切父版;n>K 屬已放棄分支內部(版本歷史在 origin 線上、內容對不上)不掛。byOrd 各節點依 ts 排序保險。
+- 驗證(使用者場景):hi 重發→S1@t1(branch1);hey 重發→S2@t2(branch2)。看 origin:hi 2/2、hey 2/2;切 hey 1/2(=S2):hi 顯示 2/2(t1<t2 → 無 ts>T 快照 → origin 版)可再切 1/2 跳 S1;看 S1:僅 hi 1/2(無 hey 節點)。
+- 問題 1 根因(兩個佈局跳動源,非 key 問題——claude 訊息 id=ingest 時生成存 state,deepcopy 快照保留,key 本來就對上):
+  ①捲動跟底:layout effect 見 stickBottom(使用者常貼底)就 smooth scrollToBottom——切版內容一換整頁平滑滾動,體感=重新載入。修:go() 設 verStickUntil=now+1200ms 靜默期,期內不自動跟底(涵蓋 cache 貼上+force fetch+輪詢首拍),使用者停在原節點。
+  ②ctlMarks(「模式 → 預設」等標記)per-sid 存 localStorage:切到快照 sid 標記瞬間消失、前綴上移。修:marksKey 掛版本群 origin(versions?.origin ?? sid;origin session 的 key 不變、舊資料不丟),載入 effect 依賴補 versions?.origin,切版(同群)不重載不消失。
+- 檔案:frontend/src/pages/AgentDetail.tsx、bff/app/main.py(version)。
+- 部署:bundle index-CNl15vj_.js;bff running=0 後 kill -9 自拉,version=0.23.15。
+- 回滾:git revert AgentDetail.tsx + npm run build + kill -9 重啟。
+
+[2026-07-15] portal 0.23.16 短對話置頂+移除「舊版」標示
+- 動機:使用者要求①第一則訊息從畫面最上方開始(原本短對話貼底、上方大片留白,訊息夠長才被頂上去)②pager 旁黃色「舊版」標示移除(‹i/n› 非最後格已足以表達)。
+- 實作:styles.css .chat 移除 margin-top: auto(.content 是 flex column,該規則把訊息流推到容器底);ChatView pager 的 ver-old-tag span 與對應 CSS 刪除。
+- 檔案:frontend/src/{styles.css,components/ChatView.tsx}、bff/app/main.py(version)。
+- 部署:裝飾類跳審查;bundle index-C1u4HwGs.js;bff running=0 後 kill -9 自拉,version=0.23.16。
+- 回滾:git revert 兩檔 + npm run build + kill -9 重啟。
+
+[2026-07-15] CT260 掛 hdd1 100G 冷資料桶(/mnt/coldstore;已重啟生效,冷歸檔 cron 上線)
+- 動機:使用者問 portal 對話/版本快照占不占空間+要求掛 hdd1 100G 給 CT260 存「丟失也沒差、不吃速度」的東西(封存對話/子代理對話/各式 log)。
+- 現況盤點:bff 版本快照 meta 僅 164K、opencode 全部 73M、~/.claude 1.5G(projects=session/workflow 子代理 transcript 663M,持續增長);CT260 rootfs 24G 用 69%。快照=純文字 MB 級,近期無壓力,長期冷堆適合 HDD。
+- 實作:24bay-pve `pct set 260 -mp0 hdd1:100,mp=/mnt/coldstore,backup=0` → 建 hdd1/vm-260-disk-0 100G thin LV+ext4。backup=0=vzdump 不含(資料定位=丟失可容忍)。hdd1 912G 原用 1.91%(CT270 rootfs),餘裕充足;HDD-0 污染區維持不分配(使用者舊裁決)。
+- 待辦(重啟後):①`pct exec 260 -- chown 1000:1000 /mnt/coldstore`(容器內 codex 無 sudo)②遷移策略建議=cron 每日把 N 天未動的舊 transcript/log 搬進去(活躍檔留 SSD 不 symlink 整目錄,避免跨 fs mv 斷寫入 fd),細節與使用者再定。
+- 收尾(2026-07-15 重啟後,兩項皆完成):①chown codex:codex 走 pve24-auto(互動鑰 pve24 重啟後 agent 快取失效被拒,自動軌本就為此而設)。②hl-coldstore-archive 上線(~/.local/bin,cron 每日 20:30 UTC=台北 04:30,flock .coldarch.lock):範圍=~/.claude/{projects,file-history,uploads} 中 mtime>14 天檔案 → /mnt/coldstore/claude-archive/<原相對路徑>;排除 */memory/*(持久記憶檔讀取不更新 mtime,不排除遲早被搬走=記憶損毀);mountpoint 防呆=掛載失蹤 TG 一次(狀態檔去抖)+exit 1,絕不往 rootfs 假目錄搬;搬空目錄順手清;支援 --dry-run。首跑 moved=109/5.0M(舊 session jsonl+file-history);fixture 驗證=舊檔搬走+memory/ 留守皆正確。註:~/.claude 全樹 mtime 最早僅 2026-07-08(上週遷移重置),故近期每日搬量趨零,隨老化自然生效;AGE_DAYS=14 可調。另盤點 remote/ccd-cli 三版 CLI 快取共 729M 為 harness 自管,未納入。
+- 生效條件:CT260 重啟(pct set 對運行中容器不熱掛)。重啟=斷使用者工作環境+Claude session,時機由使用者定;宿主指令 `sudo pct reboot 260`(或 portal/桌面外跑)。
+- 入檔:V7 §6 storage 表+§10 CT260 spec(Rootfs 16G→24G 漂移一併修正)。
+- 回滾:`pct set 260 -delete mp0` + `lvremove hdd1/vm-260-disk-0`(未遷資料前零影響)。
+
+[2026-07-15] portal 0.24.0 版本樹改雙層血統(修「切節點2連動節點1」+DeepSeek 式雙 pager)
+- 動機:使用者回報(截圖)切第 2 則訊息版本時第 1 則跟著換——0.23 平面模型把 origin 當每個節點的最新版,pager 提供跨支跳轉;並指定改 DeepSeek 式:編輯重發=使用者版本 pager 掛 prompt 泡泡下、單純重發=回覆版本 pager 掛 AI 回覆下,兩層獨立。
+- 實作:①bff 快照加記 kind(edit/resend)+turns(當時使用者訊息總數;_branch_stats 取代 _branch_ordinal、meta_store.add_version 擴欄+patch_version);/versions 回傳新欄,舊快照 turns 懶回填(批次一次 save;程序內 _TURNS_TRIED 集合防 get_messages 永久失敗被每輪輪詢重打)②前端新 versionTree.ts buildPagers 純邏輯:tok 血統標記(branch 節點=自身槽位、其他節點=byOrd 首個 ts 更大者、無=origin 槽),節點 k 同支候選=本節點快照+內部尾版(branch<k 且 turns≥k)+origin,全數過 sameLineage 前綴比對;edit 快照切 epoch → user pager=各 epoch 終態、reply pager=當前 epoch 成員 ③ChatView 雙 pager props(versionsAt/editVersionsAt)+groupOrd 含 user 群組+ordBase(分段載入尾端視窗的節點序對齊);AgentDetail buildPagers useMemo+refreshVersions 內容不變保物件識別(3 秒輪詢不打穿 memo)。
+- 測試:純邏輯 20 場景全過(使用者 repro/DeepSeek 雙層/edit 後 resend 混合 epoch/連續 edit/舊資料降級/跨空節點內部尾版配對/空群);線上丟棄式 opencode session e2e(deepseek-v4-flash:send→resend@1→send→resend@2→edit@1,branch/kind/turns 全對,收尾刪 session);使用者原 Greeting session(舊格式)驗證=turns 懶回填生效、切節點 2 候選為同支內部尾版非 origin。
+- 對抗審查(8 角度 finder):效率×3 家交叉=懶回填每筆整檔 save(改批次)、buildPagers 無 memo 被 3 秒輪詢重跑(改 useMemo+識別保留);跨檔=回填永久失敗重打(_TURNS_TRIED);重用=回填手寫數 user 改 _branch_stats;簡化=殘留 VersionEntry import(刪);逐行掃描 2 候選證僞為誤報(其假設「內部尾版與前快照同內容」不成立——快照凍「操作前」態,尾版繼承「操作後」新內容);高度=結構性已知限制:血統靠 ts 排序重建、無父指標,時鐘回撥/同秒併發理論可誤配(time.time() float+快照隨使用者操作序列生成,實務風險低);根治=快照時落 parent 指標,留待需要時。
+- 舊資料相容:kind=None 一律當 resend(單支 reply pager);turns=None 懶回填、失敗則該快照不當內部尾版(降級不崩)。
+- 檔案:bff/app/{main.py,meta_store.py};frontend/src/{versionTree.ts(新),pages/AgentDetail.tsx,components/ChatView.tsx,types.ts,styles.css}。
+- 部署:npm build(bundle index-CB3AtUUC.js)+kill -9 uvicorn 自拉,version 0.24.0;PWA SW 背景換版自動 reload(首開仍舊殼屬既知語義)。
+- 插曲:AgentDetail.tsx 內含 "\x00" 字面值,grep 視為 binary 而靜默無輸出——該 repo 查碼用 grep -a 或 awk。
+- 回滾:agenthub 不在 git(/workspace/* gitignored)——還原上列檔案舊版+npm build+kill -9 重啟;meta.json 新欄位舊代碼以 .get 讀取不擋。
+
+[2026-07-15] portal 0.25.0 三功能:🌐搜尋引用+PDF抽文注入+雙層自動記憶(統一 ctx 注入機制)
+- 動機:0.24.0 後與主流 AI app 差距盤點,使用者裁決:做②網路搜尋+引用、③自動記憶(分 session 記憶與「規則級」全域記憶)、⑥檔案理解管線;語音/Canvas/DeepResearch 擱置,體驗細項後議。
+- 核心設計(一套機制管三功能):bff 送訊前把背景資料包成 <ahctx> 區塊「接在使用者文字後」(不放前面:session 標題取開頭),首行=緊湊 JSON meta({"v":1,"web":[...],"files":[...],"mem":true});前端 ChatView 顯示層剝除+據 meta 渲染;快照/重發原樣帶區塊=同版本重生成用同批來源,語意一致。兩 adapter(opencode/claude)一視同仁。
+- ①搜尋:SendIn.web=true(composer 🌐 開關,per 對話、換對話重置、編輯模式禁用)→ ddgs 搜 6 筆+httpx 併發抓前 3 頁內文(1.5MB/頁上限、手動跟轉址逐跳驗內網、30s 整體逾時)→ 注入並指示以 [n] 引用;回覆上方 <details> 來源卡片(標題+域名可點)。搜掛/無結果注入「搜尋失敗請據實告知」防模型裝查過。
+- ⑥PDF:upload 時 pypdf 抽文(200頁/20萬字上限、60s 逾時)存 <uploads>/<sid>/.extract/<name>.txt sidecar(首行 meta);送訊帶該附件時注入(每檔 12k/總 28k 字元預算);attach-chip 顯示「已解析 N 頁/掃描檔抽不出字」。txt/md 維持原路(opencode file part 自展開、claude Read)。
+- ③記憶:send 成功後 asyncio.create_task 跑 memex(隱藏 session 即建即封存即刪,AGENTHUB_MEMEX_AGENT/MODEL 環境變數可覆寫,預設 opencode+deepseek-v4-flash effort low)萃最後一問一答 → facts 自動入庫(版本群 key 掛,快照共用;100 條/對話上限)、rules 進待批(30 上限;駁回入 rejected 200 上限永不重提);已記住清單餵給萃取器防重複。注入=規則+事實 hash 變動才灌一次(_MEM_SENT 程序內去重 500 上限;edit/compact 會截掉歷史區塊→端點 pop hash 強制下輪重注)。UI=memory 分頁頂部三區(待批 ✓/✗、全域規則、本對話事實,均可刪)+頁面選單「記憶/指令(n 待批)」徽章;SSE "memory" 事件在 agent 過濾「之前」處理(規則是全域的)。REST:GET sessions/{sid}/memory、DELETE …/facts/{fid}、POST /api/memory/rules/{rid}/resolve、DELETE /api/memory/rules/{rid}。meta_store 新頂層 "memory" key(舊檔自動補齊子結構);drop_session 連 facts 一起清。
+- 測試:bff 單元(build/strip 往返、html2text、meta_store 記憶去重/准駁/駁回防重提/drop 清理、memex 解析)+前端 ctxBlock 單元(剝除/meta/壞 JSON/多區塊/使用者手打字面區塊保留)全過;線上 e2e 三案×2 輪(審查修正前後各一)全 PASS:搜尋注入+[1] 引用回答、記憶自動萃「貓叫毛毛」+繁中規則進待批+第二輪注入答對貓名、手工 PDF 上傳抽文+答出暗號 FROG-4972;丟棄式 session 收尾全刪+測試規則批准後刪除不留 rejected 殘影。
+- 對抗審查(Opus 雙路,證僞導向;15 發現全處置):bff 8=SSRF 302 轉內網(CONFIRMED→手動跟轉址逐跳驗)、/api/search 洩注入內容(CONFIRMED→search 掃描先 strip_ctx)、ddgs 無逾時卡死送訊(→wait_for 30s)、PDF 抽文無上限/逾時(→20萬字+60s)、抓頁整包吞記憶體(→stream 1.5MB 截)、memex 隱藏 session 閃現列表(→create 後即 set_archived)、edit/compact 截掉記憶區塊但 hash 未失效=記憶靜默消失(→端點 pop)、刪對話後萃取寫回孤兒 key(→寫前驗 session 存活);前端 7=搜尋 snippet 洩漏(同 bff 修)、尾端視窗切掉 user 訊息→來源卡片消失(CONFIRMED→leadCtxMeta 從 fullMsgs 補)、SSE memory 事件被 agent_id 過濾漏刷全域徽章(CONFIRMED→移到過濾前)、編輯模式 🌐 假開關(CONFIRMED→禁用+提示)、webOn 跨對話殘留(→sid 重置)、使用者手打字面 <ahctx> 被誤剝(→僅剝首行合法 meta 的區塊)、ctx 跨 part 邊界不剝(bff 單 part 產生,不會發生,記錄即可)。證僞若干:卡片與雙擊複製不互擾、mem! 斷言有 gate、sidecar 路徑穿越不可達、meta.json 單線程無 lost-update 窗。
+- 已知限制(記錄不修):memex 期間 agent 級狀態短暫 running(數秒,per-session busy 不受影響);記憶注入依賴歷史留存,claude 編輯開新脈絡時記憶隨 hash 失效機制下輪重注;python 端 strip_ctx 不驗 meta(標題/搜尋對字面區塊過度剝除,僅外觀);ddgs 卡住的執行緒 wait_for 後仍佔 thread pool 至自然超時。
+- 檔案:bff/app/{enrich.py(新),memex.py(新),main.py,meta_store.py,adapters/base.py,adapters/claude_headless.py,requirements.txt(+ddgs+pypdf)};frontend/src/{ctxBlock.ts(新),components/ChatView.tsx,pages/AgentDetail.tsx,api.ts,types.ts,styles.css}。
+- 部署:venv pip install ddgs pypdf;npm build(bundle index-DtE5mbdA.js)+kill -9 uvicorn 自拉,version 0.25.0。
+- 插曲:pkill -f 'uvicorn app.main:app' 連坐殺到自己的 bash(-f 匹配到包裹 shell 的 eval 字串)——重啟一律 pgrep 精確路徑取 PID 再 kill。
+- 回滾:還原上列檔案+npm build+kill -9;meta.json "memory" key 舊代碼不讀不擋;sidecar 目錄殘留無害。
+
+[2026-07-15] portal 0.26.0 本地緩存=冷啟動絲滑(APK 訴求攻克 #1)
+- 動機:使用者提出想包 APK,核心訴求=①本地緩存每次加載絲滑 ②真全螢幕。評估後 APK(TWA)不解決任何實際痛點(殼裡同一個 SW/SSE;還要公網 asset links+Authelia in WebView),裁決=逐項用 PWA 原地攻克,本版做 #1。
+- 實作(三層):①msgCache 升級雙層——記憶體 Map(同步、唯一真相)+ IndexedDB 背景落盤(agenthub-cache/msgs;LRU 5→40 格;400ms 防抖、輪詢同內容不寫、同內容 set 回傳既有物件保識別;模組載入即還原,AgentDetail 換 session effect 未命中時 await hydrated 補查一次、網路先到讓路);IDB 不可用(隱私模式)靜默降級純記憶體=0.25.0 行為。②列表快取 localStorage(ahls:sessions/agents/projects)——Home 初始 state 先端上次列表,fetch 到手換權威,首頁/抽屜冷啟動零白屏。③殼改 NetworkFirst——vite-plugin-pwa globPatterns 去掉 html、navigateFallback:null、navigation 走 runtimeCaching NetworkFirst(app-shell,逾時 3s 退快取殼);LAN 下 index.html ~0.7ms,換「每次開啟即最新版」,不再首開舊殼+背景換版 reload 閃一下;帶 hash 資產照舊 precache,離線仍可開。
+- 測試:build 過(precache 7 entries,index.html 已不在);sw.js 驗有 NetworkFirst/app-shell/timeout3;msgCache node 降級路徑單元(get/set/miss/同內容識別保留/MSG_CAP/drop)全過;IDB 路徑屬瀏覽器行為,使用者端第二次開啟起生效。
+- 檔案:frontend/src/{msgCache.ts,pages/AgentDetail.tsx,pages/Home.tsx}、frontend/vite.config.ts、bff/app/main.py(version)。
+- 部署:bundle index-pIYH7IM5.js;kill -9 uvicorn 自拉,version 0.26.0。注意:這次部署本身仍走一次舊 SW 換版(最後一次);之後的部署才吃到 NetworkFirst 語義。
+- 隱私語義:對話尾端 20 則(含 <ahctx> 注入內容)落在裝置 IndexedDB/localStorage——與原生 app 快取同級,裝置鎖之內。
+- 待辦(APK 訴求 #2):真全螢幕=manifest display fullscreen(隱藏狀態列)±回前景 visibilitychange 即時補刷,下輪與使用者對齊。
+- 回滾:還原四檔+npm build+kill -9;殘留 IDB/localStorage 由新代碼忽略,或 DevTools 清站點資料。
+
+[2026-07-15] agenthub Android app=TWA 打包(APK 訴求入口形態定案+實作)
+- 動機:使用者明確要 app(本地緩存絲滑+真全螢幕);入口形態討論定案=TWA(Bubblewrap)+display standalone(使用者選,留狀態列)。關鍵翻盤事實:①*.hl 已是 LE wildcard 公信憑證(2026-07-10 方案 B2)②Digital Asset Links 由「手機上的 Chrome」抓取驗證,內網可達即可,零公網暴露需求。使用者主用 Firefox → TWA 宿主仍是 Chrome(裝著即可不必預設),Authelia 登入態不與 Firefox 共用,首開 app 內登一次。
+- 實作:①CT260 使用者級工具鏈(無 root):~/.bubblewrap/{jdk=Temurin 17.0.19,android_sdk=cmdline-tools 12+build-tools 34/35+platform android-36};坑=bubblewrap 要 <sdk>/tools/bin/sdkmanager、AGP 8.9 要標準 SDK 根 → tools→cmdline-tools/latest symlink 兩全。②簽名鑰 keytool RSA2048/10000 天,keystore+密碼=~/.config/homelab/agenthub-twa.{keystore,env}(600;換鑰=手機須解除安裝重裝)。③twa-manifest.json(~/workspace/agenthub/twa/):packageId com.lailai74143.agenthub、host agents.hl、standalone/portrait、主題色 #0d1117;坑=bubblewrap update 會抓 webManifestUrl/iconUrl,agents.hl 對 CT260 是 tailnet 不可達 → 改指 http://127.0.0.1:8300(僅建置期)。④bubblewrap build(BUBBLEWRAP_KEYSTORE/KEY_PASSWORD env)→ app-release-signed.apk 991KB,apksigner verify 過、指紋與 keystore 一致(FE:E1:F5:53…D6:89)。⑤assetlinks.json 放 frontend/public/.well-known/(隨 dist 由 bff 供應,vite 原樣複製);APK 放 public/agenthub.apk+dist → https://agents.hl/agenthub.apk 下載(200/991686B 驗證)。
+- 待使用者(root@CT203):bash ~/workspace/agenthub/twa/finish-twa-assetlinks-ct203.sh(scp/pct push 過去跑)——Authelia access_control 加 agents.hl 的 ^/\.well-known/assetlinks\.json$ bypass(備份+自驗 200);CT260 SoT 副本已同步同一規則。跑完前 TWA 開啟會殘留瀏覽器工具列(asset links 驗證失敗的降級),不影響功能。
+- 安裝流:手機瀏覽 https://agents.hl/agenthub.apk → 允許未知來源安裝 → 確認 Chrome 已裝 → 開「Agents」→ app 內登 Authelia 一次。注意 session 政策 inactivity 30m/expiration 8h/remember_me 2d → app 重登頻率由此決定;要「app 手感」可考慮 remember_me 拉長(configuration.yml,使用者裁量)。
+- 更新語義:app=指向站台的信任殼,前端照常 npm build 部署即全端生效,APK 永不重打;要重打(改名/改色/換鑰)= source agenthub-twa.env + JAVA_HOME=~/.bubblewrap/jdk PATH=~/.npm-global/bin:$PATH,twa/ 下 bubblewrap update+build。
+- 檔案:agenthub/twa/{twa-manifest.json,finish-twa-assetlinks-ct203.sh,app-release-signed.apk,app-release-bundle.aab,Android 專案};frontend/public/{.well-known/assetlinks.json,agenthub.apk};~/.config/homelab/{authelia/configuration.yml(SoT 同步),agenthub-twa.*}。
+- 回滾:手機解除安裝;CT203 cp 備份檔回去+restart authelia;CT260 刪 public/ 兩檔重 build。工具鏈 ~/.bubblewrap 約 2.3G,不用可整目錄刪。
+
+[2026-07-15] APK 下載 404 破案:前端假 404(舊 SW 攔導航+router 無 catch-all)
+- 現象:CT203 腳本跑通(assetlinks/APK 免 cookie 皆 200)後,使用者手機開 /agenthub.apk 依舊 404。
+- 排查:bff journal 顯示該路徑只有腳本自驗兩發(200),手機請求「從未到達伺服器」;公網 DNS 無 hl.* 記錄(排除 CF 萬用字元邊緣 404);鏈路內測 302/200 全正常。
+- 根因:手機 Firefox 還跑 0.26.0 前的舊 service worker(precache+navigateFallback),把 /agenthub.apk 導航攔成快取的 SPA 殼;main.tsx router 無 catch-all → react-router 預設錯誤頁字面顯示「404 Not Found」——長得像伺服器 404,實為前端本地渲染。
+- 修法:①main.tsx 加 { path:"*", element:<Navigate to="/"/> } catch-all(未知路徑歸首頁,杜絕假 404)②0.26.0 的 NetworkFirst 殼本身已根治(新 SW 接管後導航一律先走網路);過渡期使用者需先開首頁讓 SW 換版(自動 reload 一次)再開下載連結,或直接用 Chrome(無 SW 註冊+bypass 免登入)下載。
+- 附帶:Authelia bypass 規則含 /agenthub.apk(下載管理器不帶 cookie 也通);CT203 首跑踩 config 路徑(compose ./config:/config → /opt/authelia/config/configuration.yml),腳本已改雙路徑探測。
+- 檔案:frontend/src/main.tsx;CT203 /opt/authelia/config/configuration.yml(備份 .before-twa-20260715_092709)。
+
+[2026-07-15] portal 0.26.1 回前景即時補刷(app 手感收尾)
+- 動機:TWA app 上線後,鎖屏斷 SSE 回前景要等 3 秒輪詢才對齊,app 手感差一幀。
+- 實作:AgentDetail+Home 掛 visibilitychange——回 visible 立即 force 刷訊息/agent 狀態/版本/記憶/列表(Home 限 live=true,收合抽屜不掛);裝飾級改動走查即推(使用者既有裁示)。
+- 檔案:frontend/src/pages/{AgentDetail.tsx,Home.tsx}、bff version 0.26.1。部署:build+kill -9,APK 免重打。
+
+[2026-07-15] agenthub 收斂雙件:remember_me 30d + API token 閘啟用(P1 舊帳清償)
+- ①Authelia session.remember_me 2d→30d(TWA app 免頻繁重登,使用者裁示「都做」);②AGENTHUB_API_TOKEN 啟用:token=openssl rand -hex 24,三處落點=CT203 /etc/caddy/Caddyfile agents.hl reverse_proxy header_up(真值)、CT260 deploy/agenthub.env(root:600,真值)、CT260 ~/.config/homelab/agenthub-api.env(codex 600,本機工具/e2e 直打 API 需 source 此檔帶 X-AgentHub-Token,否則 401)。
+- 順序語義:CT203 先(Caddy 先注入)、CT260 後(bff 再開驗),反序 portal 會 401 一小段。
+- 腳本:/root/finish-hardening-ct203.sh(remember_me sed+備份+authelia 重啟;Caddyfile python 錨點插入+caddy validate+reload+鏈路自驗)、/root/finish-hardening-ct260.sh(env 追加+systemctl restart agenthub+雙向驗證 401/200)。皆冪等、有備份、失敗印回滾。
+- SoT 同步:configuration.yml 副本已改 30d;Caddyfile 副本 header_up 以指標代真值(機密只在 ~/.config/homelab 慣例)。
+- 影響面:直打 LAN :8300 的一切(含記憶寫入端點)全部 401;經 Caddy+Authelia 正常;Kuma 若有直探 :8300 的探針會轉 401(現行探針模式=Accepted 401,相容)。
+
+[2026-07-15] 收斂雙件完工+插曲:CT203 caddy reload 打不動,restart 才吃新設定
+- 插曲:finish-hardening-ct203.sh 的 systemctl reload caddy 失敗(Debian 包 Caddy 2.6.2,admin endpoint 未開 → reload 走 admin API 無路)。當下狀態=Caddy 跑舊設定(無 header)+bff 已開驗 → portal API 全 401 約數分鐘。處置:systemctl restart caddy(設定已過 validate,直接從磁碟載入)即復原。教訓:CT203 的 caddy 一律用 restart 不用 reload;腳本模板已知。
+- 終驗:經 Caddy 的 /api 全 200(header 注入生效)、本機直打 401/帶 token 200、assetlinks/apk bypass 200、remember_me 30d。V7 ★已知曝險 P1 條目改列已收斂。
+
+[2026-07-15] portal 0.27.0 三件:首頁批量選擇+設定頁(含 Plan 額度)+用量統計拆分
+- 動機:使用者三點(截圖):①首頁批量選擇對話 ②設定頁(分門別類,含各 Plan 額度狀態)③對話內用量只留 session 範疇、全域移設定。
+- ①批量選擇:topbar「選取」進多選模式(對話/封存視圖皆可)→卡片勾選(sel-dot)+全選/清空→底部 batch-bar:封存/取消封存/專案指派(ActionSheet)/刪除(帶數量確認);Promise.allSettled 逐筆執行,失敗數誠實回報;選取模式停用長按/導航。
+- ②設定頁 /settings(Home topbar 齒輪進入),六區:額度(見下)/用量全域(各 agent 今日+累積,新端點 GET /api/agents/{aid}/usage;opencode usage_stats 空 sid=跳過 ctx 不記錯誤 log)/通知(GET /api/notify/status+POST /api/notify/test 測試推播)/全域記憶規則(GET /api/memory/global+既有准駁端點,與各對話事實分層)/本機資料(storage.estimate 顯示+一鍵清 IndexedDB+ahls: localStorage 後 reload)/關於(GET /api/version+agent 清單)。設計原則=真資料或誠實不可用態,無假開關。
+- Plan 額度=bff quotas.py(5 分鐘快取,best-effort):Claude Plan 讀 ~/.claude/.credentials.json OAuth token 打 api.anthropic.com/api/oauth/usage(非官方端點,容錯走訪任何帶 utilization 的窗;401/過期=提示開一次 claude 刷新;實測 pro 方案 5h 窗/7 天窗/加購用量都出);DeepSeek 讀 opencode auth.json key 打官方 /user/balance(實測 CNY 1.26);xAI/Zen 無額度 API,誠實標不支援。憑證只在 bff 程序內用、只送各自官方端點、回應不含 key 本體。註:開發期分類器攔「shell 讀憑證檔」(合理紅線),故憑證讀取只存在於服務執行期代碼,未在互動 shell 碰過。
+- ③用量拆分:對話 ⋮ 用量統計 sheet 改「當前上下文(+壓縮)/本對話累積(fullMsgs tokens 加總,前端零後端)」;agent 級今日/累積移設定頁。
+- 檔案:bff/app/{main.py(usage/version/quotas/notify/memory-global 端點,0.27.0),quotas.py(新),adapters/opencode.py(空 sid 跳 ctx)};frontend/src/{pages/Settings.tsx(新),pages/Home.tsx(批量+齒輪),pages/AgentDetail.tsx(sheet),main.tsx(路由),api.ts,types.ts,styles.css}。
+- 部署:bundle index-DQu_w6cA.js;kill -9 自拉 0.27.0;新端點煙測全過(usage 數字與使用者截圖一致 15512/791592)。

@@ -175,5 +175,9 @@ https://agents.hl.lailai74143.com {
 		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
 		header_up -Authorization
 	}
-	reverse_proxy 192.168.20.60:8300
+	reverse_proxy 192.168.20.60:8300 {
+		# bff 縱深防禦:無此 header 直打 :8300 = 401。真值不入庫:
+		# 見 CT260 ~/.config/homelab/agenthub-api.env(與 deploy/agenthub.env 同值)
+		header_up X-AgentHub-Token {真值見上}
+	}
 }

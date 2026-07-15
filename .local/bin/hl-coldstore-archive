@@ -1,0 +1,62 @@
+#!/bin/bash
+# hl-coldstore-archive(2026-07-14):~/.claude 冷資料每日下沉 HDD——rootfs 24G 防冷堆。
+# 在哪跑:CT260(codex-ops)、user codex、常駐路徑 ~/.local/bin/hl-coldstore-archive;
+#   cron 每日 20:30 UTC(台北 04:30)。
+# 搬什麼:AGE_DAYS 天未動的檔案,範圍 = projects(session/workflow transcript,排除 memory/)
+#   + file-history + uploads。活躍檔案留 SSD;不做整目錄 symlink,避免拖慢正在寫的東西。
+# 搬去哪:/mnt/coldstore/claude-archive/<原相對路徑>(mp0=hdd1 thin 100G,backup=0=vzdump 不含,
+#   定位「丟了也沒差」,詳 V7 storage 表)。
+# 防呆:mountpoint 不在(mp0 失蹤/掛載失敗)→ TG 一次(狀態檔去抖)+ exit 1,
+#   絕不往 rootfs 上的假 /mnt/coldstore 目錄搬。
+# --dry-run 只列不搬。
+set -uo pipefail
+
+AGE_DAYS=14
+SRC_ROOT="$HOME/.claude"
+DEST_ROOT="/mnt/coldstore/claude-archive"
+TARGETS=(projects file-history uploads)
+STATE_DIR="$HOME/.local/state/homelab-notify"
+DRY=""
+[ "${1:-}" = "--dry-run" ] && DRY=1
+
+tg() {  # token 經 curl -K stdin,不進 argv(比照 hl-cert-watch)
+    local envf="$HOME/.config/homelab/notify-telegram.env" token chat
+    token=$(grep '^TELEGRAM_BOT_TOKEN=' "$envf" 2>/dev/null | cut -d= -f2-)
+    chat=$(grep '^TELEGRAM_CHAT_ID=' "$envf" 2>/dev/null | cut -d= -f2-)
+    [ -n "$token" ] && [ -n "$chat" ] || return 1
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$token" | \
+        curl -sf -m 20 -K - --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" >/dev/null
+}
+
+if ! mountpoint -q /mnt/coldstore; then
+    flagf="$STATE_DIR/.coldstore-missing"
+    if [ ! -e "$flagf" ]; then
+        tg "⚠️ hl-coldstore-archive:/mnt/coldstore 沒掛載,今日冷歸檔跳過(冷檔暫留 SSD,無資料風險)。宿主查:pct config 260 | grep mp0"
+        touch "$flagf"
+    fi
+    echo "FAIL: /mnt/coldstore 未掛載"; exit 1
+fi
+rm -f "$STATE_DIR/.coldstore-missing"
+
+moved=0; bytes=0
+for t in "${TARGETS[@]}"; do
+    src="$SRC_ROOT/$t"
+    [ -d "$src" ] || continue
+    while IFS= read -r -d '' f; do
+        rel="${f#"$SRC_ROOT"/}"
+        sz=$(stat -c %s "$f" 2>/dev/null || echo 0)
+        if [ -n "$DRY" ]; then
+            echo "DRY: $rel ($sz bytes)"
+        else
+            dest="$DEST_ROOT/$rel"
+            mkdir -p "$(dirname "$dest")" && mv "$f" "$dest" || continue
+        fi
+        moved=$((moved+1)); bytes=$((bytes+sz))
+    done < <(find "$src" -type f -mtime +"$AGE_DAYS" -not -path '*/memory/*' -print0)
+    # 搬空的子目錄順手清掉(target 根本身保留)
+    [ -z "$DRY" ] && find "$src" -mindepth 1 -type d -empty -delete
+done
+
+msg="$(date -u +%FT%TZ) moved=$moved bytes=$bytes age>${AGE_DAYS}d dry=${DRY:-0}"
+[ -z "$DRY" ] && { mkdir -p "$DEST_ROOT"; echo "$msg" >> "$DEST_ROOT/_archive.log"; }
+echo "$msg"
