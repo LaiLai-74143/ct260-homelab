@@ -1621,11 +1621,23 @@ localStorage+殼 NetworkFirst(開啟即最新版,不再舊殼閃 reload)。
 0.27.0(2026-07-15)首頁批量選擇(多選→批次封存/刪除/指派)+設定頁 /settings
 (額度=quotas.py best-effort:Claude OAuth usage/DeepSeek balance;用量全域/通知測試/
 全域記憶規則/清本機快取/關於)+對話內用量統計改 session 範疇。
+0.28.0(2026-07-15)①前端質感層:語意色收斂 token(--blue/--red/--amber/--purple 各一)、
+hairline 邊框+卡片內光、毛玻璃 topbar/浮層、背景 noise+暖光、彈簧曲線動效+列表 stagger、
+skeleton 載入態、chip 呼吸點、額度進度條(quotas pct/sub)、agent 色條、theme-color
+#0d1117→#21201e 三處修正。②「portal agent 改 agenthub 自身」四層護欄:
+回滾層=agenthub 自成 git repo(dist+APK 入庫,密鑰/依賴不入庫);阻擋層 claude=
+claude_headless spawn 注入 AGENTHUB_PORTAL=1+~/.claude PreToolUse hook
+(agenthub-guard.py:旗標在才生效,擋 kill/systemctl/rm -rf agenthub,寫檔前自動
+git 快照;維運/互動 session 無旗標不受影響);阻擋層 opencode=build agent bash
+*kill*/*systemctl*=ask(portal 待核准 UI 把關;生效待 opencode-serve 重啟);
+提醒層=全域記憶規則(只寫檔、不重啟、改完回報)。
 Android app=TWA(Bubblewrap;com.lailai74143.agenthub,standalone):APK 下載=
-https://agents.hl/agenthub.apk;簽名鑰 ~/.config/homelab/agenthub-twa.*(600);
+https://agents.hl/agenthub.apk(1.1.0/versionCode 2,2026-07-15 顏色重打,同鑰
+覆蓋安裝);簽名鑰 ~/.config/homelab/agenthub-twa.*(600);
 assetlinks.json 隨 dist 供應(/.well-known/),Authelia 對該路徑 bypass(CT203 腳本:
 agenthub/twa/finish-twa-assetlinks-ct203.sh,SoT 副本已同步);宿主=手機 Chrome
-(cookie 不與 Firefox 共用,首開 app 內登一次);前端部署即 app 更新,APK 不重打。
+(cookie 不與 Firefox 共用,首開 app 內登一次);前端部署即 app 更新,APK 不重打
+(例外:烙進 APK 的狀態列/導航列顏色改動要重打,如 1.1.0)。
 ★曝險已收斂(2026-07-15):AGENTHUB_API_TOKEN 已啟用——CT203 Caddy agents.hl
 reverse_proxy header_up 注入、CT260 deploy/agenthub.env(root:600)持真值;直打 LAN :8300
 的 /api/*(含 memory 寫入端點)一律 401,信任鏈=Authelia→Caddy(header)→bff。
