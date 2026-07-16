@@ -1,0 +1,53 @@
+#!/bin/sh
+# hl-detach '<標籤>' '<shell 指令>'
+# 把指令完全脫離當前 claude 進程執行(setsid+nohup),跨 agenthub portal 的 per-turn teardown 存活;
+# 完成後 curl BFF /wake,自動喚醒本對話回報結果(需 agenthub 0.29.0+ 部署)。
+# 需環境變數(claude_headless adapter 注入):AGENTHUB_AID / AGENTHUB_SID / AGENTHUB_WAKE_BASE
+LABEL="${1:-task}"
+CMD="$2"
+if [ -z "$CMD" ]; then echo "用法: hl-detach '<標籤>' '<shell 指令>'" >&2; exit 2; fi
+BASE="${AGENTHUB_WAKE_BASE:-http://127.0.0.1:8300}"
+AID="$AGENTHUB_AID"
+SID="$AGENTHUB_SID"
+SAFE=$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9' _ | cut -c1-40)
+LOG="/tmp/hl-detach-${SAFE}-$$.log"
+RUN="/tmp/hl-detach-${SAFE}-$$.sh"
+
+# 產一支獨立 runner:跑原指令 → 收尾 curl /wake(用 python3 組 JSON + HTTP,穩)
+cat > "$RUN" <<RUNNER
+#!/bin/sh
+{ $CMD ; } > "$LOG" 2>&1
+CODE=\$?
+TAIL=\$(tail -c 1500 "$LOG" 2>/dev/null)
+if [ -n "$AID" ] && [ -n "$SID" ]; then
+  python3 - "$AID" "$SID" "$BASE" "$LABEL" "\$CODE" "\$TAIL" <<'PY'
+import sys, json, os, urllib.request
+aid, sid, base, label, code, tail = (sys.argv + [""] * 6)[1:7]
+text = "背景任務「%s」結束 exit=%s\n%s" % (label, code, tail)
+data = json.dumps({"text": text}).encode()
+headers = {"Content-Type": "application/json"}
+tok = os.environ.get("AGENTHUB_API_TOKEN")  # BFF 的 /api/* gate 需要;不帶會 401 被靜默擋掉
+if tok:
+    headers["X-AgentHub-Token"] = tok
+try:
+    urllib.request.urlopen(urllib.request.Request(
+        "%s/api/agents/%s/sessions/%s/wake" % (base, aid, sid),
+        data=data, headers=headers), timeout=20).read()
+except Exception as e:
+    try:
+        with open("/tmp/hl-detach-wake-err.log", "a") as f:
+            f.write("wake failed [%s/%s]: %s\n" % (aid, sid, e))  # 別再靜默吞錯
+    except Exception:
+        pass
+PY
+fi
+rm -f "$RUN"
+RUNNER
+chmod +x "$RUN"
+setsid nohup "$RUN" </dev/null >/dev/null 2>&1 &
+echo "hl-detach 已脫離啟動:「$LABEL」  (log: $LOG)"
+if [ -n "$AID" ] && [ -n "$SID" ]; then
+  echo "  完成後會自動喚醒本對話($AID/$SID)回報結果"
+else
+  echo "  ⚠ 未偵測到 AGENTHUB_AID/SID(agenthub 尚未部署 0.29.0?)——仍會執行完,但不自動喚醒,log 可查"
+fi
