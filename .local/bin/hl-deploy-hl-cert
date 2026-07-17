@@ -91,6 +91,18 @@ got=$(timeout 10 openssl s_client -connect "$DMZ_IP:443" -servername portal.hl.l
       </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null)
 [ -n "$want" ] && [ "$want" = "$got" ] || fail "服務端憑證指紋不符(want=$want got=$got)"
 
+# ── derper(DERP relay :8443,symlink 共用同一 wildcard;2026-07-16 起,見缺改記錄)──
+# derper 啟動時載入憑證,推新檔後必須 restart,否則 ~60 天後過期斷蜂巢中繼
+derper_ok=1
+ssh pve24 "sudo pct exec 203 -- systemctl restart derper" || derper_ok=0
+sleep 1
+[ "$derper_ok" = "1" ] && ssh pve24 "sudo pct exec 203 -- systemctl is-active --quiet derper" || derper_ok=0
+[ "$derper_ok" = "1" ] || fail "derper restart 後未存活(caddy 已上新憑證且正常;蜂巢 DERP 中繼停擺。排查:pct exec 203 -- journalctl -u derper -n 20)"
+dgot=$(timeout 10 openssl s_client -connect "$DMZ_IP:8443" -servername derp.hl.lailai74143.com \
+       </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null)
+[ -n "$want" ] && [ "$want" = "$dgot" ] || fail "derper 憑證指紋不符(want=$want got=$dgot)"
+log "derper restart + 指紋 OK"
+
 bad=""
 for h in $HOSTS; do
     fqdn="$h.hl.lailai74143.com"
@@ -103,5 +115,5 @@ done
 expiry=$(openssl x509 -in "$FULL" -noout -enddate | cut -d= -f2)
 log "驗證全過;到期 $expiry"
 echo "部署+驗證完成;憑證到期:$expiry"
-tg "✅ hl 憑證已部署(*.hl.lailai74143.com,LE);到期 $expiry;7 站信任鏈驗證全過"
+tg "✅ hl 憑證已部署(*.hl.lailai74143.com,LE);到期 $expiry;7 站+derper(8443) 信任鏈驗證全過"
 exit 0

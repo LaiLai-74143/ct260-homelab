@@ -1,0 +1,14 @@
+# Force phone off lossy UDP direct with router tailscaled (:41641) -> DERP 900.
+# v2 (2026-07-17): extend to all public v4 — night probe caught CGNAT v4 punch
+# (42.73.x:6738) bypassing the v6-only block. RFC1918 exempt = in-home direct OK.
+# See ForAI/缺改記錄. Rollback: delete this file + fw4 reload.
+chain derpforce_output {
+	type filter hook output priority 10; policy accept;
+	ip6 daddr 2001:b400::/32 udp sport 41641 counter drop
+	ip daddr != { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } udp sport 41641 counter drop
+}
+chain derpforce_input {
+	type filter hook input priority 10; policy accept;
+	ip6 saddr 2001:b400::/32 udp dport 41641 counter drop
+	ip saddr != { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } udp dport 41641 counter drop
+}

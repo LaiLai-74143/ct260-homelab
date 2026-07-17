@@ -1,0 +1,166 @@
+===== 2026-07-16 22:50:43
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.03  sec  5.04 MBytes  4.22 Mbits/sec  13.150 ms  674/4399 (15%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 18 packets received, 10% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.05  sec  4.76 MBytes  3.97 Mbits/sec  2.370 ms  1026/5091 (20%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct [2001:b400:e356:ff2c:56f:e520:5df1:5c9]:33508, tx 6647620 rx 7284  
+===== 2026-07-16 23:21:24
+--raw-udp5M
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct [2001:b400:e356:ff2c:56f:e520:5df1:5c9]:33508, tx 6652288 rx 11368  
+===== 2026-07-16 23:51:44
+--raw-udp5M
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct [2001:b400:e356:ff2c:56f:e520:5df1:5c9]:33508, tx 1780 rx 1584  
+===== 2026-07-17 00:22:03
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.890 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to receive control message - port may not be available, the other side may have stopped running, etc.: Connection reset by peer
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5090 (0%)  sender
+[  5]   0.00-10.85  sec  5.92 MBytes  4.58 Mbits/sec  9.059 ms  0/5054 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; relay "home", tx 6646652 rx 7544                          
+===== 2026-07-17 00:52:44
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.951 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.564 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; relay "home", tx 13291996 rx 12696                        
+===== 2026-07-17 01:23:23
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.06  sec  5.53 MBytes  4.61 Mbits/sec  1.877 ms  320/4402 (7.3%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.710 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; relay "home", tx 6641036 rx 1660                          
+===== 2026-07-17 01:54:03
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.960 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  2.067 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; relay "home", tx 6646212 rx 5548                          
+===== 2026-07-17 02:24:43
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.818 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.640 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; relay "home", tx 13292868 rx 11604                        
+===== 2026-07-17 02:55:22
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.997 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to receive control message - port may not be available, the other side may have stopped running, etc.: Connection reset by peer
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.589 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640916 rx 1660             
+===== 2026-07-17 03:26:02
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.944 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.580 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640932 rx 1660             
+===== 2026-07-17 03:56:42
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.958 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to receive control message - port may not be available, the other side may have stopped running, etc.: Connection reset by peer
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.571 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640916 rx 1660             
+===== 2026-07-17 04:27:22
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  2.083 ms  0/4402 (0%)  receiver
+--raw-tcp
+[  5]   0.00-10.00  sec   248 MBytes   208 Mbits/sec    0            sender
+[  5]   0.00-10.05  sec   246 MBytes   205 Mbits/sec                  receiver
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.99 Mbits/sec  1.780 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640764 rx 1752             
+===== 2026-07-17 04:58:12
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  2.022 ms  0/4402 (0%)  receiver
+--raw-tcp
+[  5]   0.00-10.00  sec   229 MBytes   192 Mbits/sec    0            sender
+[  5]   0.00-10.06  sec   227 MBytes   189 Mbits/sec                  receiver
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.03  sec  5.96 MBytes  4.98 Mbits/sec  1.733 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640972 rx 1752             
+===== 2026-07-17 05:29:02
+--raw-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/4402 (0%)  sender
+[  5]   0.00-10.02  sec  5.96 MBytes  4.99 Mbits/sec  1.965 ms  0/4402 (0%)  receiver
+--raw-tcp
+iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection refused
+--icmp
+20 packets transmitted, 20 packets received, 0% packet loss
+--tunnel-udp5M
+[  5]   0.00-10.00  sec  5.96 MBytes  5.00 Mbits/sec  0.000 ms  0/5091 (0%)  sender
+[  5]   0.00-10.04  sec  5.96 MBytes  4.98 Mbits/sec  1.698 ms  0/5091 (0%)  receiver
+100.100.1.6  006-s24ultra         tagged-devices                 android  active; direct 42.73.185.138:6738, tx 6640972 rx 1752             

@@ -858,6 +858,24 @@ CT203 ct-dmz-proxy(100.100.1.2)=唯一 subnet-router(tailscaled 1.98.4;TUN=pct d
     (W2 主機自身不受閘門管制)ctdmz 無 output 鏈;CT203 被打穿即有 proto-all 橫移 8 內段能力。
       安全模型=「完全信任 CT203」,緩解靠 unprivileged LXC/Wazuh(★sshd 實況見 §10.7)。
       進一步收斂選項:把 8 條 proto-all 收成實際用到的目的服務埠(least-privilege,未做)。
+
+  ★★ 自架 DERP region 900(2026-07-16,「蜂巢內網慢」終解;全程與回滾見缺改記錄同日條):
+    根因=emome 類別政策:用戶自發起 TCP=好類別(實測 72M);任何 UDP/外部發起 TCP=爛類別
+    (~19% 按比例丟)→ 手機蜂巢 WG 直連天然吃爛類別,cubic 崩至 0.5M。
+    解法鏈:derper@CT203:8443(derper.service;manual cert 共用 *.hl wildcard;--verify-clients
+    綁本機 tailscaled;STUN:3478)+ OpenWrt v4 DNAT 8443/3478 + v6 放行→CT203 GUA + CT203
+    v6guard 例外 + derpMap region 900(IP 直寫,零公網 DNS;OmitDefaultRegions=false,hkg 備援)
+    + derp-force-nft.service(擋 CT203↔2001:b400::/32 udp/41642)→ 蜂巢手機強制 via DERP(home),
+    在家 LAN 直連不變。實測 0.5M→72M。
+    營運 runbook——PPPoE 換 IP / v6 prefix 輪替時(缺一步 DERP 即啞):
+      ① tailnet console policy derpMap:IPv4=新 WAN IP;IPv6=CT203 新 GUA(pct exec 203 -- ip -6 addr show eth0)
+      ② OpenWrt uci:兩條 Allow-WAN6-DERP-*-CT203 的 dest_ip=CT203 新 GUA → commit + firewall reload
+      ③ 驗證:CT203/OpenWrt tailscale netcheck 的 home 應 <1ms;手機 tailscale ping via DERP(home)
+    憑證續簽:hl-deploy-hl-cert 已含 restart derper + :8443 指紋驗證(2026-07-17 補,缺口關閉)。
+    force-relay 第二段(2026-07-17):OpenWrt /etc/nftables.d/40-derp-force-dns.nft 擋
+      OpenWrt↔2001:b400::/32 udp/41641 雙向 → 手機 DNS(100.100.1.1)路徑亦走 DERP(home)。
+    BBR 常駐(同日):OpenWrt(kmod-tcp-bbr+/etc/sysctl.d/99-bbr.conf)、CT203(sysctl.d 同;
+    pve24 宿主 modules-load.d 載模組)——爛類別殘存路徑(如 OpenWrt↔手機 DNS 直連)的止痛。
 ```
 
 ### 4.9 WireGuard break-glass(待辦24,2026-07-08)

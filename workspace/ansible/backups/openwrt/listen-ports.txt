@@ -30,7 +30,6 @@ tcp ::1:139 smbd
 tcp ::1:445 smbd
 tcp ::1:5353 dnsmasq
 tcp :::443 uhttpd
-tcp :::5201 iperf3
 tcp :::52438 dropbear
 tcp :::53 AdGuardHome
 tcp :::80 uhttpd
