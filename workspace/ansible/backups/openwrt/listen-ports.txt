@@ -13,6 +13,8 @@ tcp 125.228.123.224:5353 dnsmasq
 tcp 127.0.0.1:139 smbd
 tcp 127.0.0.1:445 smbd
 tcp 127.0.0.1:5353 dnsmasq
+tcp 127.0.0.1:6060 crowdsec
+tcp 127.0.0.1:8081 crowdsec
 tcp 192.168.10.1:52438 dropbear
 tcp 192.168.10.1:5353 dnsmasq
 tcp 192.168.20.1:5353 dnsmasq

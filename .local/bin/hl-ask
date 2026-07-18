@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# hl-ask:極簡問答外包 DeepSeek(不經 Claude Code、不吃 Plan 額度)。在 CT260 跑。
+# 用法:hl-ask "問題"          預設快模型(DEEPSEEK_MODEL_FAST=deepseek-v4-flash)
+#       hl-ask -d "問題"       深度模型(DEEPSEEK_MODEL_DEEP=deepseek-v4-pro)
+#       echo 問題 | hl-ask     stdin 也行
+# 金鑰:~/.config/homelab/deepseek.env(與晨報 homelab-notify 共用)
+set -euo pipefail
+set -a; . "$HOME/.config/homelab/deepseek.env"; set +a
+MODEL="${DEEPSEEK_MODEL_FAST:-deepseek-chat}"
+if [ "${1:-}" = "-d" ]; then MODEL="${DEEPSEEK_MODEL_DEEP:-deepseek-reasoner}"; shift; fi
+# 有給引數(含空字串)就用引數;完全沒給才讀 stdin——空字串引數不可靜默吞 stdin
+if [ "$#" -gt 0 ]; then Q="$*"; else Q="$(cat)"; fi
+[ -n "$Q" ] || { echo "用法:hl-ask [-d] \"問題\"" >&2; exit 1; }
+export HL_ASK_MODEL="$MODEL" HL_ASK_Q="$Q"
+exec python3 - <<'PY'
+import json, os, sys, urllib.request
+base = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+key = os.environ.get("DEEPSEEK_API_KEY")
+if not key:
+    print("hl-ask 失敗:deepseek.env 缺 DEEPSEEK_API_KEY", file=sys.stderr)
+    sys.exit(1)
+req = urllib.request.Request(
+    base + "/chat/completions",
+    data=json.dumps({
+        "model": os.environ["HL_ASK_MODEL"],
+        "messages": [
+            {"role": "system", "content": "回答精簡、繁體中文;指令/程式碼/專有名詞保留原文。"},
+            {"role": "user", "content": os.environ["HL_ASK_Q"]},
+        ],
+        "max_tokens": 1000, "temperature": 0.3, "stream": False,
+    }).encode(),
+    headers={"Content-Type": "application/json",
+             "Authorization": "Bearer " + key},
+)
+try:
+    with urllib.request.urlopen(req, timeout=90) as r:
+        d = json.load(r)
+    print(d["choices"][0]["message"]["content"].strip())
+except Exception as e:
+    print(f"hl-ask 失敗:{type(e).__name__}: {e}", file=sys.stderr)
+    sys.exit(1)
+PY

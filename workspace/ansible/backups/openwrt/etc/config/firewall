@@ -281,6 +281,26 @@ config rule 'allow_camera_to_dxp4800_smb'
 	list dest_port '139'
 	option target 'ACCEPT'
 
+config rule 'allow_iot_derp_hairpin_8443'
+	option name 'Allow-IoT-DERP-Hairpin-8443-CT203'
+	option src 'iot'
+	option dest 'dmz'
+	option dest_ip '10.60.60.10'
+	option dest_port '8443'
+	option proto 'tcp'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
+config rule 'allow_iot_derp_stun_3478'
+	option name 'Allow-IoT-DERP-STUN-Hairpin-3478-CT203'
+	option src 'iot'
+	option dest 'dmz'
+	option dest_ip '10.60.60.10'
+	option dest_port '3478'
+	option proto 'udp'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
 config rule
 	option name 'Block-IoT-To-Legacy-LAN'
 	option src 'iot'
@@ -428,7 +448,7 @@ config rule
 config zone
 	option name 'infra'
 	option network 'infra_core'
-	option input 'ACCEPT'
+	option input 'REJECT'
 	option output 'ACCEPT'
 	option forward 'REJECT'
 
@@ -438,7 +458,7 @@ config forwarding
 
 config zone 'servers'
 	option name 'servers'
-	option input 'ACCEPT'
+	option input 'REJECT'
 	option output 'ACCEPT'
 	option forward 'REJECT'
 	list network 'servers'
@@ -2179,8 +2199,10 @@ config redirect
 	option dest_ip '10.60.60.10'
 	option dest_port '8443'
 	option family 'ipv4'
-	option reflection '0'
+	option reflection '1'
 	option target 'DNAT'
+	list reflection_zone 'iot'
+	list reflection_zone 'trusted'
 
 config redirect
 	option name 'WAN-DERP-STUN-3478-to-CT203'
@@ -2191,8 +2213,10 @@ config redirect
 	option dest_ip '10.60.60.10'
 	option dest_port '3478'
 	option family 'ipv4'
-	option reflection '0'
+	option reflection '1'
 	option target 'DNAT'
+	list reflection_zone 'iot'
+	list reflection_zone 'trusted'
 
 config rule
 	option name 'Allow-WAN6-DERP-8443-CT203'
@@ -2212,5 +2236,66 @@ config rule
 	option dest_port '3478'
 	option proto 'udp'
 	option family 'ipv6'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-Servers-Router-DNS'
+	option src 'servers'
+	option target 'ACCEPT'
+	option proto 'tcp udp'
+	option dest_port '53'
+
+config rule
+	option name 'Allow-Servers-Router-ICMP'
+	option src 'servers'
+	option target 'ACCEPT'
+	option proto 'icmp'
+
+config rule
+	option name 'Allow-CT260-To-Router-SSH-52438'
+	option src 'servers'
+	option target 'ACCEPT'
+	option src_ip '192.168.20.60'
+	option proto 'tcp'
+	option dest_port '52438'
+
+config rule
+	option name 'Allow-Infra-Router-DNS'
+	option src 'infra'
+	option target 'ACCEPT'
+	option proto 'tcp udp'
+	option dest_port '53'
+
+config rule
+	option name 'Allow-Infra-Router-ICMP'
+	option src 'infra'
+	option target 'ACCEPT'
+	option proto 'icmp'
+
+config rule
+	option name 'Allow-Infra-Router-Tailscale-41641'
+	option src 'infra'
+	option target 'ACCEPT'
+	option proto 'udp'
+	option dest_port '41641'
+
+config rule 'allow_trusted_derp_hairpin_8443'
+	option name 'Allow-Trusted-DERP-Hairpin-8443-CT203'
+	option src 'trusted'
+	option dest 'dmz'
+	option dest_ip '10.60.60.10'
+	option dest_port '8443'
+	option proto 'tcp'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
+config rule 'allow_trusted_derp_stun_3478'
+	option name 'Allow-Trusted-DERP-STUN-Hairpin-3478-CT203'
+	option src 'trusted'
+	option dest 'dmz'
+	option dest_ip '10.60.60.10'
+	option dest_port '3478'
+	option proto 'udp'
+	option family 'ipv4'
 	option target 'ACCEPT'
 

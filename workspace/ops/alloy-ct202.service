@@ -1,0 +1,14 @@
+[Unit]
+Description=Grafana Alloy (promtail successor)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/alloy run /etc/alloy/config.alloy --server.http.listen-addr=127.0.0.1:12345 --storage.path=/var/lib/alloy/data --stability.level=generally-available
+Restart=on-failure
+RestartSec=5
+# 512M 容器:限 alloy 上限,OOM 時只殺 alloy 不拖垮 squid(本機主業)
+MemoryMax=320M
+
+[Install]
+WantedBy=multi-user.target

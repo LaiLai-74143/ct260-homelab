@@ -239,4 +239,12 @@ CT203 是 tailnet→內網的唯一把關點：OpenWrt 對 10.60.60.10 是「靜
 4. CT203 主機自身 outbound 不受 ctdmz 管制（無 output 鏈）＋ OpenWrt proto-all → CT203 一旦被打穿即可 proto-all
    橫移 8 內段（安全模型＝完全信任 CT203）。故其公網攻擊面（Caddy/cloudflared/Authelia 容器）務必最小化；
    least-privilege 收斂選項（把 §4.4 那 8 條 proto-all 收成實際服務埠）見拓樸 §4.8 尾註 W2，未做。
+5. ★★ Caddyfile 部署鐵律（2026-07-18 事故立法，見缺改記錄同日「占位 token 上線」條）：
+   repo 副本 ~/workspace/ct-dmz-proxy/Caddyfile 是「去密模板」——agents.hl 的 X-AgentHub-Token 寫的是
+   占位字樣「{真值見上}」，真值只在 CT203 現機與 CT260 ~/.config/homelab/agenthub-api.env。
+   (a) 禁止把 repo 副本原樣 pct push 上 CT203——先替入真 token（用 ~/workspace/ct-dmz-proxy/
+       deploy-caddyfile.sh，它自動替入+validate+restart+驗證；手改請以現機備份為底）。
+   (b) 部署後驗證必須打到「帶 token 的 API 層」：journalctl -u agenthub 看到來源 10.60.60.10 的
+       /api/* 回 200 才算過；agents.hl 回 302 只證明 SSO 層活著，token 壞了它照樣 302。
+   (c) caddy validate 對占位字樣照樣 PASS（Caddy 視為未知 placeholder），驗證擋不住這類錯。
 ```

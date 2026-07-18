@@ -56,7 +56,7 @@
    現況：CT203 ct-dmz-proxy 10.60.60.10 運行（Caddy 2.6.2 held + node_exporter 1.9.0，snapshot baseline，onboot=1）；
         OpenWrt monitor→dmz 觀測放行；Prometheus 17/17 UP；Grafana 總覽 10 台。詳見拓樸 §10.7。
    d✔ cloudflared cutover 完成（2026-07-04，使用者確認外網 Vaultwarden 經 CT203 connector + Caddy）。
-   未完（OPEN）：e vault.* AGH rewrite（hl.* wildcard 已加——待辦③；vault.* 本身仍待）、g Kuma 對 /health 探活(UI)。
+   未完（OPEN）：g Kuma 對 /health 探活(UI)。（e✔ 2026-07-18 以 vault.hl 別名站收尾，見 e 行）
         f◐ 放行現況：monitor→dmz:80,9100,9959、dmz→storage:50303/8096、dmz→service:9090、
         trusted/servers→dmz:443（內部→dmz 443 已於 2026-07-04 隨待辦③落地）。
         逐步 runbook：CT260 ~/workspace/ct-dmz-proxy/CUTOVER-runbook.md。
@@ -71,7 +71,11 @@
       CF dashboard 把 public hostname 的 service 改指 http://10.60.60.10（Caddy）→
       Caddy 反代到後端（Vaultwarden 首個，10.<storage>.x:port，OpenWrt 加 dmz→storage 單條放行）→
       驗證外網可用後，關停 DXP 上的 cloudflared 容器。
-   e◐ AGH：內部域名（vault.home.arpa 等）rewrite 指 10.60.60.10，內外走同一反代。（主機/閘道 record 已加；vault.* rewrite 待 cutover）
+   e✔ 內部直達收尾（2026-07-18，改道）：原定「AGH rewrite 公網名指 10.60.60.10」不可行——對外名只掛在
+      Caddy :80 catch-all（cloudflared 終結 TLS）、wildcard 憑證僅 *.hl，且 AGH rewrite 有 per-client
+      filtering 坑（V7 §3）。改增 https://vault.hl.lailai74143.com 站（LE wildcard＋dnsmasq hl.* 覆寫皆
+      現成，零新憑證零 DNS 改動；無 forward_auth＝與對外 CF 路徑同姿勢，Vaultwarden 自身帳密+2FA）。
+      CF 掛掉時 app/瀏覽器改填 vault.hl 即可（tailnet+當日閘門內）。驗證 200=Vaultwarden Web。
    f◐ 放行原則：dmz→內部僅逐條 dport 放行；內部→dmz 允許 trusted/servers 443。（monitor→dmz:80,9100 已加；其餘待 cutover）
    g◐ Kuma/Prometheus：對 Caddy 探活 + node_exporter；缺改記錄留存 CF 設定截圖/文字。（node_exporter+Grafana✔；Kuma /health 待 UI）
    後續批次：Jellyfin✔（2026-07-04：走 Tailscale，非 CF——CT203 升為 subnet-router，advertise 30.3/32，
@@ -264,6 +268,25 @@
      詳見監控告警 §5e / 缺改記錄 2026-07-05〕
     ★ 選型：Loki 3.7.3 + promtail 3.6.11（官方最後出貨版、binary 含 journal 支援——全節點 journald-only
       免裝 rsyslog；promtail 已 EOL，長期遷 Alloy 列監控待辦 §9）。
+    ◐ promtail→Alloy 遷移（2026-07-18 使用者「做」；①CT202 先導✔切換完成 13:20:影子雙管線驗證過後
+      使用者親切 promtail→alloy,切後 canary 以 host="ct202" 進 Loki 確認;promtail unit/binary+config 備份
+      留存為 24-48h 回滾窗,穩了再滾②CT270。alloy.service 帶 MemoryMax=320M 防拖垮 squid。
+      ★實裝地雷:CT202 /tmp=tmpfs 吃記憶體配額,下載/解壓一律走 /var/tmp;unzip 已補裝）：
+      現況：promtail 3.6.11 在 CT260/270/202/100(原生 systemd /usr/local/bin)、CT201(docker compose
+      /opt/monitoring)、VM300(原生 systemd,無 WAN)六台;全 Debian13 trixie amd64。Alloy 1.17.1 apt.grafana.com
+      +GitHub 皆可得,`alloy convert --source-format=promtail` 轉 River。Loki 基線七 host 全在線(ct100/201/
+      202/260/270/vm300+openwrt syslog)。
+      遷移次序(低風險先導→最兇):①CT202(squid,2 job 最單純=先導,腳本 ~/workspace/ops/alloy-pilot-ct202.sh)
+      →②CT270(docker_sd→discovery.docker)→③CT100(順修下方 mcsmanager 死路徑)→④CT201(容器化+身兼
+      OpenWrt 唯一 syslog receiver 1514/udp+Loki 主機,最兇,要先用 loki.source.syslog 重建再切)→⑤CT260(本機,
+      工具鏈自身,穩了再動)→⑥VM300(無 WAN 只能 qm guest exec 分塊傳;cowrie 曾丟 7464 筆 429 事故,
+      Alloy 無 promtail readline_rate 對等物,要先顯式寫 queue_config 並突發流量壓測零遺漏再切)。
+      每台切換法:影子跑(不停 promtail,alloy 帶臨時標籤並存送 Loki)→Loki 查得到 canary→手動切 service→
+      比對 job/host 標籤集合與切前一致(下游 deep_analysis 靠 host= 取日誌,標籤一改靜默斷鏈)→留 promtail
+      24-48h 回滾窗。★掃描抓到既有缺陷(非遷移引入):CT100 config job=mcsmanager 的 __path__=/var/log/mcsmanager/*.log
+      是死路徑(該目錄從不存在,Loki 30 天零資料),實際 log 在 /opt/mcsmanager/{daemon,web}/logs/*.log
+      ——遷 CT100 時一併修,別讓 alloy convert 原樣搬。★promtail 9080 全節點綁 *:9080(既有暴露面),
+      順手可收斂到 127.0.0.1(Alloy 除錯 UI 在 12345)。
     目標：集中日誌，餵 DeepSeek Tier2 更多上下文。
     流程：
     a✔ CT201 compose 加 loki（pin 3.7.3，:3100），retention 30d，存 SSD 卷；
@@ -496,10 +519,21 @@
 -------------------------------------------------------------------------------
 20. CrowdSec 評估（使用者已同意「自製腳本轉正」方向）
     【說明】社群情資版 autoban：多來源 log 解析 + 全球黑名單，決策仍寫本地 nft set，與現架構同構。
+    ◐ 決策 2026-07-18：使用者「裝了之後先觀察」=先偵測-only 跑兩週。已盤點+備安裝腳本
+      ~/workspace/ops/crowdsec-openwrt-detect-only.sh（在哪跑:OpenWrt root,或 CT260
+      ssh openwrt-auto 'sh -s' < 該腳本）。可行性=partial,掃描抓到兩顆地雷腳本已處理:
+      ① LAPI 預設 127.0.0.1:8080 已被 AdGuardHome 佔用→腳本改 8081（不改起不來）。
+      ② ★BusyBox logread 格式≠標準 RFC3164(有 weekday+year、facility.severity 取代 hostname),
+         標準 crowdsecurity/syslog-logs grok 極可能解析失敗→alerts 靜默掛零卻不報錯(假安全感)。
+         腳本裝完『強制』cscli explain 印出解析結果讓人親眼確認;全 unparsed 就得自訂 grok 剝前綴。
+      套件:apk crowdsec-1.6.2-r1(x86_64,196MiB)現貨;資源充裕(14G RAM/78G disk 0.2% 用)。
+      既有並存 nft(不衝突,偵測-only 不碰):portscanban/cowriequarantine/ssh22tripwire/honeypotratelimit。
     流程：
-    a. OpenWrt opkg 裝 crowdsec（x86 包可用）+ cs-firewall-bouncer(nftables 模式)；
-       或保守起見先裝 crowdsec 本體「只偵測不封鎖」（不裝 bouncer）。
-    b. 觀察模式跑 2 週：cscli metrics / cscli alerts list 對照 portscan-autoban 命中差異。
+    a. ✔已實裝(2026-07-18 人在家窗口):crowdsec 1.6.2-r1 偵測-only 上線,LAPI 8081、自啟 S99、
+       全鏈 cscli explain 🟢、ssh-bf 端到端實證過(偽造樣本觸發 alert 後已清)。實裝多踩一顆地雷:
+       source: cmd 不存在→改 uci log_file+file 源;另補兩個自訂 parser(BusyBox 格式/無 PAM dropbear)
+       ——詳缺改 07-18 深夜2 條,腳本已同步修正。
+    b. ◐觀察模式跑 2 週(至 ~08-01)：cscli metrics / cscli alerts list 對照 portscan-autoban 命中差異。
     c. 決策：情資增量明顯 → 啟用 bouncer 並與 autoban 並行（各自 nft set 不衝突）；
        增量有限 → 移除，維持自製方案，缺改記錄結論。
 
@@ -643,7 +677,7 @@
     給 Waterfly III → 與 NocoDB 分工記入拓樸：Firefly 管收支、NocoDB 管借貸。
 
 -------------------------------------------------------------------------------
-◐33. servers / infra zone input 收緊(trusted 保留全訪問——使用者裁決)
+✔33. servers / infra zone input 收緊(trusted 保留全訪問——使用者裁決)(2026-07-18 全結,見尾)
     a✔ 觀察期上線(2026-07-08,期滿 2026-07-15 讀數):OpenWrt 自建 nft table
        inputaudit33(比照 ssh22tripwire 模式:/usr/bin/input-audit33+init.d S99,
        hook input priority -150 policy accept 純觀察零行為影響)——動態集
@@ -666,6 +700,26 @@
        全監控綠 + hl-* 工具通。(b/c=下輪維護窗)
     d. 與第 16 項絆線互補:切換後絆線理論上更乾淨。
     回滾:uci revert 即回 ACCEPT;觀察面=/etc/init.d/input-audit33 stop(刪 table)。
+    ★期滿收案(2026-07-18,使用者裁決「現在就切」):
+      - ⚠ssh22 異常查明:37 顆全落三叢發(07-09 06:17 pve24×17、07-09 07:17 CT260×11、
+        07-10 20:47 CT260×9),之後 8 天零新增=當時維運窗的測試/探測流量,非持續進程;
+        告警管線健康(當時確有 firing,Prometheus metric=nft counter=54 同步)。
+        CT100/CT201/CT270 各 3pkt(=單次連線的 SYN 重送)為觀察期前單次事件,不可追溯。
+      - 期滿讀數:servers 實際用量=53/udp(46.9k)+52438/tcp(CT260 管理,260pkt)+雜訊
+        (pve24 NetBIOS 137/138、CT270 SSDP 1900→安心拒);infra=53/udp(446)+tailscale
+        探測(3478/5351/1900→拒後自動 fallback);123/NTP 與 icmp 全程零樣本(各機時間
+        源=網際網路 NTP,不需放行)。
+      - b✔ 放行六條:Allow-Servers-Router-DNS(tcp+udp 53)、Allow-Servers-Router-ICMP、
+        Allow-CT260-To-Router-SSH-52438、Allow-Infra-Router-DNS、Allow-Infra-Router-ICMP、
+        Allow-Infra-Router-Tailscale-41641(41641=router tailscaled 監聽埠;動態高埠回包
+        靠 fw4 內建 conntrack ESTABLISHED,不需放行)。CT201→AGH:8080 十天零樣本且 CT201
+        屬 mgmt zone(本就 REJECT),未另立規則。
+      - c✔ firewall.servers.input→REJECT、firewall.@zone[6](infra)→REJECT 逐一切換,
+        每步驗證:DNS 查詢/ssh52438/icmp(pve24、routerpve)/tailscale 兩端 status/
+        Alertmanager 僅剩 Watchdog,全過。
+      - 備份:openwrt /root/_backups/firewall.before-todo33-20260718_*;
+        回滾=uci set firewall.servers.input='ACCEPT'(infra 同理)+commit+reload。
+      - 觀察面 inputaudit33 保留續跑一週,確認 REJECT 後無服務異常再 stop 收臺。
 
 -------------------------------------------------------------------------------
 ✗34. Grafana 告警總覽面板 — 刪除(2026-07-08 使用者裁決:與 portal(待辦49)
@@ -948,7 +1002,9 @@
     雙 rAF、星期)駁 5。
     ▶ ✔ 0.17.0 於 2026-07-12 隨 0.18.0 同車上線(0170 腳本未單獨跑,被 0180
       錨點自適應涵蓋;見下一條進度)。
-    ▶ 剩:Homepage 退役儀式(常用網站已搬遷,待使用者驗過大廳板塊後點名停用 homepage 容器)。
+    ▶ ✔ Homepage 退役(2026-07-18 使用者點名「直接退役」):CT201 /opt/homepage docker compose down
+      (容器+network 移除;config/image 留存可回滾)、homepage.hl Caddy 站同日移除(vault.hl 同車部署)。
+      Kuma 無其監控項、diun 本就不列,無其他收尾面。觀察一週無異再清 image/目錄(可選)。
     【進度 2026-07-11(0.18.0 拾遺歸檔板塊;概念移植 LYiHub/labs-ArchiveAssistant,
       使用者點名「加入這個板塊」)】
     新板塊「拾遺歸檔」:貼 URL/純文字→AI 歸入六部(吏戶禮兵刑工)個人剪藏。

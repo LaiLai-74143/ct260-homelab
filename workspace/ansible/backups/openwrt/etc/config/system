@@ -16,6 +16,7 @@ config system
 	option timezone 'CST-8'
 	option log_ip '10.80.80.11'
 	option log_port '1514'
+	option log_file '/var/log/messages'
 
 config timeserver 'ntp'
 	list server '0.openwrt.pool.ntp.org'

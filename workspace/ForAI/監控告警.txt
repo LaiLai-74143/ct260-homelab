@@ -522,9 +522,9 @@ selftest（分流後）：--selftest=warning（只 TG，驗敘事鏈）；--self
 
 反向代理（待辦③ SSO，2026-07-04）：Grafana GF_SERVER_ROOT_URL=https://grafana.hl.lailai74143.com、
   Prometheus command --web.external-url=https://prometheus.hl.lailai74143.com（皆在 /opt/monitoring/docker-compose.yml，
-  改後 docker compose up -d 重建）。經 CT203 Caddy forward_auth(Authelia) 反代＝grafana.hl / prometheus.hl / kuma.hl / homepage.hl。
-  ★ 直連 :3002/:9090/:3001/:3000（PC40 放行）保留為後備，未收（反代/SSO 故障時排障用）。
-  ★ Homepage services.yaml 服務 href 已指 .hl（點擊走 SSO）；description 的 URL 文字仍標內網位置（後備參考）。
+  改後 docker compose up -d 重建）。經 CT203 Caddy forward_auth(Authelia) 反代＝grafana.hl / prometheus.hl / kuma.hl
+  （homepage.hl 已退役 2026-07-18，容器同日停用）。
+  ★ 直連 :3002/:9090/:3001（PC40 放行）保留為後備，未收（反代/SSO 故障時排障用）。
   ★ Grafana 的 Prometheus datasource 維持容器內直連（prometheus:9090），不走反代（API 走 SSO 會被擋）。
 
 portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 iframe」決策）：
@@ -607,6 +607,11 @@ portal 圖表嵌入（2026-07-09，portal 0.7.0，使用者點名翻掉「不 if
   - ct260-deadman(CT201 cron 每分鐘,/usr/local/bin):雙端點(5001/health+9100)連續
     5 輪全掛→CT201 本機 ntfy 直發 urgent(刻意不經 CT260 TG 鏈=獨立路徑;CT260 一倒
     全站通知靜默的盲點就靠這條);恢復發解除。憑證 /usr/local/etc/ct260-deadman.env(600)。
+  - hl-derp-watch(CT260 cron 每時 :07,2026-07-18 PC 斷網事故後加):經 openwrt-auto 唯讀
+    斷言 ①兩條 DERP redirect reflection='1'+reflection_zone 含 iot+trusted、nft 反射 DNAT/
+    forward 顯式放行都在(配置漂移)②OpenWrt netcheck 見 home 延遲(derper 死=STUN 同亡)
+    ③在線手機/PC Relay=home(掛外區=hairpin 又壞)。違例 TG,12h 同內容去重;OK 清狀態。
+    背景:此類缺口全程靜默(Prometheus/Kuma 看不到),上線首跑即抓到 trusted 缺口=有效性已驗。
 ★ 2026-07-10 B 系列(安全縱深)落地——B1 見 §3/§4(RouterDown 抑制+node 標籤+VM300
   排除),B4 見拓樸 V7 §10 ansible 段(監聽埠基線漂移),另三支 CT260 哨兵:
   - hl-token-watch(cron 週一 09:10 台北):對 10 類 API token 打最便宜唯讀端點,

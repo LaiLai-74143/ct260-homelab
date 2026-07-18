@@ -8,7 +8,10 @@
 #   :80 站帶明確埠本就不受影響，對外 pw.* 仍由 Cloudflare 邊緣終結 TLS。
 #   （歷史坑：auto_https off 會把 tls internal 的發證一併關掉——2026-07-04 實測；現已無此依賴。）
 # ★ admin off + systemd reload 不相容（reload 走 admin API:2019）→ 改設定一律 systemctl restart caddy。
-# 編輯此源檔後以 pct push 覆蓋 /etc/caddy/Caddyfile，caddy validate 後 restart。
+# ★★ 此檔是「去密模板」：X-AgentHub-Token 為占位字樣，真值不進 git（在 CT203 現機與
+#   CT260 ~/.config/homelab/agenthub-api.env）。部署一律用 ./deploy-caddyfile.sh（自動替真值
+#   +validate+restart+打帶 token 的 API 層驗證）；原樣 pct push＝agents.hl 全 401
+#   （2026-07-18 事故：validate 對占位照樣 PASS、agents.hl 也照樣 302，兩道檢查都擋不住）。
 {
 	admin off
 	auto_https disable_redirects
@@ -114,16 +117,8 @@ https://kuma.hl.lailai74143.com {
 	reverse_proxy 10.80.80.11:3001
 }
 
-# 受保護服務 #4：Homepage 入口牆面（CT201 10.80.80.11:3000，gethomepage；本身無認證 -> 該收編）。
-https://homepage.hl.lailai74143.com {
-	import hl_tls
-	forward_auth 127.0.0.1:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
-		header_up -Authorization
-	}
-	reverse_proxy 10.80.80.11:3000
-}
+# (退役 2026-07-18)受保護服務 #4 Homepage:容器已停(CT201 /opt/homepage docker compose down,
+#   config/image 留存可回滾),常用網站先前已搬 portal.hl 大廳「常用網站」板塊,站點移除。
 
 # 受保護服務 #5：入口大廳 portal（CT201 10.80.80.11:8088；待辦49，2026-07-08）。
 #   portal 程式碼零認證，身份全靠此層（Authelia default two_factor）；
@@ -178,6 +173,18 @@ https://agents.hl.lailai74143.com {
 	reverse_proxy 192.168.20.60:8300 {
 		# bff 縱深防禦:無此 header 直打 :8300 = 401。真值不入庫:
 		# 見 CT260 ~/.config/homelab/agenthub-api.env(與 deploy/agenthub.env 同值)
+		# ⚠占位!部署前必替真值(deploy-caddyfile.sh 自動處理);原樣推上線=agents.hl 全 401
 		header_up X-AgentHub-Token {真值見上}
 	}
+}
+
+# 受保護服務 #8:Vaultwarden 內部直達(待辦②e 收尾,2026-07-18)
+# 事由:內網/tailnet 取密碼庫不繞 Cloudflare——CF 掛掉時改填此 URL 仍可用。
+#   原定「rewrite 公網名指 10.60.60.10」不可行:對外名走 :80 catch-all 無內部 TLS 站,
+#   wildcard 憑證只涵蓋 *.hl;故用 vault.hl 別名,憑證與 dnsmasq hl.* 覆寫皆現成。
+# 不掛 forward_auth:Vaultwarden 自身帳密+2FA+E2E(與對外 CF 路徑同姿勢;
+#   app 走 API token 也進不了 Authelia——待辦③f 既知)。tailnet 面仍有 nft 動態閘門前置。
+https://vault.hl.lailai74143.com {
+	import hl_tls
+	reverse_proxy 192.168.30.3:50303
 }
