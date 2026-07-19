@@ -229,7 +229,9 @@ bridge        alertmanager-gotify-bridge：把 AM webhook JSON 轉成 Gotify mes
 
 bridge 取值：title=annotation.summary，內文=annotation.description，priority=annotation.priority（預設 5）。
 **寫新規則務必帶 summary / description**（方案 A：hardware+services staleness 規則 description 已加 {{ $value }}）。
-改 alertmanager.yml：amtool check-config 後 curl -X POST .../-/reload（嚴禁 docker kill -s HUP，見 §3 戒律）。
+改 alertmanager.yml：amtool check-config 後 curl -X POST .../-/reload（AM v0.33 的 /-/reload 預設開，不需 --web.enable-lifecycle；嚴禁 docker kill -s HUP，見 §3 戒律）。
+
+mute_time_intervals(1 條，2026-07-19 起)：backup-window(Asia/Taipei 04:15-05:10) 靜音一條 route child，只匹配 {alertname=~"HostHighIOWait|FilesystemReadWriteSpike", severity="warning"}。成因：pve24 夜間 vzdump 04:20-04:40 讀寫尖峰，iowait 平時<2%、備份時 8 台 node_exporter 同時>25% → HostHighIOWait 連環 firing(即「8 告警關聯」)，FilesystemReadWriteSpike 同理。只壓這兩個 warning，窗外照常；CPU/記憶體/磁碟空間/所有 critical 一律不受影響(child matcher 錨死 alertname)。屬降噪非遮蔽——根治是修 Switch3F Te3(pve24 上聯)線材。回滾：cp /opt/monitoring/alertmanager.yml.before-backupmute-20260719_051201 覆回 → curl -X POST :9093/-/reload。
 
 inhibit_rules(共 2 條,B1 2026-07-10 起):
 ```text
