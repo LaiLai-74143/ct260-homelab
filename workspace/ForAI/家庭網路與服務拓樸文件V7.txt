@@ -2057,8 +2057,13 @@ OpenWrt 是唯一 WAN ingress;PVE/NAS/CT201 管理面不直接暴露 WAN。
 Vaultwarden 對外=Cloudflare Tunnel → CT203 connector → Caddy 反代 DXP:50303。
 guest-portal 對外(§10.9,材料備妥待建)=同 tunnel → CT203 Caddy :80 host 分流 schedule.* →
   CT205:8300(DMZ 唯讀分享站,自帶帳密登入,不經 Authelia;推快照不直讀資料庫)。
-Jellyfin 遠端=Tailscale 經 CT203 subnet-router(僅 30.3:8096;朋友 Share node);
-  CT203 INPUT 擋朋友碰自身服務。
+Jellyfin 遠端:①自有裝置=Tailscale 經 CT203 subnet-router 直打 30.3:8096(媒體豁免)。
+  ②朋友(sharee)=不能用 subnet route(TS 官方限制:分享節點不含 subnet route)→ 改
+  tailscale serve 於 CT203:https://002-ct203-dmz-proxy.tail99fc16.ts.net:10000 → 反代
+  30.3:8096(LE 真憑證,朋友端無警告;2026-07-19 上線並驗證)。10000 不在 ctdmz INPUT
+  droplist{22,80,443,8082,9091,9100,9959}→policy accept 直放,免動 nft/免 restart 閘門。
+  需 console ACL:grant autogroup:shared→100.100.1.2:10000(舊「→30.3:8096」對 sharee 無效)。
+  關閉:CT203 tailscale serve --https=10000 off。CT203 INPUT 仍擋朋友碰 22/80/443 等自身服務。
 Minecraft / Honeypot / P2P 是明確 DNAT;VLAN666 隔離;VLAN80 觀測面限制操作能力。
 IoT -> 其他內網段明確 REJECT;trusted zone input 亦為 REJECT(比 V6 記載更嚴)。
 portscan-autoban + cowrie-quarantine 在 raw prerouting 封鎖,已接 Prometheus/Grafana/GeoIP。

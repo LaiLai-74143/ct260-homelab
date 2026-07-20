@@ -8,7 +8,10 @@
 #   :80 站帶明確埠本就不受影響，對外 pw.* 仍由 Cloudflare 邊緣終結 TLS。
 #   （歷史坑：auto_https off 會把 tls internal 的發證一併關掉——2026-07-04 實測；現已無此依賴。）
 # ★ admin off + systemd reload 不相容（reload 走 admin API:2019）→ 改設定一律 systemctl restart caddy。
-# 編輯此源檔後以 pct push 覆蓋 /etc/caddy/Caddyfile，caddy validate 後 restart。
+# ★★ 此檔是「去密模板」：X-AgentHub-Token 為占位字樣，真值不進 git（在 CT203 現機與
+#   CT260 ~/.config/homelab/agenthub-api.env）。部署一律用 ./deploy-caddyfile.sh（自動替真值
+#   +validate+restart+打帶 token 的 API 層驗證）；原樣 pct push＝agents.hl 全 401
+#   （2026-07-18 事故：validate 對占位照樣 PASS、agents.hl 也照樣 302，兩道檢查都擋不住）。
 {
 	admin off
 	auto_https disable_redirects
@@ -24,8 +27,9 @@
 # 兩條對外服務共用 :80，以 Host 分流（handle 區塊互斥、由上而下）：
 #   /health*                     -> 探活「OK」（Kuma / 內部）
 #   schedule.lailai74143.com     -> guest-portal（CT205 DMZ，對外唯讀分享站；行程+借貸）
+#   rime.lailai74143.com         -> RIME 詞庫站（CT260:8790；bearer token 自保，不掛 Authelia）
 #   其餘（含 pw.* Vaultwarden）    -> DXP:50303（catch-all 維持現況，不需知道 VW 確切 hostname）
-# ★ 零風險原則：只「加」schedule 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
+# ★ 零風險原則：只「加」schedule/rime 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
 :80 {
 	# 健康端點（Uptime Kuma / 內部探活）—— 任何 host 的 /health 都回 OK
 	# （handle 只收單一 matcher,兩個 path 需具名 matcher——20260710 validate 教訓）
@@ -38,6 +42,15 @@
 	@schedule host schedule.lailai74143.com
 	handle @schedule {
 		reverse_proxy 10.60.60.11:8300
+	}
+
+	# rime 詞庫站（對外；cloudflared -> Caddy -> CT260:8790）
+	# ★ 不掛 Authelia：自身 bearer token 認證（Trime 同步鍵/管理網頁都帶 token；同 Vaultwarden 姿勢）。
+	#   主機名 rime.lailai74143.com 由使用者在 CF Tunnel 後台加（不經 Agent）。CT203→CT260 通路
+	#   與 opencode/agenthub/SillyTavern 同（192.168.20.60 已在反代白名單）。
+	@rime host rime.lailai74143.com
+	handle @rime {
+		reverse_proxy 192.168.20.60:8790
 	}
 
 	# Vaultwarden 及其餘：cloudflared -> Caddy -> DXP（catch-all，維持現況）
@@ -170,6 +183,7 @@ https://agents.hl.lailai74143.com {
 	reverse_proxy 192.168.20.60:8300 {
 		# bff 縱深防禦:無此 header 直打 :8300 = 401。真值不入庫:
 		# 見 CT260 ~/.config/homelab/agenthub-api.env(與 deploy/agenthub.env 同值)
+		# ⚠占位!部署前必替真值(deploy-caddyfile.sh 自動處理);原樣推上線=agents.hl 全 401
 		header_up X-AgentHub-Token b99fb637f55f62e4a8d8c266627357bcc029abf27686d47f
 	}
 }
@@ -183,4 +197,19 @@ https://agents.hl.lailai74143.com {
 https://vault.hl.lailai74143.com {
 	import hl_tls
 	reverse_proxy 192.168.30.3:50303
+}
+
+# 受保護服務 #9:SillyTavern(RP 前端;CT260 192.168.20.60:8000)
+# 事由:OpenRouter 多模型 RP 前端。手機直連時 SillyTavern 自身 basicAuth 會白畫面
+#   (行動瀏覽器 SPA 的 fetch/XHR 不重送 basic 憑證 → 初始化 API 401)。故關掉它的 basicAuth,
+#   認證改由 Authelia SSO cookie 承擔(同 agents.hl;Authelia default_policy=two_factor 自動涵蓋)。
+#   僅 tailnet 可解(*.hl→100.100.1.2);零公網 record。SPA/串流 Caddy 自動 flush/Upgrade。
+https://sillytavern.hl.lailai74143.com {
+	import hl_tls
+	forward_auth 127.0.0.1:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+		header_up -Authorization
+	}
+	reverse_proxy 192.168.20.60:8000
 }

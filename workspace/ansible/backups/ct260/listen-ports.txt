@@ -2,7 +2,10 @@ tcp 0.0.0.0:4096 opencode
 tcp 0.0.0.0:5001 python3
 tcp 0.0.0.0:5002 python3
 tcp 0.0.0.0:5003 python3
+tcp 0.0.0.0:8000 node
 tcp 0.0.0.0:8300 uvicorn
+tcp 0.0.0.0:8790 node
+tcp 0.0.0.0:8899 python3
 tcp 127.0.0.1:25 -
 tcp *:22 -
 tcp *:42281 -
