@@ -8,7 +8,7 @@ export default function More() {
     <>
       <PageHead title="更多" />
       <div className="grid grid-cols-2 gap-2.5">
-        {MODULES.filter((m) => !['home', 'devices', 'alerts'].includes(m.key)).map((m) => (
+        {MODULES.filter((m) => !['home', 'devices', 'storage'].includes(m.key)).map((m) => (
           <Link
             key={m.key}
             to={m.route}

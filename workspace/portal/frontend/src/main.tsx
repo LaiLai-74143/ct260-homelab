@@ -26,6 +26,7 @@ import Life from './pages/Life'
 import Archive from './pages/Archive'
 import ArchiveDoc from './pages/ArchiveDoc'
 import More from './pages/More'
+import Storage from './pages/Storage'
 import Host from './pages/Host'
 import Kiosk from './pages/Kiosk'
 
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: 'm/power', element: <Power /> },
       { path: 'm/game', element: <Game /> },
       { path: 'm/life', element: <Life /> },
+      { path: 'm/storage', element: <Storage /> },
       { path: 'm/archive', element: <Archive /> },
       { path: 'archive/:id', element: <ArchiveDoc /> },
       { path: 'more', element: <More /> },

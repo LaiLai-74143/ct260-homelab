@@ -13,7 +13,7 @@ import { useToast } from './Toast'
 const KEYJUMP: Record<string, string> = {
   h: '/', d: '/m/devices', a: '/m/alerts', s: '/m/services',
   c: '/m/security', p: '/m/power', m: '/m/game', l: '/m/life',
-  r: '/m/archive',
+  r: '/m/archive', f: '/m/storage',
 }
 const JUMPKEY = Object.fromEntries(Object.entries(KEYJUMP).map(([k, r]) => [r, k]))
 
@@ -130,8 +130,12 @@ export default function CommandPalette() {
       { g: '動作', ic: '◍', t: '戳一下 Clawd', k: 'poke clawd 吉祥物', run: () => window.dispatchEvent(new CustomEvent('clawd-poke')) },
       { g: '動作', ic: '☾', t: night ? '切回日間(夜間預覽中)' : '切換夜間模式預覽', k: 'night dark 夜間', run: toggleNight },
     )
+    // 與模塊同名的服務卡不重複列(0.19.4:檔案站同時是模塊頁與生活組服務卡,
+    // ⌘K 出兩筆同名結果會誤點——模塊頁優先,外開入口留在服務目錄頁)
+    const moduleNames = new Set(MODULES.map((m) => m.label))
     for (const g of sv.data?.groups ?? []) {
       for (const i of g.items) {
+        if (moduleNames.has(i.name)) continue
         const url = linkOf(i) // 與服務目錄同一套可達性判定,不出死鏈
         if (!url) continue
         out.push({

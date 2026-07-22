@@ -24,12 +24,13 @@
 }
 
 # ===== 對外（cloudflared -> :80）=====
-# 兩條對外服務共用 :80，以 Host 分流（handle 區塊互斥、由上而下）：
+# 多條對外服務共用 :80，以 Host 分流（handle 區塊互斥、由上而下）：
 #   /health*                     -> 探活「OK」（Kuma / 內部）
 #   schedule.lailai74143.com     -> guest-portal（CT205 DMZ，對外唯讀分享站；行程+借貸）
 #   rime.lailai74143.com         -> RIME 詞庫站（CT260:8790；bearer token 自保，不掛 Authelia）
+#   storage.lailai74143.com      -> 檔案站（同 CT260:8790 後端；bearer token+限時簽名分享鏈）
 #   其餘（含 pw.* Vaultwarden）    -> DXP:50303（catch-all 維持現況，不需知道 VW 確切 hostname）
-# ★ 零風險原則：只「加」schedule/rime 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
+# ★ 零風險原則：只「加」schedule/rime/storage 具名路由,Vaultwarden 仍是 catch-all，行為一字不動。
 :80 {
 	# 健康端點（Uptime Kuma / 內部探活）—— 任何 host 的 /health 都回 OK
 	# （handle 只收單一 matcher,兩個 path 需具名 matcher——20260710 validate 教訓）
@@ -50,6 +51,14 @@
 	#   與 opencode/agenthub/SillyTavern 同（192.168.20.60 已在反代白名單）。
 	@rime host rime.lailai74143.com
 	handle @rime {
+		reverse_proxy 192.168.20.60:8790
+	}
+
+	# storage 檔案站(2026-07-22 網址正規化;後端與 rime 同一 CT260:8790,server 依 Host 出檔案站首頁)
+	# 用途:鍵盤 📦/電腦網頁/限時分享連結共用一個語義化網址。
+	# 主機名 storage.lailai74143.com 由使用者在 CF Tunnel 後台加(不經 Agent),加好前此路由靜置無害。
+	@storage host storage.lailai74143.com
+	handle @storage {
 		reverse_proxy 192.168.20.60:8790
 	}
 

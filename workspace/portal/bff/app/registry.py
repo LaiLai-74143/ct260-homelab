@@ -100,6 +100,10 @@ SERVICE_GROUPS: list[dict] = [
          "pc40": True, "phone": True},
         {"name": "Navidrome", "url": "http://192.168.20.70:4533", "kuma": "navidrome", "host": "ct270",
          "pc40": True, "phone": True, "note": "媒體豁免,手機免發證"},
+        # 檔案站(LaiBoard 📦;2026-07-22):公網走 CF Tunnel 任何網路可達,LAN 走 /files 捷徑
+        {"name": "檔案站", "url": "http://192.168.20.60:8790/files",
+         "url_hl": "https://storage.lailai74143.com", "kuma": None, "host": "ct260",
+         "pc40": True, "phone": True, "note": "上傳/下載/資料夾/限時分享;與 LaiBoard 鍵盤同後端"},
     ]},
     {"group": "媒體", "items": [
         {"name": "Jellyfin", "url": "http://192.168.30.3:8096", "kuma": "jellyfin", "host": "dxp4800",

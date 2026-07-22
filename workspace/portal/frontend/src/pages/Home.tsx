@@ -62,6 +62,10 @@ export default function Home() {
         spark,
       }
     }
+    if (m.key === 'storage') {
+      // 靜態入口卡:檔案站是外部服務(CT260:8790),BFF 無其 stub;不擺假數字
+      return { route: m.route, name: m.label, state: 'ok', big: '▦', sub: '上傳 · 分享 · 資料夾', spark }
+    }
     const s = stubOf(m.key)
     if (s) return { route: m.route, name: m.label, state: s.state, big: s.big, bigUnit: s.bigUnit, sub: s.sub, spark }
     // 誠實原則:無數據來源就標待接,不顯示假數字

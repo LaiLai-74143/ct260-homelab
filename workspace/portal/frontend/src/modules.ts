@@ -16,13 +16,16 @@ export const MODULES: ModuleDef[] = [
   { key: 'power', route: '/m/power', label: '電力', shortLabel: '電力', icon: '⚡' },
   { key: 'game', route: '/m/game', label: '遊戲', shortLabel: '遊戲', icon: '▶' },
   { key: 'life', route: '/m/life', label: '生活', shortLabel: '生活', icon: '✦' },
+  { key: 'storage', route: '/m/storage', label: '檔案站', shortLabel: '檔案站', icon: '▦' },
   { key: 'archive', route: '/m/archive', label: '拾遺歸檔', shortLabel: '拾遺', icon: '▤' },
 ]
 
-// 手機底部 tab:大廳/設備/告警/更多(報告 §3)
+const byKey = (k: string) => MODULES.find((m) => m.key === k)!
+
+// 手機底部 tab:大廳/設備/檔案站/更多(0.19.4 告警讓位檔案站,告警入口移「更多」)
 export const TABBAR = [
-  MODULES[0],
-  MODULES[1],
-  MODULES[2],
+  byKey('home'),
+  byKey('devices'),
+  byKey('storage'),
   { key: 'more', route: '/more', label: '更多', shortLabel: '更多', icon: '⋯' },
 ]
