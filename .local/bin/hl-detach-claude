@@ -1,0 +1,49 @@
+#!/bin/sh
+# hl-detach-claude '<標籤>' '<prompt>' [額外 claude 旗標...]
+#
+# 「跨輪 AI 工作」— 把一個 headless `claude -p` 用 hl-detach 脫離本輪執行:
+#   - 完整結果寫入 /tmp/hl-claude-<標籤>-<pid>.md
+#   - 跨 agenthub per-turn teardown 存活(底層 setsid+nohup)
+#   - 完成後自動喚醒本對話,只回報 exit + 檔路徑 + 前 800 字(避開 1500B 截斷)
+#
+# 這個 detached claude 是「全新冷 session」:不帶本對話記憶。要餵背景,
+# 就在 prompt 裡叫它讀檔(它有 Read/Bash 工具)。
+#
+# 預設:
+#   --dangerously-skip-permissions  無人值守要能自動跑工具(整台本來就 bypass)
+#   未帶 --max-turns 時補 --max-turns 40  防暴衝燒 token
+#   未指定 --model 時吃 settings.json 預設;便宜任務可自帶 --model claude-haiku-4-5-20251001
+#
+# 用法:
+#   hl-detach-claude '2340-掃env' '掃 /home/codex/workspace 下所有 .env,列洩漏風險'
+#   hl-detach-claude '爬蟲' '讀 /tmp/urls.txt 逐一分析' --model claude-haiku-4-5-20251001 --max-turns 20
+
+set -u
+LABEL="${1:-}"
+PROMPT="${2:-}"
+if [ -z "$LABEL" ] || [ -z "$PROMPT" ]; then
+  echo "用法: hl-detach-claude '<標籤>' '<prompt>' [額外 claude 旗標...]" >&2
+  exit 2
+fi
+shift 2
+PASS="$*"
+
+# 安全預設:未帶 --max-turns 就補上限,防無限跑
+case " $PASS " in
+  *" --max-turns "*) : ;;
+  *) PASS="$PASS --max-turns 40" ;;
+esac
+
+SAFE=$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9' _ | cut -c1-40)
+PROMPT_FILE="/tmp/hl-claude-${SAFE}-$$.prompt"
+RESULT="/tmp/hl-claude-${SAFE}-$$.md"
+
+# prompt 寫檔,用 stdin 餵給 claude,徹底避開 shell quoting 地雷
+printf '%s\n' "$PROMPT" > "$PROMPT_FILE"
+
+# 交給 hl-detach 的指令:全是固定結構+檔路徑,無使用者內容內嵌 → 零注入風險。
+# claude 全文 → RESULT;摘要+前 800 字 → stdout(進 hl-detach 的 LOG,喚醒時 tail 回報)。
+CMD="claude -p --dangerously-skip-permissions $PASS < '$PROMPT_FILE' > '$RESULT' 2>&1; C=\$?; rm -f '$PROMPT_FILE'; echo \"[hl-detach-claude] exit=\$C  結果檔: $RESULT\"; echo '--- 前 800 字 ---'; head -c 800 '$RESULT'"
+
+echo "結果檔(完成後讀這個): $RESULT"
+exec hl-detach "$LABEL" "$CMD"

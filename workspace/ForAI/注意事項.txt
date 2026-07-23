@@ -1,6 +1,6 @@
 # 注意事項 / Homelab 操作戒律
 
-更新時間：2026-07-11
+更新時間：2026-07-23（§14 新增 Claude Code 子代理執行環境實測）
 依據：家庭網路與服務拓樸文件 V7 現況
 
 本文只收「操作時仍然有效的 DO / DON'T 與待辦」。
@@ -247,4 +247,42 @@ CT203 是 tailnet→內網的唯一把關點：OpenWrt 對 10.60.60.10 是「靜
    (b) 部署後驗證必須打到「帶 token 的 API 層」：journalctl -u agenthub 看到來源 10.60.60.10 的
        /api/* 回 200 才算過；agents.hl 回 302 只證明 SSO 層活著，token 壞了它照樣 302。
    (c) caddy validate 對占位字樣照樣 PASS（Caddy 視為未知 placeholder），驗證擋不住這類錯。
+```
+
+---
+
+## 14. CT260 Claude Code 子代理執行環境（2026-07-23 實測）
+
+CT260 的 agent 由 agenthub 以 headless `claude -p --resume` 逐輪 spawn（基礎見 §1）。以下為 v2.1.218 上的實測行為與設定入口，供調子代理並行/巢狀時參考。
+
+```text
+1. 版本/安裝：Claude Code 為 npm global，裝在 ~/.npm-global（codex 擁有，
+   `npm i -g @anthropic-ai/claude-code@latest` 免 sudo）。現況 2.1.218。
+   ⚠ 新版 package 要求 Node≥22，本機 Node v20.19.2，靠自帶 binary（claude.exe）執行；
+   未來某版若拿掉 fallback 會起不來 → 屆時先升 Node 22。
+   回滾：`npm i -g @anthropic-ai/claude-code@<舊版>`，transcript 不變可續，升級不會弄丟進行中對話。
+2. 並行上限（實測）：CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS 只管「Task/Agent 一次 fan-out」路徑
+   —— 設 36 → 實測 30 顆同時；不設 → 精準卡 20（2.1.218 預設）。
+   ★ Workflow 的 parallel()/pipeline() 另有自身硬上限 min(16, 核-2)=16，「不甩」此 env（實測 on/off 都 16）。
+   要 >16 的真並行只能走 Task fan-out，不是 Workflow。
+3. 巢狀子代理（實測）：2.1.218 預設「關」（子代理不能再生子代理）。
+   設 CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2 → 你→子→孫 成功；不設 → 孫被擋（BLOCKED）。
+   值＝允許的 spawn 跳數：2＝到孫、擋第 3 跳。實務 2~3 層即可，再深邊際遞減、token 指數膨脹。
+4. 設定入口：改 ~/.claude/settings.json 的 "env" 區塊，「下一輪 spawn 才生效」（非當輪）。
+   ☆ 目前狀態＝上述兩個 env 已撤除，跑官方預設（並行 20 / 巢狀關）；要開 36 / 深度 2 再把 env 加回。
+5. 逐輪生命週期：每輪 claude -p 結束＝teardown，背景子代理/Workflow 會一起被砍。
+   這不是 agenthub 政策，是 in-session 子代理本質＝該進程的 coroutine，進程一退即消
+   （好處：不留殭屍代理，OOM 安全）。
+   → 跨輪的長 AI 工作用 hl-detach-claude（~/.local/bin/，包 claude -p 以 setsid 脫離本輪、
+     結果落檔、完成 curl /wake 喚醒本對話）。
+   註：claude -p 只保存「最終訊息」，交付內容要嘛叫它當最終訊息輸出、要嘛自行寫檔（最終訊息只回檔路徑）。
+6. tier 強約束（hook）：子代理 subagent_type / Workflow agentType 必須是
+   mini/reader/editor/tester/architect/full 之一，否則 enforce-agent-tier.py 擋下（portal 白方塊＝違規）。
+   只有 full 帶 Agent 工具、能再派子代理（做巢狀時中間層要用 full）。
+7. 巢狀能力（2026-07-23 實測）：子代理**只能**用 Task/Agent 再派子代理、且**限 full tier**
+   （其餘 tier 無 Agent 工具）；子代理**不能**呼叫 Workflow——Workflow 工具「不在子代理環境」
+   （系統明文 not available inside subagents），只存在主代理層。
+   → 巢狀樹只有 Task 一種、深度硬頂 2、中間層必 full。連帶把風險收窄：子代理無法自行掀起整個
+   Workflow fan-out；真正代價是 token 幾何膨脹 + 高並發 RAM 壓力（CT260 盯 hl-memguard）+
+   孫代理在 portal 面板隱形（subagents() 不佔頂層方塊）。
 ```

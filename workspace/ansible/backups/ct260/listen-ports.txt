@@ -6,9 +6,8 @@ tcp 0.0.0.0:8300 uvicorn
 tcp 0.0.0.0:8790 node
 tcp 0.0.0.0:8899 python3
 tcp 127.0.0.1:25 -
-tcp 127.0.0.1:5037 adb
+tcp 127.0.0.1:4097 opencode
 tcp *:22 -
 tcp *:33277 -
 tcp *:9080 -
 tcp *:9100 -
-udp 0.0.0.0:5353 adb
